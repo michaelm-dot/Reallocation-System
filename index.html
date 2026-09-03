@@ -411,6 +411,7 @@ let findCode = "";              /* store column to highlight and scroll to, orde
 let checking = {};              /* CODE -> {at} - someone is working this client right now */
 const PAGE = 30;                /* client columns per page - 299 at once is unusable */
 let colPage = 0, colPages = 1;
+let showDone = false;        /* keep rows that have already moved on out of the grid */
 let mskuPick = [];              /* stores queued for an MSKU export */
 let allFilter = "all", allQuery = "";
 let resPick = new Set();          /* which clients the results download covers */
@@ -916,7 +917,13 @@ function loadBudget(sheetsObj, filename){
 }
 
 /* ---------------- grid model ---------------- */
-function gridRows(){
+/* a row whose every copy has left the Amazon side has nothing left to check here */
+function settledAsin(asin){
+  const its = items.filter(i=>i.asin === asin);
+  if(!its.length) return false;
+  return its.every(i=>i.stage === "walmart" || i.stage === "dom" || i.stage === "excluded");
+}
+function gridRows(all){
   const seen = new Map();
   items.forEach(i=>{
     if(!/^B0/i.test(i.asin)) return;
@@ -924,7 +931,9 @@ function gridRows(){
     const g = seen.get(i.asin); g.rows++; g.value += i.value;
     if(!g.brand && i.brand) g.brand = i.brand;
   });
-  return [...seen.values()];
+  const out = [...seen.values()];
+  if(all || showDone) return out;
+  return out.filter(g=>!settledAsin(g.asin));
 }
 function activeStores(){ return problem.length ? stores.filter(s=>!problem.includes(s.code)) : stores; }
 function markOf(asin){ return marks[asin] || (marks[asin] = {listing:"", stores:{}}); }
@@ -1399,6 +1408,9 @@ function renderGrid(){
             <option value="9999"${randPool===9999?" selected":""}>half</option>
           </select></label>`}
       <input type="search" id="gq" placeholder="Filter ASIN or brand" value="${esc(gridQuery)}">
+      ${(()=>{ const gone = gridRows(true).filter(g=>settledAsin(g.asin)).length;
+        return gone ? `<button class="btn sm" id="showdone">${showDone
+          ? "Hide the " + gone + " on Walmart" : "Show " + gone + " on Walmart"}</button>` : ""; })()}
       <input class="win" id="findclient" list="store-opts" placeholder="Find a client" style="width:150px"
         value="${esc(findCode)}">
       ${findCode ? `<button class="btn sm" id="clearfind">Clear ${esc(findCode)}</button>` : ""}
@@ -2426,6 +2438,7 @@ document.addEventListener("click", e=>{
       rows.map(({it,w,v,n})=>[it.tracking + (n>1 ? " (+"+(n-1)+")" : ""),it.brand,v.title,v.listing,
         w.k,w.client||"",v.id,v.bsz,v.sellable,v.unit,v.target,v.profit,v.roi,v.breakeven,v.amount,w.d||""]));
   }
+  if(t.id==="showdone"){ showDone = !showDone; return renderGrid(); }
   if(t.id==="pgprev"){ colPage--; return renderGrid(); }
   if(t.id==="pgnext"){ colPage++; return renderGrid(); }
   if(t.id==="clearfind"){ findCode = ""; return renderGrid(); }
