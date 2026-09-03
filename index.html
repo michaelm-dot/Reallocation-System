@@ -412,6 +412,7 @@ let checking = {};              /* CODE -> {at} - someone is working this client
 const PAGE = 30;                /* client columns per page - 299 at once is unusable */
 let colPage = 0, colPages = 1;
 let showDone = false;        /* keep rows that have already moved on out of the grid */
+let showDoneWm = false;      /* same on the Walmart tab, for rows that have gone to Dom */
 let mskuPick = [];              /* stores queued for an MSKU export */
 let allFilter = "all", allQuery = "";
 let resPick = new Set();          /* which clients the results download covers */
@@ -1780,17 +1781,24 @@ function renderReport(){ const el = document.getElementById("readreport"); if(el
 function renderWalmart(){
   const keep = gridScroll("#walmart");
   const el = document.getElementById("wm-grid");
-  const rows = items.filter(i=>i.stage==="walmart");
-  if(!rows.length){
+  const onWm = items.filter(i=>i.stage==="walmart");
+  /* a row that has gone to Dom - no WM #, a listing error, or every client gated -
+     has nothing left to do here */
+  const goneToDom = onWm.filter(i=>wmResult(i).dom).length;
+  const rows = showDoneWm ? onWm : onWm.filter(i=>!wmResult(i).dom);
+  if(!onWm.length){
     el.innerHTML = `<div class="panel"><h2>Walmart</h2><div class="body"><p class="note" style="margin:0">
       Nothing routed here yet. Items arrive when the listing status is anything other than No Error,
       or when the sample of ten clients comes back all gated.</p></div></div>`;
     return;
   }
-  const resolved = rows.filter(i=>{ const r=wmResult(i); return r.sheet || r.dom; }).length;
+  const resolved = onWm.filter(i=>{ const r=wmResult(i); return r.sheet || r.dom; }).length;
   el.innerHTML = `<div class="panel">
-    <h2>Walmart &mdash; ${rows.length} row${rows.length===1?"":"s"}, ${resolved} resolved</h2>
+    <h2>Walmart &mdash; ${rows.length} row${rows.length===1?"":"s"}${
+      goneToDom && !showDoneWm ? "" : ", " + resolved + " resolved"}</h2>
     <div class="gridbar">
+      ${goneToDom ? `<button class="btn sm" id="showdonewm">${showDoneWm
+        ? "Hide the " + goneToDom + " on Dom" : "Show " + goneToDom + " on Dom"}</button>` : ""}
       <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink2)">Add a client column
         <input class="win" id="wm-cadd" list="store-opts" placeholder="store code" style="width:150px"></label>
       <button class="btn sm" id="wm-cadd-btn">Add</button>
@@ -2439,6 +2447,7 @@ document.addEventListener("click", e=>{
         w.k,w.client||"",v.id,v.bsz,v.sellable,v.unit,v.target,v.profit,v.roi,v.breakeven,v.amount,w.d||""]));
   }
   if(t.id==="showdone"){ showDone = !showDone; return renderGrid(); }
+  if(t.id==="showdonewm"){ showDoneWm = !showDoneWm; return renderWalmart(); }
   if(t.id==="pgprev"){ colPage--; return renderGrid(); }
   if(t.id==="pgnext"){ colPage++; return renderGrid(); }
   if(t.id==="clearfind"){ findCode = ""; return renderGrid(); }
