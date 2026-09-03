@@ -305,6 +305,11 @@
   .wholabel{font:500 10px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#3C6E9C}
   .who{background:var(--panel);border:1px solid #BBD3E8;border-radius:20px;padding:2px 9px;font-size:12.5px;color:#154267}
   .who small{color:var(--ink3);margin-left:4px;font-size:11px}
+  .who i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .who.on{border-color:#7FB98B;color:#14532d;background:#F2FBF4}
+  .who.on i{background:#22A35A;box-shadow:0 0 0 3px rgba(34,163,90,.18)}
+  .who.away{border-color:var(--rule);color:var(--ink3);background:var(--panel)}
+  .who.away i{background:var(--rule)}
   @media (max-width:900px){.cols{grid-template-columns:1fr}.ledger .done{margin-left:0;border-left:0;padding-left:0}}
 </style>
 
@@ -451,6 +456,7 @@ const SB_KEY = "sb_publishable_Sj8oCVoSz1Gq9zxA1OZb4Q_iTK4t9zz";
 const QUEUE_FN = SB_URL + "/functions/v1/realloc-queue";
 let sb = null, me = null, channel = null, presence = null;
 let online = [];             /* who else is in the system right now */
+let lastAct = Date.now(), amActive = true;   /* actually at the screen, or just left the tab open */
 let allowedDomains = [];
 let queueAt = "", queueCounts = {}, queueSkipped = 0, queueLoading = false;
 
@@ -804,11 +810,30 @@ function renderWho(){
   const others = online.filter(p=>p.email !== (me && me.email));
   el.innerHTML = others.length
     ? `<span class="wholabel">Also here</span>` + others.map(p=>
-        `<span class="who" title="${esc(p.email)}">${esc(shortName(p.email))}</span>`).join("")
+        `<span class="who ${p.active === false ? "away" : "on"}"
+           title="${esc(p.email)}${p.active === false ? " \u2014 tab open, but away" : " \u2014 at the screen"}"
+           ><i></i>${esc(shortName(p.email))}</span>`).join("")
     : `<span class="wholabel">You are the only one here right now</span>`;
 }
 function trackMe(){
-  if(presence && me) presence.track({ email: me.email, view, at: Date.now() });
+  if(presence && me) presence.track({ email: me.email, view, active: amActive, at: Date.now() });
+}
+const IDLE_AFTER = 3 * 60 * 1000;            /* three minutes with no typing or clicking */
+function markActive(){
+  lastAct = Date.now();
+  if(!amActive){ amActive = true; trackMe(); }
+}
+function checkIdle(){
+  const idle = (typeof document !== "undefined" && document.hidden) || (Date.now() - lastAct > IDLE_AFTER);
+  if(idle === amActive){ amActive = !idle; trackMe(); }
+}
+if(typeof document !== "undefined" && document.addEventListener){
+  ["mousedown","keydown","wheel","touchstart"].forEach(ev=>
+    document.addEventListener(ev, markActive, { passive: true }));
+  document.addEventListener("visibilitychange", ()=>{
+    if(document.hidden){ amActive = false; trackMe(); } else markActive();
+  });
+  setInterval(checkIdle, 20000);
 }
 function subscribePresence(){
   if(!sb || !me || presence) return;
