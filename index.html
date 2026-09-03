@@ -301,6 +301,10 @@
   .cloudbar{display:flex;gap:8px;align-items:center;padding:8px 24px;background:var(--wash-walmart);
     border-bottom:1px solid var(--rule);font-size:12.5px;color:#154267}
   .cloudbar[hidden]{display:none}
+  .whobar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto}
+  .wholabel{font:500 10px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#3C6E9C}
+  .who{background:var(--panel);border:1px solid #BBD3E8;border-radius:20px;padding:2px 9px;font-size:12.5px;color:#154267}
+  .who small{color:var(--ink3);margin-left:4px;font-size:11px}
   @media (max-width:900px){.cols{grid-template-columns:1fr}.ledger .done{margin-left:0;border-left:0;padding-left:0}}
 </style>
 
@@ -327,7 +331,8 @@
   </nav>
 </header>
 
-<div class="cloudbar" id="cloudbar" hidden>Live — you are seeing your team's changes as they happen</div>
+<div class="cloudbar" id="cloudbar" hidden><span>Live — you are seeing your team's changes as they happen</span>
+  <span id="whobar" class="whobar"></span></div>
 <div class="ledger" id="ledger"></div>
 
 <main>
@@ -444,7 +449,8 @@ function since(ms){
 const SB_URL = "https://uwiwxxgrqpnaorwbsnkp.supabase.co";
 const SB_KEY = "sb_publishable_Sj8oCVoSz1Gq9zxA1OZb4Q_iTK4t9zz";
 const QUEUE_FN = SB_URL + "/functions/v1/realloc-queue";
-let sb = null, me = null, channel = null;
+let sb = null, me = null, channel = null, presence = null;
+let online = [];             /* who else is in the system right now */
 let allowedDomains = [];
 let queueAt = "", queueCounts = {}, queueSkipped = 0, queueLoading = false;
 
@@ -784,7 +790,38 @@ function laterRender(){
   };
   setTimeout(go, 800);
 }
+/* who is here, and which tab they are on */
+const VIEW_NAMES = { queue:"Queue", all:"All items", amazon:"Amazon ungating",
+                     walmart:"Walmart", dom:"Dom", sheets:"Offer sheets" };
+function shortName(email){
+  const n = String(email || "").split("@")[0].replace(/[._-]+/g, " ").replace(/\d+/g, "").trim();
+  if(!n) return "someone";
+  return n.split(/\s+/).map(w=>w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+function renderWho(){
+  const el = document.getElementById("whobar");
+  if(!el) return;
+  const others = online.filter(p=>p.email !== (me && me.email));
+  el.innerHTML = others.length
+    ? `<span class="wholabel">Also here</span>` + others.map(p=>
+        `<span class="who" title="${esc(p.email)}">${esc(shortName(p.email))}</span>`).join("")
+    : `<span class="wholabel">You are the only one here right now</span>`;
+}
+function trackMe(){
+  if(presence && me) presence.track({ email: me.email, view, at: Date.now() });
+}
+function subscribePresence(){
+  if(!sb || !me || presence) return;
+  presence = sb.channel("realloc-presence", { config: { presence: { key: me.id } } });
+  presence.on("presence", { event: "sync" }, ()=>{
+    const state = presence.presenceState();
+    online = Object.values(state).flat();
+    renderWho();
+  });
+  presence.subscribe(st=>{ if(st === "SUBSCRIBED") trackMe(); });
+}
 function subscribeLive(){
+  subscribePresence();
   if(!sb || channel) return;
   channel = sb.channel("realloc-live")
     .on("postgres_changes", { event: "*", schema: "public", table: "realloc_marks_v2" }, p=>{
@@ -2320,13 +2357,14 @@ function downloadOfferSheet(key){
 }
 
 function render(){
-  renderLedger(); renderFiles(); renderBatchChip(); renderResultPicker();
+  renderLedger(); renderFiles(); renderBatchChip(); renderResultPicker(); renderWho();
   const nb = document.getElementById("nobudget");
   if(nb) nb.hidden = stores.length > 0;
   document.querySelectorAll("#tabs button").forEach(b=>{
     b.setAttribute("aria-current", String(b.dataset.view===view));
     if(b.hasAttribute("data-needs")) b.disabled = !items.length;
   });
+  trackMe();
   ["queue","all","amazon","walmart","dom","sheets"].forEach(v=>document.getElementById("view-"+v).hidden = v!==view);
   if(view==="all") renderAll();
   if(view==="amazon") renderGrid();
