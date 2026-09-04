@@ -2381,7 +2381,12 @@ function downloadOfferSheet(key){
   downloadWorkbook([hit], "Offer Sheet for " + hit.b.code + ".xlsx");
 }
 
+let lastView = null;
 function render(){
+  /* a re-render rebuilds the page, which would otherwise jump you back to the top.
+     keep the window scroll unless you have actually changed tab. */
+  const sameView = lastView === view;
+  const wy = (typeof window !== "undefined" && window.scrollY) || 0;
   renderLedger(); renderFiles(); renderBatchChip(); renderResultPicker(); renderWho();
   const nb = document.getElementById("nobudget");
   if(nb) nb.hidden = stores.length > 0;
@@ -2396,6 +2401,16 @@ function render(){
   if(view==="walmart") renderWalmart();
   if(view==="dom") renderDom();
   if(view==="sheets") renderSheets();
+  if(typeof window !== "undefined" && window.scrollTo){
+    if(sameView && wy){
+      const put = ()=>window.scrollTo(0, wy);
+      put();
+      if(typeof requestAnimationFrame === "function") requestAnimationFrame(put);
+    } else if(!sameView){
+      window.scrollTo(0, 0);
+    }
+  }
+  lastView = view;
 }
 
 /* ---------------- csv ---------------- */
