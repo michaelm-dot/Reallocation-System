@@ -1443,7 +1443,7 @@ function restoreScroll(sel, pos){
   if(typeof requestAnimationFrame === "function") requestAnimationFrame(put);
 }
 function renderGrid(){
-  const keep = gridScroll("#amazon");
+  const keep = gridScroll("#view-amazon");
   const el = document.getElementById("amazon");
   const rows0 = gridRows();
   if(!rows0.length){
@@ -1557,7 +1557,7 @@ function renderGrid(){
       <button class="btn" id="grid-csv">Download this worksheet as CSV</button>
       <button class="btn warn" id="grid-clear">Clear all marks</button>
     </div></div>`;
-  restoreScroll("#amazon", keep);
+  restoreScroll("#view-amazon", keep);
 }
 
 /* recolour one cell in place, then refresh the derived bits without redrawing the grid */
@@ -1719,7 +1719,7 @@ function applyBulk(sheetsObj, filename){
 }
 
 function renderAll(){
-  const keep = gridScroll("#allitems");
+  const keep = gridScroll("#view-all");
   const el = document.getElementById("allitems");
   if(!items.length){ el.innerHTML = `<div class="panel"><p class="empty">Upload an O2I export first.</p></div>`; return; }
   const rows = allGroups();
@@ -1820,7 +1820,7 @@ function renderAll(){
       <button class="btn" id="all-csv">Download this view as CSV</button>
       <span style="font-size:13px;color:var(--ink2)">Showing ${shown.length} of ${rows.length}</span>
     </div></div>`;
-  restoreScroll("#allitems", keep);
+  restoreScroll("#view-all", keep);
 }
 
 /* ---------------- other views ---------------- */
@@ -1841,7 +1841,7 @@ function renderBatchChip(){
 }
 function renderReport(){ const el = document.getElementById("readreport"); if(el) el.hidden = true; }
 function renderWalmart(){
-  const keep = gridScroll("#walmart");
+  const keep = gridScroll("#view-walmart");
   const el = document.getElementById("wm-grid");
   const onWm = items.filter(i=>i.stage==="walmart");
   /* a row that has gone to Dom - no WM #, a listing error, or every client gated -
@@ -1932,7 +1932,7 @@ function renderWalmart(){
     </tbody></table></div>
     <div class="toolbar"><button class="btn" id="wm-csv">Download Walmart sheet as CSV</button></div>
   </div>`;
-  restoreScroll("#walmart", keep);
+  restoreScroll("#view-walmart", keep);
 }
 function afterWmEdit(id){
   recompute(); saveMarks(); renderLedger();
@@ -1969,7 +1969,7 @@ function domSummary(rows){
     tprofit: rows.reduce((a,r)=>a+r.tprofit,0) };
 }
 function renderDom(){
-  const keep = gridScroll("#dom");
+  const keep = gridScroll("#view-dom");
   const rows = domOsRows();
   const el = document.getElementById("dom-table");
   if(!rows.length){ el.innerHTML = `<p class="empty">Empty, which is the good outcome.</p>`; return; }
@@ -2009,7 +2009,7 @@ function renderDom(){
         <td>${esc(r.dist)}</td>
       </tr>`).join("")}
       </tbody></table></div></div>`;
-  restoreScroll("#dom", keep);
+  restoreScroll("#view-dom", keep);
 }
 /* exactly the header row from Offer Sheet Format.xlsx */
 const OS_HEAD = ["Store Code","Tracking Code","ASIN","ASIN Eligible","ASIN Desired","Total Price","UPC",
@@ -2285,13 +2285,13 @@ function strandedBar(){
     </span></div>`;
 }
 function renderSheets(){
-  const keep = gridScroll("#sheets");
+  const keep = gridScroll("#view-sheets");
   const el = document.getElementById("sheet-table");
   const books = allBooks();
   if(!books.length){
     el.innerHTML = strandedBar() + `<p class="empty">No offer sheet yet. An Amazon sheet appears once a store picks up items;
       a Walmart sheet appears once a row has a WM # and an ungated client.</p>`;
-    restoreScroll("#sheets", keep);
+    restoreScroll("#view-sheets", keep);
     return;
   }
   el.innerHTML = strandedBar() + `<div class="gridbar">
@@ -2302,7 +2302,7 @@ function renderSheets(){
       Profitable / Good to Order. Both stay editable per row.</span>
   </div>`
   + books.map(({b,ch})=>osBlock(b, "Offer Sheet for " + b.code, ch)).join("");
-  restoreScroll("#sheets", keep);
+  restoreScroll("#view-sheets", keep);
 }
 
 function bookFor(key){
