@@ -342,21 +342,13 @@
 
 <main>
   <section id="view-queue">
-    <div class="warnbar" id="nobudget" hidden>
-      <strong>Load the store budget first.</strong> Nothing can be allocated until the roster is loaded.
-      It saves for the whole team, so this is a one-off.
-    </div>
     <div class="panel" id="filelist"></div>
     <div class="panel">
-      <h2>Store budget</h2>
-      <div class="body">
-        <p class="note" id="budgetnote"></p>
-        <button class="btn go" id="pick2">Load / replace the store budget</button>
-        <input type="file" id="file2" accept=".xlsx,.xlsm,.xls,.csv" hidden>
-        <span id="fname2" class="sub"></span>
-        <p class="note">Reads <code>Store_Code</code>, <code>Partner_Name</code>, <code>Appetite_AMZ</code>,
-          <code>Appetite_WM</code> and <code>G&amp;G_Ungate_Date</code>. Stores with a blank G&amp;G date are ignored.</p>
-      </div>
+      <h2>The roster</h2>
+      <div class="body"><p class="note" id="rosternote"></p>
+        <p class="note">Clients come from O2I. Anyone not allocatable there is out of the queue.
+          The order is fewest already allocated to Amazon first, counted from the OMS portal.
+          Store codes are three letters; anything else is ignored.</p></div>
     </div>
     <div class="panel" id="readreport" hidden></div>
   </section>
@@ -412,7 +404,7 @@ const uid = () => Math.random().toString(36).slice(2,9);
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const norm = s => String(s??"").toLowerCase().replace(/[^a-z0-9]/g,"");
 
-let items = [], budget = [], sheets = [];
+let items = [], sheets = [];
 let marks = {};                 /* asin -> { listing:"", stores:{CODE:"Gated"|"Ungated"} } */
 let wm = {};                    /* item id -> { wmnum, upc, roi, profit, target, listing, st:{CODE:status} } */
 let wmClients = [];             /* shared client columns on the walmart sheet, in the order added */
@@ -428,7 +420,7 @@ let allFilter = "all", allQuery = "";
 let resPick = new Set();          /* which clients the results download covers */
 let allSort = { key: "", dir: 1 };
 let osEdit = {};                /* item id -> { status, notes } typed over the auto value */
-let stores = [];                /* [{code,end,appetite,appetiteWM,name}] newest -> oldest */
+let stores = [];                /* [{code,name,allocatable,allocated}] fewest allocated first */
 let colMode = "split";          /* split | rand | all | hits */
 let randomCols = null, oldPick = null, randPool = 50;
 let gridQuery = "", lastFile = "", lastSheetNames = [], pickedO2I = "";
@@ -442,7 +434,7 @@ function toast(m){
   clearTimeout(toastTimer); toastTimer = setTimeout(()=>{ if(d.parentNode) d.parentNode.removeChild(d); }, 3400);
 }
 
-/* ---------------- built-in store budget ---------------- */
+/* ---------------- the roster ---------------- */
 function since(ms){
   const mins = Math.max(0, Math.round((Date.now() - ms) / 60000));
   if(mins < 1) return "just now";
@@ -459,6 +451,8 @@ let online = [];             /* who else is in the system right now */
 let lastAct = Date.now(), amActive = true;   /* actually at the screen, or just left the tab open */
 let allowedDomains = [];
 let queueAt = "", queueCounts = {}, queueSkipped = 0, queueLoading = false;
+let liveRoster = {};         /* code -> {allocatable, allocated, status_account} from the portals */
+let omsNote = "";
 
 function gateMsg(text, bad){
   const el = document.getElementById("g-msg");
@@ -521,47 +515,29 @@ async function initCloud(){
 }
 
 /* ---------------- the roster ---------------- */
+function allocCount(code){
+  const r = liveRoster[code];
+  return r ? (Number(r.allocated) || 0) : 0;
+}
+function canAllocate(code){
+  const r = liveRoster[code];
+  return r ? r.allocatable !== false : true;   /* unknown to the portal: allow */
+}
 function rebuildStores(){
-  stores = budget.slice().sort((a,b)=> new Date(b.end) - new Date(a.end));
+  /* the roster comes from O2I, ordered by fewest already allocated to Amazon */
+  stores = Object.values(liveRoster).slice().sort((a,b)=>
+    (a.allocated - b.allocated) || a.code.localeCompare(b.code));
   const dl = document.getElementById("store-opts");
   if(dl) dl.innerHTML = stores.map(s=>`<option value="${esc(s.code)}">${esc(s.name)}</option>`).join("");
-  const n = document.getElementById("budgetnote");
+  const n = document.getElementById("rosternote");
+  const blocked = stores.filter(x=>!canAllocate(x.code)).length;
   if(n) n.textContent = stores.length
-    ? stores.length + " stores, newest to oldest by G&G ungate date \u2014 " + stores[0].code
-      + " (" + stores[0].end + ") first, " + stores[stores.length-1].code
-      + " (" + stores[stores.length-1].end + ") last. Shared with everyone."
-    : "No store roster yet. Load the budget file below \u2014 it saves for the whole team.";
-}
-function isoDate(s){
-  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s || "").trim());
-  if(!m) return null;
-  const p = n => String(n).padStart(2, "0");
-  return m[3] + "-" + p(m[1]) + "-" + p(m[2]);
-}
-async function loadSavedBudget(){
-  budget = [];
-  if(sb && me){
-    const { data, error } = await sb.from("realloc_stores")
-      .select("code,partner_name,appetite_amz,appetite_wm,gg_ungate_date");
-    if(error) toast("Could not load the roster: " + error.message);
-    else budget = (data || []).filter(r=>r.gg_ungate_date).map(r=>({
-      code: r.code, name: r.partner_name || "",
-      appetite: Number(r.appetite_amz) || 0, appetiteWM: Number(r.appetite_wm) || 0,
-      end: normDate(r.gg_ungate_date)
-    }));
-  }
-  rebuildStores();
-}
-async function saveBudget(){
-  if(!sb || !me) return;
-  const rows = budget.map(b=>({
-    code: b.code, partner_name: b.name || "",
-    appetite_amz: b.appetite || 0, appetite_wm: b.appetiteWM || 0,
-    gg_ungate_date: isoDate(b.end), updated_at: new Date().toISOString()
-  })).filter(r=>r.gg_ungate_date);
-  const { error } = await sb.from("realloc_stores").upsert(rows, { onConflict: "code" });
-  if(error) toast("Could not save the roster: " + error.message);
-  else toast(rows.length + " stores saved for everyone");
+    ? stores.length + " stores from O2I, fewest allocated to Amazon first \u2014 " + stores[0].code
+      + " (" + allocCount(stores[0].code) + ") first, " + stores[stores.length-1].code
+      + " (" + allocCount(stores[stores.length-1].code) + ") last"
+      + (blocked ? " \u00b7 " + blocked + " on hold and out of the queue" : "")
+      + (omsNote ? " \u00b7 " + omsNote : "")
+    : "Waiting for the roster from O2I.";
 }
 
 /* ---------------- the live queue ---------------- */
@@ -619,6 +595,10 @@ async function refreshQueue(){
       holder: r.holder_name, holderCode: r.holder_code, status: r.allocation_status,
       stage: "", reason: "", note: "", client: "", sweep: false, pending: 0
     }));
+    liveRoster = {};
+    (body.roster || []).forEach(r=>{ liveRoster[r.code] = r; });
+    omsNote = body.oms_ok ? "" : (body.oms_note || "");
+    rebuildStores();
     queueCounts = body.counts || {};
     queueSkipped = body.missing_raw_info || 0;
     queueAt = body.read_at || new Date().toISOString();
@@ -951,33 +931,7 @@ function readWorkbook(file, done){
   r.readAsArrayBuffer(file);
 }
 
-function loadBudget(sheetsObj, filename){
-  const names = Object.keys(sheetsObj);
-  const rows = sheetsObj[names.find(n=>/budget|client|store|sheet1/i.test(n)) || names[0]];
-  if(!rows || rows.length<2) return toast("No usable rows in the budget file");
-  const H = rows[0].map(x=>String(x));
-  const cCode = pickCol(H,"Store_Code","StoreCode","Code");
-  const cName = pickCol(H,"Partner_Name","Client_name","Store_name");
-  const cDate = pickCol(H,"G&G_Ungate_Date","GG_Ungate_Date");
-  const cApp = pickCol(H,"Appetite_AMZ","Appetite");
-  const cWM = pickCol(H,"Appetite_WM");
-  if(cCode < 0) return toast("No Store_Code column in that file");
-  if(cDate < 0) return toast("No G&G_Ungate_Date column in that file");
-  const num = v => Number(String(v??"").replace(/[^0-9.\-]/g,"")) || 0;
-  const next = [];
-  for(let i=1;i<rows.length;i++){
-    const r = rows[i]; if(!r) continue;
-    const code = String(r[cCode]||"").trim().toUpperCase();
-    const end = normDate(r[cDate]);
-    if(!code || !end || isNaN(new Date(end).getTime())) continue;
-    next.push({ code, end, name: cName>=0?String(r[cName]||"").trim():"",
-      appetite: cApp>=0?num(r[cApp]):0, appetiteWM: cWM>=0?num(r[cWM]):0 });
-  }
-  if(!next.length) return toast("No stores with a usable G&G_Ungate_Date in that file");
-  budget = next; rebuildStores(); saveBudget();
-  document.getElementById("fname2").textContent = filename + " \u2014 " + budget.length + " stores with a G&G date";
-  toast(budget.length + " stores loaded"); recompute(); render();
-}
+
 
 /* ---------------- grid model ---------------- */
 /* a row whose every copy has left the Amazon side has nothing left to check here */
@@ -998,7 +952,9 @@ function gridRows(all){
   if(all || showDone) return out;
   return out.filter(g=>!settledAsin(g.asin));
 }
-function activeStores(){ return problem.length ? stores.filter(s=>!problem.includes(s.code)) : stores; }
+function activeStores(){
+  return stores.filter(s=>!problem.includes(s.code) && canAllocate(s.code));
+}
 function markOf(asin){ return marks[asin] || (marks[asin] = {listing:"", stores:{}}); }
 /* how many clients have been given any verdict on this ASIN */
 function checkedCount(asin){
@@ -1097,8 +1053,7 @@ function visibleStores(){
 }
 
 /* ---------------- routing ---------------- */
-function remainingSpent(spent, s){ return s.appetite - (spent[s.code]||0); }
-/* the amount the $100 test and the appetite walk work from - follows any edit */
+/* the amount the $100 test works from - follows any edit */
 /* people paste "$26.44", "3%", "1,200" and even "$ 7.579.57" into these boxes.
    strip the decoration, and treat anything still unreadable as not set. */
 function typedNum(v, fallback){
@@ -1164,33 +1119,16 @@ function recompute(){
     it.pending = pending;          /* held provisionally until every newer client is checked */
     it.sweep = pending > 0;
     const amt = liveAmount(it);
-    const skips = [];
-    let placed = false, firstShort = null;
+    let placed = false;
     for(const code of codes){
-      const s = storeBy(code); if(!s) continue;
-      const rem = remainingSpent(spent, s);
-      if(amt > rem){
-        if(!firstShort) firstShort = {code, rem, appetite: s.appetite};
-        skips.push(code + " over appetite");
-        continue;
-      }
-      spent[code] = (spent[code]||0) + amt;
+      if(!storeBy(code)) continue;
+      spent[code] = (spent[code] || 0) + amt;
       it.stage = "basket"; it.client = code;
-      it.note = skips.length ? "Passed over " + skips.join(", ") : "";
       placed = true; break;
     }
     if(!placed){
       it.stage = "walmart";
-      if(firstShort){
-        it.reason = "Over appetite";
-        it.note = firstShort.code + " has " + money(Math.max(0, firstShort.rem)) + " left of "
-          + money(firstShort.appetite) + ", this item needs " + money(amt)
-          + (skips.length > 1 ? " \u2014 same for " + (skips.length - 1) + " other ungated client"
-             + (skips.length === 2 ? "" : "s") : "");
-      } else {
-        it.reason = "Ungated client not in the roster";
-        it.note = skips.length ? "Passed over " + skips.join(", ") : "";
-      }
+      it.reason = "Ungated client not in the roster";
     }
   });
 
@@ -1548,7 +1486,7 @@ function renderGrid(){
           const v = m.stores[st.code] || "";
           return `<td class="${findCode===st.code?"findcol":""}${checking[st.code]?" onitcol":""}"${i===boundary?' style="border-left:2px solid var(--ink3)"':''}><select class="cell ${cellClass(v)}"
             id="c_${esc(r.asin)}_${esc(st.code)}" data-asin="${esc(r.asin)}" data-code="${esc(st.code)}"
-            title="${esc(st.code)} · ${esc(st.name)} · G&amp;G ${esc(st.end)} · appetite ${money(st.appetite)}"
+            title="${esc(st.code)} · ${esc(st.name)} · ${allocCount(st.code)} allocated to Amazon"
             ><option value=""${v?"":" selected"}>&mdash;</option><option value="Gated"${v==="Gated"?" selected":""}>Gated</option><option value="Ungated"${v==="Ungated"?" selected":""}>Ungated</option></select></td>`;
         }).join("")}</tr>`;
     }).join("")}
@@ -1888,7 +1826,7 @@ function renderWalmart(){
       <th class="w7">Result</th>
       ${wmClients.map(c=>{ const st = storeBy(c);
         return `<th class="wc">${esc(c)}<button class="clx" data-cx="${esc(c)}" aria-label="Remove ${esc(c)} column">&times;</button>
-          <span class="d">${esc(st ? st.name.split(" ").slice(0,2).join(" ") : "not in budget")}</span></th>`;}).join("")}
+          <span class="d">${esc(st ? String(st.name).split(" ").slice(0,2).join(" ") : "not in the roster")}</span></th>`;}).join("")}
       ${wmClients.length ? "" : `<th class="w8">Clients checked</th>`}
     </tr></thead><tbody>
     ${rows.map((it,n)=>{
@@ -2169,7 +2107,7 @@ function osBlock(b, label, channel){
         <div class="os-eyebrow">Offer sheet &middot; ${esc(channel)}</div>
         <div class="os-who">${esc(b.code)}</div>
         ${b.store?`<div class="os-sub"><b>${esc(b.store.name)}</b> &nbsp;&middot;&nbsp; G&amp;G ${esc(b.store.end)}
-          &nbsp;&middot;&nbsp; appetite ${money(channel==="amazon"?b.store.appetite:b.store.appetiteWM)}</div>`:""}
+          &nbsp;&middot;&nbsp; ${allocCount(b.code)} allocated to Amazon</div>`:""}
         <div class="os-sub">${b.rows.length} line${b.rows.length===1?"":"s"} &nbsp;&middot;&nbsp; ${esc(osDate())}</div>
       </div>
       <div class="os-figs">
@@ -2322,6 +2260,11 @@ const IMPORT_HEAD = ["tracking_code","asin","upc/gtin","brand","product_name","a
   "bundle_size","unit_price","order_quantity","target_sell_price","profit","roi","breakeven_price",
   "distributor","date_ordered","order_id","invoice_number","notes","client_name"];
 
+function isoDate(s){
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s || "").trim());
+  const p = n => String(n).padStart(2, "0");
+  return m ? m[3] + "-" + p(m[1]) + "-" + p(m[2]) : "";
+}
 function dateOut(v){
   const d = normDate(v);
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(d);
@@ -2388,8 +2331,6 @@ function render(){
   const sameView = lastView === view;
   const wy = (typeof window !== "undefined" && window.scrollY) || 0;
   renderLedger(); renderFiles(); renderBatchChip(); renderResultPicker(); renderWho();
-  const nb = document.getElementById("nobudget");
-  if(nb) nb.hidden = stores.length > 0;
   document.querySelectorAll("#tabs button").forEach(b=>{
     b.setAttribute("aria-current", String(b.dataset.view===view));
     if(b.hasAttribute("data-needs")) b.disabled = !items.length;
@@ -2451,8 +2392,6 @@ function csv(name, header, rows){
 }
 
 /* ---------------- events ---------------- */
-const pick2 = document.getElementById("pick2");
-if(pick2) pick2.onclick = () => document.getElementById("file2").click();
 document.addEventListener("change", e=>{
   if(e.target.id === "bulk-file"){
     const f = e.target.files[0];
@@ -2465,8 +2404,6 @@ document.addEventListener("change", e=>{
     e.target.value = "";
   }
 });
-const file2 = document.getElementById("file2");
-if(file2) file2.onchange = e => { const f=e.target.files[0]; if(f) readWorkbook(f, s=>loadBudget(s,f.name)); };
 
 /* sign in — Google only */
 const ggl = document.getElementById("g-google");
@@ -2833,7 +2770,6 @@ document.addEventListener("change", e=>{
 (async ()=>{
   const signedIn = await initCloud();
   if(!signedIn){ render(); return; }
-  await loadSavedBudget();
   view = "all";
   render();
   await refreshQueue();
