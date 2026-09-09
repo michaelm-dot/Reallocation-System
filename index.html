@@ -107,6 +107,10 @@
   .prob:hover{border-color:var(--flag);background:var(--wash-flag);color:var(--flag)}
   .prob.dot{color:var(--ink3);font-size:12px}
   .prob.take{color:var(--ink3);font-weight:700}
+  select.pick{width:100%;font:500 12px var(--mono);padding:3px 4px;border:1px solid var(--rule);
+    border-radius:4px;background:var(--wash);color:var(--ink2);cursor:pointer}
+  select.pick:hover{border-color:var(--amazon)}
+  select.pick.set{background:#F2FBF4;border-color:#7FB98B;color:#14532d;font-weight:600}
   .prob.take:hover{border-color:var(--amazon);background:var(--wash-amazon);color:var(--amazon)}
   .asincell{display:flex;align-items:center;gap:5px}
   .asinlink{color:var(--ink);text-decoration:none;border-bottom:1px dotted var(--ink3)}
@@ -408,7 +412,7 @@ let items = [], sheets = [];
 let marks = {};                 /* asin -> { listing:"", stores:{CODE:"Gated"|"Ungated"} } */
 let wm = {};                    /* item id -> { wmnum, upc, roi, profit, target, listing, st:{CODE:status} } */
 let wmClients = [];             /* shared client columns on the walmart sheet, in the order added */
-let problem = [];               /* store codes pulled out for an account problem */
+let problem = [];               /* no longer used - O2I decides. kept so old saved state still loads */
 let findCode = "";              /* store column to highlight and scroll to, order untouched */
 let checking = {};              /* CODE -> {at} - someone is working this client right now */
 const PAGE = 30;                /* client columns per page - 299 at once is unusable */
@@ -710,7 +714,7 @@ if(typeof window !== "undefined" && window.addEventListener){
 
 /* give one client everything it is ungated for, and make it stick */
 function takeAll(code){
-  if(problem.includes(code)) return toast(code + " is flagged, so it cannot take items");
+  if(!canAllocate(code)) return toast(code + " is not allocatable in O2I, so it cannot take items");
   const ung = items.filter(it=>(markOf(it.asin).stores || {})[code] === "Ungated");
   /* a listing error means nobody can list it, so priority must not take it */
   const ok = ung.filter(it=>/^no error$/i.test(markOf(it.asin).listing || ""));
@@ -953,7 +957,8 @@ function gridRows(all){
   return out.filter(g=>!settledAsin(g.asin));
 }
 function activeStores(){
-  return stores.filter(s=>!problem.includes(s.code) && canAllocate(s.code));
+  /* O2I decides who can receive. there is no manual override. */
+  return stores.filter(s=>canAllocate(s.code));
 }
 function markOf(asin){ return marks[asin] || (marks[asin] = {listing:"", stores:{}}); }
 /* how many clients have been given any verdict on this ASIN */
@@ -982,10 +987,10 @@ function splitCols(){
   if(!oldPick || !oldPick.length) drawOld();
   /* flagging a member removes only that one and draws a replacement from the old pool.
      the other four never move - the whole five is not redrawn. */
-  const keep = oldPick.filter(x=>x && !problem.includes(x.code));
+  const keep = oldPick.filter(x=>x && canAllocate(x.code));
   if(keep.length < oldPick.length || keep.length < 5){
     const have = new Set(keep.map(x=>x.code));
-    const pool = poolSplit().oldPool.filter(x=>!have.has(x.code) && !problem.includes(x.code));
+    const pool = poolSplit().oldPool.filter(x=>!have.has(x.code) && canAllocate(x.code));
     while(keep.length < 5 && pool.length){
       keep.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
     }
@@ -1077,11 +1082,10 @@ function recompute(){
   items.forEach(it=>{
     const lk = wm[it.id];
     if(lk && lk.excluded){ it.stage = "excluded"; it.reason = "Taken off the offer sheet"; return; }
-    if(lk && lk.locked && problem.includes(lk.locked)){
-      /* an account problem outranks a finalised sheet - a flagged client
-         cannot receive items, so it cannot hold them either */
+    if(lk && lk.locked && !canAllocate(lk.locked)){
+      /* O2I outranks a finalised sheet - a client that cannot receive cannot hold either */
       it.stage = "unchecked";
-      it.reason = "Was finalised to " + lk.locked + ", but that account is flagged";
+      it.reason = "Was given to " + lk.locked + ", but that account is not allocatable in O2I";
       return;
     }
     if(lk && lk.locked){
@@ -1135,7 +1139,7 @@ function recompute(){
   items.filter(i=>i.stage==="walmart").forEach(it=>{
     const r = wmResult(it), rec = wmRec(it.id);
     const lkw = wm[it.id];
-    const sheetFor = (lkw && lkw.locked && lkw.lockedCh === "walmart" && !problem.includes(lkw.locked))
+    const sheetFor = (lkw && lkw.locked && lkw.lockedCh === "walmart" && canAllocate(lkw.locked))
       ? lkw.locked : r.sheet;
     it.client = sheetFor || "";
     if(sheetFor) sheets.push({ id:"wm_"+it.id, channel:"walmart", client:sheetFor, itemIds:[it.id],
@@ -1148,7 +1152,7 @@ function recompute(){
   /* finalised rows join their client's group whatever the basket total */
   items.forEach(it=>{
     const lk = wm[it.id];
-    if(lk && lk.locked && !lk.excluded && lk.lockedCh !== "walmart" && !problem.includes(lk.locked)){
+    if(lk && lk.locked && !lk.excluded && lk.lockedCh !== "walmart" && canAllocate(lk.locked)){
       (groups[lk.locked] = groups[lk.locked] || []);
       if(!groups[lk.locked].includes(it)) groups[lk.locked].push(it);
     }
@@ -1201,6 +1205,27 @@ function wmResult(it){
 function wmUngCount(it){ const r = wmRec(it.id); return wmClients.filter(c=>r.st[c]==="Ungated").length; }
 
 /* ---------------- ungating grid ---------------- */
+/* the ungated clients for an ASIN, fewest already allocated first */
+function ungatedPick(asin){
+  return ungatedCodes(asin).slice().sort((a,b)=> allocCount(a) - allocCount(b) || a.localeCompare(b));
+}
+function idsFor(asin){ return items.filter(i=>i.asin === asin).map(i=>i.id); }
+function lockedFor(asin){
+  for(const id of idsFor(asin)){ const r = wm[id]; if(r && r.locked) return r.locked; }
+  return "";
+}
+/* you choose who gets it - the order is only a suggestion */
+function resultCell(r){
+  const codes = ungatedPick(r.asin);
+  const res = resultFor(r.asin);
+  if(!codes.length) return `<span class="res ${res.c}" title="${esc(res.tip||res.t)}">${esc(res.t)}</span>`;
+  const chosen = lockedFor(r.asin);
+  return `<select class="pick ${chosen?"set":""}" data-pick="${esc(r.asin)}"
+      title="${chosen ? "Given to " + esc(chosen) : "Suggested: " + esc(codes[0])}">
+    <option value=""${chosen?"":" selected"}>${esc(codes[0])} &mdash; suggested</option>
+    ${codes.map(c=>`<option value="${esc(c)}"${chosen===c?" selected":""}>${esc(c)} \u00b7 ${allocCount(c)} allocated</option>`).join("")}
+  </select>`;
+}
 function resultFor(asin){
   const its = items.filter(i=>i.asin===asin);
   if(!its.length) return {t:"not in O2I", c:"e"};
@@ -1449,15 +1474,8 @@ function renderGrid(){
           <button class="clx" data-check="${esc(c)}" aria-label="Clear ${esc(c)}">&times;</button></span>`).join("")}
         <em>Everyone sees these as they happen.</em>
       </div>` : ""; })()}
-    ${problem.length ? `<div class="warnbar" style="margin:0 16px 12px">Account problem &mdash; out of the
-      queue and cannot receive items: ${problem.map(c=>`<span class="cl"><b>${esc(c)}</b>
-      <button class="clx" data-unprob="${esc(c)}" aria-label="Restore ${esc(c)}">&times;</button></span>`).join("")}</div>` : ""}
-    <div class="gridwrap"><table class="grid"><thead><tr>
-      <th class="stick c0"></th><th class="stick c1">ASIN</th><th class="stick c2">Brand</th>
-      <th class="stick c3" title="Ungated marks / clients checked">Ung / Chk</th><th class="stick c4">Listing status</th><th class="stick c5">Result</th>
-      ${cols.map((st,i)=>`<th id="h_${esc(st.code)}" class="${findCode===st.code?"findcol":""}${checking[st.code]?" onitcol":""}${problem.includes(st.code)?" flaggedcol":""}"${i===boundary?' style="border-left:2px solid var(--ink3)"':''}>
-        <span class="hd">${esc(st.code)}<button class="prob" data-prob="${esc(st.code)}"
-          title="Account problem \u2014 drop ${esc(st.code)} and pull in the next store by G&amp;G date">!</button><button
+      ${cols.map((st,i)=>`<th id="h_${esc(st.code)}" class="${findCode===st.code?"findcol":""}${checking[st.code]?" onitcol":""}"${i===boundary?' style="border-left:2px solid var(--ink3)"':''}>
+        <span class="hd">${esc(st.code)}<button
           class="prob take" data-take="${esc(st.code)}"
           title="Priority \u2014 give ${esc(st.code)} every row it is ungated for">&raquo;</button>${
           checking[st.code]
@@ -1481,7 +1499,7 @@ function renderGrid(){
           <option value=""${m.listing?"":" selected"}>— not set —</option>
           ${opts.map(o=>`<option value="${esc(o)}"${m.listing===o?" selected":""}>${esc(o)}</option>`).join("")}
         </select></td>
-        <td class="stick c5" id="r_${esc(r.asin)}"><span class="res ${res.c}" title="${esc(res.tip||res.t)}">${esc(res.t)}</span></td>
+        <td class="stick c5" id="r_${esc(r.asin)}">${resultCell(r)}</td>
         ${cols.map((st,i)=>{
           const v = m.stores[st.code] || "";
           return `<td class="${findCode===st.code?"findcol":""}${checking[st.code]?" onitcol":""}"${i===boundary?' style="border-left:2px solid var(--ink3)"':''}><select class="cell ${cellClass(v)}"
@@ -1513,8 +1531,7 @@ function afterEdit(asin){
   if(nEl) nEl.innerHTML = ungatedCodes(asin).length + '<span class="chk"> / ' + checkedCount(asin) + '</span>';
   gridRows().forEach(r=>{
     const rEl = document.getElementById("r_" + r.asin);
-    if(rEl){ const res = resultFor(r.asin);
-      rEl.innerHTML = `<span class="res ${res.c}" title="${esc(res.tip||res.t)}">${esc(res.t)}</span>`; }
+    if(rEl) rEl.innerHTML = resultCell(r);
   });
 }
 
@@ -2393,6 +2410,19 @@ function csv(name, header, rows){
 
 /* ---------------- events ---------------- */
 document.addEventListener("change", e=>{
+  const pk = e.target && e.target.dataset ? e.target.dataset.pick : null;
+  if(pk){
+    const code = e.target.value;
+    idsFor(pk).forEach(id=>{
+      const r = wmRec(id);
+      r.locked = code || "";
+      r.lockedCh = code ? "amazon" : "";
+      touch("ovr", id);
+    });
+    recompute(); saveMarks(); renderGrid(); renderLedger();
+    toast(code ? pk + " given to " + code : pk + " back to the suggested client");
+    return;
+  }
   if(e.target.id === "bulk-file"){
     const f = e.target.files[0];
     if(f) readWorkbook(f, s=>applyBulk(s, f.name));
@@ -2476,25 +2506,6 @@ document.addEventListener("click", e=>{
   if(tk){ e.preventDefault(); return takeAll(tk.dataset.take); }
   const cb = t.closest("button[data-check]");
   if(cb) return toggleChecking(cb.dataset.check);
-  const pb = t.closest("button[data-prob]");
-  if(pb){
-    const code = pb.dataset.prob;
-    if(!problem.includes(code)) problem.push(code);
-    touch("state");
-    if(randomCols) drawRandom();
-    recompute(); saveMarks(); renderGrid(); renderLedger();
-    const next = visibleStores().map(x=>x.code).filter(c=>c!==code);
-    toast(code + " marked as an account problem \u2014 next store by G&G date takes its place");
-    return;
-  }
-  const ub = t.closest("button[data-unprob]");
-  if(ub){
-    problem = problem.filter(c=>c!==ub.dataset.unprob);
-    touch("state");
-    if(randomCols) drawRandom();
-    recompute(); saveMarks(); renderGrid(); renderLedger();
-    return toast(ub.dataset.unprob + " restored");
-  }
   if(t.id==="q-refresh") return refreshQueue();
   if(t.id==="batchclose"){ batchReport = null; return renderGrid(); }
   if(t.id==="batch-pick"){
