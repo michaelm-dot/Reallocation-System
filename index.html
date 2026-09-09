@@ -1474,6 +1474,11 @@ function renderGrid(){
           <button class="clx" data-check="${esc(c)}" aria-label="Clear ${esc(c)}">&times;</button></span>`).join("")}
         <em>Everyone sees these as they happen.</em>
       </div>` : ""; })()}
+    <div class="gridwrap">
+      <table class="grid"><thead><tr>
+      <th class="stick c0"></th><th class="stick c1">ASIN</th><th class="stick c2">Brand</th>
+      <th class="stick c3" title="Ungated marks / clients checked">Ung / Chk</th>
+      <th class="stick c4">Listing status</th><th class="stick c5">Result</th>
       ${cols.map((st,i)=>`<th id="h_${esc(st.code)}" class="${findCode===st.code?"findcol":""}${checking[st.code]?" onitcol":""}"${i===boundary?' style="border-left:2px solid var(--ink3)"':''}>
         <span class="hd">${esc(st.code)}<button
           class="prob take" data-take="${esc(st.code)}"
@@ -1481,7 +1486,7 @@ function renderGrid(){
           checking[st.code]
             ? `<button class="onit" data-check="${esc(st.code)}" title="Being checked, started ${esc(since(checking[st.code].at))} ago \u2014 click to clear">&#9679;</button>`
             : `<button class="prob dot" data-check="${esc(st.code)}" title="Mark ${esc(st.code)} as being checked">&bull;</button>`}</span>
-        <span class="d">${esc(st.end)}</span></th>`).join("")}
+        <span class="d">${allocCount(st.code)} alloc</span></th>`).join("")}
     </tr></thead><tbody>
     ${rows.map((r,n)=>{
       const m = markOf(r.asin), res = resultFor(r.asin);
