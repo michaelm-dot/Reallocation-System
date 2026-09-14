@@ -330,6 +330,10 @@
 <header class="masthead">
   <div class="wordmark">Reallocation desk<span id="batchchip">O2I &rarr; Amazon &rarr; Walmart &rarr; Dom</span></div>
   <span id="whoami" style="font:400 12px var(--mono);color:var(--ink3)"></span>
+  <div id="mos-switch">
+    <button data-app="realloc" aria-current="true">Reallocation desk</button>
+    <button data-app="mos">Manual offer sheet</button>
+  </div>
   <nav class="tabs" id="tabs">
     <button data-view="queue" aria-current="true">Queue</button>
     <button data-view="all" data-needs>All items</button>
@@ -395,10 +399,200 @@
   </section>
 </main>
 
+<style>
+/* Manual Offer Sheet — leans on the app's existing tokens so the two desks
+   read as one product. Blue is the reallocation side; this desk uses the
+   ink/amazon greens already in :root. */
+#mos-switch{display:flex;gap:2px;background:var(--wash-dom);border:1px solid var(--rule);
+  border-radius:7px;padding:2px;margin-right:14px}
+#mos-switch button{border:0;background:none;cursor:pointer;padding:5px 11px;border-radius:5px;
+  font:500 12.5px/1.2 var(--sans);color:var(--ink2);white-space:nowrap}
+#mos-switch button[aria-current="true"]{background:var(--panel);color:var(--ink);
+  box-shadow:0 1px 2px rgba(23,32,29,.08)}
+body.mos-on #tabs, body.mos-on main{display:none}
+body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
+
+#mos-main{padding:22px 26px 70px;max-width:1500px}
+#mos-main h2{margin:0 0 4px;font:600 19px/1.2 var(--disp);letter-spacing:-.01em}
+#mos-main h3{margin:26px 0 9px;font:600 13.5px/1.3 var(--sans);color:var(--ink)}
+#mos-main .lede{margin:0 0 18px;color:var(--ink2);font-size:13px;max-width:70ch}
+.mos-card{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:16px;margin-bottom:14px}
+.mos-drop{border:1.5px dashed var(--rule);border-radius:8px;padding:20px;text-align:center;
+  color:var(--ink2);font-size:13px;cursor:pointer;background:var(--panel)}
+.mos-drop:hover,.mos-drop.over{border-color:var(--amazon);background:var(--wash-amazon);color:var(--amazon)}
+.mos-drop small{display:block;margin-top:5px;font-size:12px;color:var(--ink3)}
+
+.mos-stats{display:flex;gap:26px;flex-wrap:wrap;margin:14px 0}
+.mos-stat b{display:block;font:600 21px/1.1 var(--mono);letter-spacing:-.02em}
+.mos-stat span{font-size:11.5px;color:var(--ink3)}
+.mos-empty{color:var(--ink3);font-size:13px;padding:14px 0}
+
+.mos-scroll{max-height:420px;overflow:auto;border:1px solid var(--rule);border-radius:8px;background:var(--panel)}
+.mos-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.mos-table th{position:sticky;top:0;background:var(--panel);text-align:left;font-weight:600;
+  color:var(--ink2);padding:7px 9px;border-bottom:1px solid var(--rule);white-space:nowrap;z-index:1}
+.mos-table th.s{cursor:pointer;user-select:none}
+.mos-table th.s:hover{color:var(--amazon)}
+.mos-table td{padding:6px 9px;border-bottom:1px solid var(--rule);vertical-align:top}
+.mos-table .r{text-align:right;font-family:var(--mono)}
+.mos-table .dim{color:var(--ink3)}
+.mos-table .mono{font-family:var(--mono)}
+.mos-table .nowrap{white-space:nowrap}
+.mos-table tbody tr:hover{background:var(--wash-dom)}
+
+.mos-row{display:flex;gap:9px;flex-wrap:wrap;align-items:flex-end;margin-top:12px}
+.mos-field{flex:0 0 auto}
+.mos-field label{display:block;font-size:12.5px;font-weight:500;margin-bottom:5px}
+.mos-field input,.mos-field select,.mos-field textarea{padding:7px 9px;border:1px solid var(--rule);
+  border-radius:6px;background:var(--panel);font:400 13px/1.4 var(--sans);color:var(--ink);width:100%}
+.mos-field textarea{font-family:var(--mono);font-size:12px;resize:vertical}
+.mos-field .hint{font-size:12px;color:var(--ink3);margin-top:5px;line-height:1.45;max-width:46ch}
+.mos-btn{padding:7px 14px;border-radius:6px;border:1px solid var(--amazon);background:var(--amazon);
+  color:#fff;font:500 13px/1.4 var(--sans);cursor:pointer;white-space:nowrap}
+.mos-btn:hover{filter:brightness(1.08)}
+.mos-btn.quiet{background:var(--panel);color:var(--ink2);border-color:var(--rule)}
+.mos-btn.quiet:hover{background:var(--wash-dom);color:var(--ink);filter:none}
+.mos-btn.flag{background:var(--panel);color:var(--flag);border-color:#E2BEB9}
+.mos-btn.flag:hover{background:var(--wash-flag);filter:none}
+.mos-btn:disabled{opacity:.42;cursor:not-allowed;filter:none}
+.mos-mini{padding:3px 8px;font:400 12px/1.3 var(--sans);border-radius:5px;border:1px solid var(--rule);
+  background:var(--panel);color:var(--ink2);cursor:pointer}
+.mos-mini:hover{background:var(--wash-dom);color:var(--ink)}
+.mos-pill{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:500;
+  background:var(--wash-amazon);color:var(--amazon);margin-right:4px}
+.mos-pill.warn{background:var(--wash-flag);color:var(--flag)}
+.mos-warn{background:var(--wash-flag);color:var(--flag);padding:10px 12px;border-radius:7px;font-size:12.5px;line-height:1.5}
+.mos-ok{background:var(--wash-amazon);color:var(--amazon);padding:10px 12px;border-radius:7px;font-size:12.5px}
+.mos-note{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);
+  color:#fff;padding:9px 16px;border-radius:7px;font-size:13px;z-index:90;max-width:70ch}
+.mos-note.bad{background:var(--flag)}
+#mos-busy{font:500 12.5px/1.3 var(--sans);color:var(--ink2);margin:10px 0}
+</style>
+
+<nav class="tabs" id="mos-tabs">
+  <button data-mv="asins" aria-current="true">ASINs</button>
+  <button data-mv="sheet">Manual offer sheet</button>
+</nav>
+
+<div id="mos-main">
+  <div id="mos-busy" hidden>Working&hellip;</div>
+
+  <!-- ===== ASINs ===== -->
+  <section id="mos-asins">
+    <h2>ASINs</h2>
+    <p class="lede">The unique ASINs from Ungate List 3.0, shared with everyone on the team. Duplicates collapse to the row with the lowest unit cost; on an exact tie the order is KEHE DC27, DC15, DC18, DC19, DC01, then any other distributor consistently at random.</p>
+
+    <div class="mos-stats" id="mos-asin-stats"></div>
+
+    <div class="mos-card">
+      <div class="mos-drop" id="mos-asin-drop">
+        <div><b>Drop a new Asins CSV here</b>, or click to choose a file</div>
+        <small>In Ungate List 3.0: File &rarr; Download &rarr; Comma-separated values, with the Asins tab open. Replaces the list for the whole team; clients, gating and history stay.</small>
+      </div>
+      <input type="file" id="mos-asin-drop-input" accept=".csv,.tsv,text/csv" hidden>
+    </div>
+
+    <h3>Duplicates resolved</h3>
+    <div class="mos-scroll" id="mos-dupes"></div>
+  </section>
+
+  <!-- ===== MANUAL OFFER SHEET ===== -->
+  <section id="mos-sheet" hidden>
+    <h2>Manual offer sheet</h2>
+    <p class="lede">Upload the Batch Details exports and the clients and their gating come straight out of them. A row counts as Ungated when it has an FNSKU and no errors; anything else is Gated.</p>
+
+    <div class="mos-card">
+      <div class="mos-drop" id="mos-batch-drop">
+        <div><b>Drop the Batch Details CSVs here</b>, or click to choose them &mdash; one file or many</div>
+        <small>The client is read from the MSKU, so GHW-B001E12YNA-3PCK is GHW. Only the ASINs in the file are touched.</small>
+      </div>
+      <input type="file" id="mos-batch-drop-input" accept=".csv,text/csv" multiple hidden>
+      <div id="mos-staged"></div>
+    </div>
+
+    <h3>Clients</h3>
+    <div class="mos-scroll" style="max-height:340px" id="mos-clients"></div>
+
+    <h3>Settings</h3>
+    <div class="mos-card">
+      <div class="mos-row">
+        <div class="mos-field" style="width:250px">
+          <label for="mos-method">How to share the ASINs</label>
+          <select id="mos-method">
+            <option value="priority">Priority order &mdash; top to bottom</option>
+            <option value="spread">Spread evenly across clients</option>
+          </select>
+          <div class="hint" id="mos-method-note"></div>
+        </div>
+        <div class="mos-field" style="width:165px">
+          <label for="mos-date">Sheet date</label>
+          <input type="date" id="mos-date">
+        </div>
+        <div class="mos-field" style="width:185px">
+          <label for="mos-max">Maximum clients per ASIN</label>
+          <input type="number" id="mos-max" min="1" max="20">
+        </div>
+        <div class="mos-field" style="width:175px">
+          <label for="mos-min">Minimum per client</label>
+          <input type="number" id="mos-min" min="0" step="50">
+          <div class="hint">A client under this is dropped, and what it held goes back for the clients after it.</div>
+        </div>
+      </div>
+      <label style="display:flex;gap:9px;align-items:flex-start;cursor:pointer;margin-top:14px">
+        <input type="checkbox" id="mos-pending" style="width:auto;margin-top:3px">
+        <span><b>Offer the Pending cells too</b>
+        <span class="hint" id="mos-pending-note"></span></span>
+      </label>
+    </div>
+
+    <div class="mos-card">
+      <div class="mos-row" style="margin-top:0">
+        <button class="mos-btn quiet" id="mos-preview">Preview</button>
+        <button class="mos-btn" id="mos-commit" disabled>Generate and record</button>
+        <button class="mos-btn quiet" id="mos-separate" disabled>One sheet per client</button>
+        <button class="mos-btn quiet" id="mos-listings" disabled>Listing extracts</button>
+      </div>
+      <div class="hint" style="margin-top:9px;color:var(--ink3);font-size:12px">Preview changes nothing. Generate downloads the workbook and records the allocations for everyone, which is what uses up the client slots.</div>
+    </div>
+
+    <div id="mos-out" hidden>
+      <div class="mos-stats" id="mos-totals"></div>
+      <div id="mos-dropped"></div>
+      <h3>Per client</h3>
+      <div class="mos-scroll" id="mos-per-client"></div>
+      <h3>Why clients were passed over</h3>
+      <div class="mos-scroll" style="max-height:260px" id="mos-skips"></div>
+    </div>
+
+    <h3>Records</h3>
+    <div class="mos-card">
+      <div class="mos-stats" style="margin-top:0" id="mos-records"></div>
+      <div class="mos-row">
+        <div class="mos-field" style="width:320px">
+          <label for="mos-reset-input">Reset specific ASINs</label>
+          <textarea id="mos-reset-input" rows="2" placeholder="B00T6BOA3C, B0BLDRVWCV"></textarea>
+        </div>
+        <div class="mos-field" style="width:250px">
+          <label for="mos-batch">Undo a whole run</label>
+          <input type="text" id="mos-batch" placeholder="2026-09-14_a1b2c3d4" spellcheck="false">
+        </div>
+      </div>
+      <div class="mos-row">
+        <button class="mos-btn flag" id="mos-reset">Reset these ASINs</button>
+        <button class="mos-btn flag" id="mos-undo">Undo run</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="mos-note" id="mos-note" hidden></div>
+
+
 <datalist id="wm-opts"><option value="No WM # found"></option></datalist>
 <datalist id="store-opts"></datalist>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.99.1/dist/umd/supabase.js"></script>
 <script>
 const MIN_SHEET = 100;
@@ -2789,5 +2983,818 @@ document.addEventListener("change", e=>{
   view = "all";
   render();
   await refreshQueue();
+})();
+</script>
+
+<script>
+/* ===========================================================================
+   Manual Offer Sheet — a second desk in this app.
+
+   Its own rules, its own tables, its own data. It shares only the sign-in and
+   the Supabase client from the Reallocation desk; nothing here reads or
+   writes a realloc_* table.
+
+   Where the two differ, deliberately:
+     Reallocation desk        newest G&G date wins, $100 floor
+     Manual offer sheet       spread evenly, $500 floor, three clients per ASIN
+   =========================================================================== */
+(function(){
+"use strict";
+
+const M = {
+  on:false, ready:false, view:"asins", busy:false,
+  budgets:{},                 // code -> budget
+  pool:[],                    // deduped ASINs
+  dupes:[],
+  stores:[],                  // ordered client codes
+  ungated:new Set(),          // "ASIN|CODE"
+  pending:new Set(),
+  ledger:[],
+  counts:{}, spent:{},
+  cfg:{method:"spread", minOrder:500, maxClients:3, pendingOn:false,
+       year:2026, quarter:"Q3", channel:"amazon"},
+  result:null, staged:null,
+  sort:{by:"pct", dir:-1},
+};
+const KEHE=["KEHE DC27","KEHE DC15","KEHE DC18","KEHE DC19","KEHE DC01"];
+
+const el = id => document.getElementById(id);
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const cash = n => "$"+(Number(n)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const cash0 = n => "$"+Math.round(Number(n)||0).toLocaleString("en-US");
+const norm = d => String(d??"").trim().replace(/\s+/g," ").toUpperCase();
+const key = (a,s) => a+"|"+s;
+const offerable = k => M.ungated.has(k) || (M.cfg.pendingOn && M.pending.has(k));
+
+let noteTimer;
+function note(msg, bad){
+  const n=el("mos-note"); if(!n) return;
+  n.textContent=msg; n.className="mos-note"+(bad?" bad":"");
+  n.hidden=false; clearTimeout(noteTimer);
+  noteTimer=setTimeout(()=>{ n.hidden=true; }, 4000);
+}
+
+function parseMoney(v){
+  if(v==null) return 0;
+  if(typeof v==="number") return v;
+  const t=String(v).trim(); if(!t) return 0;
+  const neg=t.startsWith("-")||(t.startsWith("(")&&t.endsWith(")"));
+  const n=parseFloat(t.replace(/[^0-9.]/g,""));
+  return isFinite(n) ? (neg?-n:n) : 0;
+}
+function parsePct(v){
+  if(v==null) return 0;
+  if(typeof v==="number") return v;
+  const t=String(v).trim(); if(!t) return 0;
+  const n=parseMoney(t);
+  return t.includes("%") ? n/100 : n;
+}
+/* Reproducible stand-in for random, so a re-run on unchanged data agrees. */
+function hash01(str){
+  let h=2166136261>>>0;
+  for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619)>>>0; }
+  return h/4294967296;
+}
+
+/* ---------------------------------------------------------------------------
+   Supabase. Every read pages, because PostgREST caps a response at 1000 rows
+   and the gating table alone runs to five figures.
+   --------------------------------------------------------------------------- */
+async function readAll(table, cols, order){
+  const out=[]; const size=1000;
+  for(let from=0;;from+=size){
+    let q=sb.from(table).select(cols).range(from, from+size-1);
+    if(order) q=q.order(order);
+    const {data,error}=await q;
+    if(error) throw new Error(`${table}: ${error.message}`);
+    out.push(...data);
+    if(data.length<size) return out;
+  }
+}
+async function writeChunks(table, rows, conflict){
+  for(let i=0;i<rows.length;i+=500){
+    const {error}= conflict
+      ? await sb.from(table).upsert(rows.slice(i,i+500),{onConflict:conflict})
+      : await sb.from(table).insert(rows.slice(i,i+500));
+    if(error) throw new Error(`${table}: ${error.message}`);
+  }
+}
+
+async function loadAll(){
+  const [budgets, asins, clients, gating, ledger, settings] = await Promise.all([
+    readAll("mos_budgets","store_code,budget"),
+    readAll("mos_asins","*","pos"),
+    readAll("mos_clients","store_code,position","position"),
+    readAll("mos_gating","asin,store_code,state"),
+    readAll("mos_allocations","*"),
+    sb.from("mos_settings").select("*").eq("id",true).maybeSingle(),
+  ]);
+  M.budgets={};
+  for(const b of budgets) M.budgets[b.store_code]=Number(b.budget)||0;
+  M.pool=asins.map(r=>({
+    asin:r.asin, n:r.pos, upc:r.upc||"", status:r.status||"", notes:r.notes||"",
+    qty:r.qty||0, unitCost:Number(r.unit_cost)||0, avg90:Number(r.avg90)||0,
+    bundle:r.bundle||1, ppu:Number(r.ppu)||0, roi:Number(r.roi)||0,
+    total:Number(r.total)||0, p30:Number(r.p30)||0, brand:r.brand||"", dist:r.dist||"",
+  }));
+  M.stores=clients.map(c=>c.store_code);
+  M.ungated=new Set(); M.pending=new Set();
+  for(const g of gating){
+    const k=key(g.asin,g.store_code);
+    if(g.state==="pending") M.pending.add(k); else M.ungated.add(k);
+  }
+  M.ledger=ledger;
+  if(settings && settings.data){
+    const s=settings.data;
+    M.cfg={method:s.method, minOrder:Number(s.min_order), maxClients:s.max_clients,
+           pendingOn:s.pending_on, year:s.year, quarter:s.quarter, channel:s.channel};
+  }
+  recompute();
+  M.ready=true;
+}
+
+function recompute(){
+  M.counts={}; M.spent={};
+  for(const r of M.ledger){
+    (M.counts[r.asin] ||= new Set()).add(r.store_code);
+    if(r.year===M.cfg.year && r.quarter===M.cfg.quarter)
+      M.spent[r.store_code]=(M.spent[r.store_code]||0)+(Number(r.total_price)||0);
+  }
+}
+function remainingFor(code){
+  if(!(code in M.budgets)) return null;
+  return Math.max(0, M.budgets[code]-(M.spent[code]||0));
+}
+
+async function saveSettings(){
+  const {error}=await sb.from("mos_settings").upsert({
+    id:true, method:M.cfg.method, min_order:M.cfg.minOrder, max_clients:M.cfg.maxClients,
+    pending_on:M.cfg.pendingOn, year:M.cfg.year, quarter:M.cfg.quarter,
+    channel:M.cfg.channel, updated_at:new Date().toISOString(),
+  });
+  if(error) note("Could not save the settings: "+error.message, true);
+}
+async function saveClients(){
+  await sb.from("mos_clients").delete().neq("store_code","\u0000");
+  if(M.stores.length)
+    await writeChunks("mos_clients", M.stores.map((c,i)=>({store_code:c, position:i})), "store_code");
+}
+
+/* ---------------------------------------------------------------------------
+   ASINs
+   --------------------------------------------------------------------------- */
+const COLS={
+  "asin":"asin","upc":"upc","status":"status","notes":"notes",
+  "recommended sellable qty":"qty","unit cost":"unitCost","90days average":"avg90",
+  "bundle size":"bundle","profit per unit":"ppu","roi %":"roi",
+  "total price":"total","30d profit":"p30","brand":"brand","distributor":"dist"
+};
+function dedupe(raw){
+  const groups=new Map(), order=[];
+  for(const r of raw){
+    if(!groups.has(r.asin)){ groups.set(r.asin,[]); order.push(r.asin); }
+    groups.get(r.asin).push(r);
+  }
+  const pool=[], dupes=[];
+  for(const a of order){
+    const g=groups.get(a);
+    if(g.length===1){ pool.push(g[0]); continue; }
+    const low=Math.min(...g.map(x=>x.unitCost));
+    const tied=g.filter(x=>Math.abs(x.unitCost-low)<0.005);
+    const rank=r=>{ const d=norm(r.dist), i=KEHE.indexOf(d);
+      return i>=0 ? [0,i,0] : [1,0,hash01(r.asin+"|"+d)]; };
+    const w=tied.reduce((x,y)=>{
+      const rx=rank(x), ry=rank(y);
+      for(let i=0;i<3;i++) if(rx[i]!==ry[i]) return rx[i]<ry[i]?x:y;
+      return x;
+    });
+    pool.push(w);
+    dupes.push({asin:a, dist:w.dist, cost:w.unitCost, total:w.total,
+                rejected:g.filter(x=>x!==w).map(x=>x.dist+" "+cash(x.unitCost))});
+  }
+  pool.forEach((r,i)=>{ r.n=i+1; });
+  return {pool, dupes};
+}
+function parseAsinCsv(text){
+  const wb=XLSX.read(text,{type:"string"});
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
+  if(!rows.length) throw new Error("That file has no rows.");
+  const heads=Object.keys(rows[0]).map(h=>h.trim().toLowerCase());
+  if(!heads.includes("asin"))
+    throw new Error("No ASIN column. Columns seen: "+heads.join(", "));
+  return rows.map(r=>{
+    const o={};
+    for(const k in r){ const t=COLS[String(k).trim().toLowerCase()]; if(t) o[t]=r[k]; }
+    return {
+      asin:String(o.asin||"").trim(), upc:String(o.upc??"").trim(),
+      status:String(o.status??"").trim(), notes:String(o.notes??"").trim(),
+      qty:Math.round(parseMoney(o.qty)), unitCost:parseMoney(o.unitCost),
+      avg90:parseMoney(o.avg90), bundle:Math.max(1,Math.round(parseMoney(o.bundle))||1),
+      ppu:parseMoney(o.ppu), roi:parsePct(o.roi), total:parseMoney(o.total),
+      p30:parseMoney(o.p30), brand:String(o.brand??"").trim(), dist:String(o.dist??"").trim(),
+    };
+  }).filter(r=>r.asin);
+}
+async function replaceAsins(raw){
+  const {pool,dupes}=dedupe(raw);
+  M.busy=true; renderMos();
+  try{
+    await sb.from("mos_asins").delete().neq("asin","\u0000");
+    await writeChunks("mos_asins", pool.map(r=>({
+      asin:r.asin, pos:r.n, upc:r.upc, status:r.status, notes:r.notes, qty:r.qty,
+      unit_cost:r.unitCost, avg90:r.avg90, bundle:r.bundle, ppu:r.ppu, roi:r.roi,
+      total:r.total, p30:r.p30, brand:r.brand, dist:r.dist,
+    })), "asin");
+    M.pool=pool; M.dupes=dupes;
+    note(`${pool.length.toLocaleString()} ASINs saved for everyone — ${raw.length-pool.length} duplicate rows dropped`);
+  }catch(e){ note("Could not save the ASINs: "+e.message, true); }
+  finally{ M.busy=false; renderMos(); }
+}
+
+/* ---------------------------------------------------------------------------
+   Batch Details import — the gating comes from what Amazon actually allowed
+     FNSKU filled, Errors empty   ->  Ungated
+     FNSKU empty                  ->  Gated
+     FNSKU filled, Errors filled  ->  Gated
+   The client is the MSKU prefix: GHW-B001E12YNA-3PCK is GHW.
+   --------------------------------------------------------------------------- */
+function readBatch(text, fileName){
+  const wb=XLSX.read(text,{type:"string"});
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
+  const heads=Object.keys(rows[0]||{}).map(h=>h.trim().toLowerCase());
+  if(!heads.includes("asin")||!heads.includes("msku"))
+    throw new Error(`${fileName} needs at least an MSKU and an ASIN column`);
+  const pick=(r,n)=>{ for(const k in r) if(k.trim().toLowerCase()===n) return String(r[k]||"").trim(); return ""; };
+  const out=[];
+  for(const r of rows){
+    const asin=pick(r,"asin"); if(!asin) continue;
+    const fnsku=pick(r,"fnsku"), errors=pick(r,"errors");
+    out.push({asin, code:(pick(r,"msku").split("-")[0]||"").trim().toUpperCase(),
+              ungated: !!fnsku && !errors});
+  }
+  return out;
+}
+function summarise(rows){
+  const known=new Set(M.pool.map(r=>r.asin.toUpperCase()));
+  const by={};
+  for(const r of rows){
+    const g=(by[r.code] ||= {code:r.code, rows:0, ungated:0, gated:0, unknown:0,
+                             known:M.stores.includes(r.code)});
+    g.rows++;
+    if(!known.has(r.asin.toUpperCase())) g.unknown++;
+    if(r.ungated) g.ungated++; else g.gated++;
+  }
+  return Object.values(by).sort((a,b)=>b.rows-a.rows);
+}
+async function applyBatch(rows){
+  const byUpper=new Map(M.pool.map(r=>[r.asin.toUpperCase(),r.asin]));
+  const add=[], drop=[]; let added=0, missing=0;
+  for(const r of rows){
+    if(!r.code) continue;
+    if(!M.stores.includes(r.code)){ M.stores.push(r.code); added++; }
+    const asin=byUpper.get(r.asin.toUpperCase());
+    if(!asin){ missing++; continue; }
+    const k=key(asin,r.code);
+    M.pending.delete(k);
+    if(r.ungated){ M.ungated.add(k); add.push({asin, store_code:r.code, state:"ungated"}); }
+    else { M.ungated.delete(k); drop.push([asin, r.code]); }
+  }
+  M.busy=true; renderMos();
+  try{
+    if(added) await saveClients();
+    if(add.length) await writeChunks("mos_gating", add, "asin,store_code");
+    for(const [asin,code] of drop)
+      await sb.from("mos_gating").delete().eq("asin",asin).eq("store_code",code);
+    note(`${add.length} Ungated, ${drop.length} back to Gated`+
+      (added?`, ${added} new client${added>1?"s":""}`:"")+
+      (missing?`, ${missing} not in the ASIN list`:""));
+  }catch(e){ note("Could not save the gating: "+e.message, true); }
+  finally{ M.busy=false; M.staged=null; renderMos(); }
+}
+
+/* ---------------------------------------------------------------------------
+   Allocation
+
+   For each ASIN, walk the clients:
+     gated, already holds it, no budget, cannot afford the whole line
+       -> passed over, and NOT counted against the three
+     otherwise -> given, budget charged, counter +1
+   Nothing is ever split.
+   --------------------------------------------------------------------------- */
+const REASONS={
+  already:"Client already received this ASIN in an earlier run",
+  nobudget:"No budget on record for this client",
+  overbudget:"Line costs more than the client has left",
+  zero:"ASIN has no line price",
+};
+function allocate(excluded){
+  excluded = excluded || new Set();
+  const cap=M.cfg.maxClients, spread=M.cfg.method==="spread";
+  const date=el("mos-date").value || new Date().toISOString().slice(0,10);
+  const remaining={}, assigned={}, skips={}, before={}, after={};
+  const pos={}; M.stores.forEach((c,i)=>{ pos[c]=i; });
+  const live=M.stores.filter(c=>!excluded.has(c));
+  for(const c of M.stores){
+    const rem=remainingFor(c);
+    remaining[c] = rem===null ? 0 : rem;
+    before[c]=remaining[c]; assigned[c]=[];
+  }
+  const countsAfter={}; let exhausted=0;
+
+  for(const r of M.pool){
+    const holders=new Set(M.counts[r.asin]||[]);
+    if(holders.size>=cap){ exhausted++; countsAfter[r.asin]=holders.size; continue; }
+    const able=[];
+    for(const c of live){
+      if(!offerable(key(r.asin,c))) continue;
+      if(holders.has(c)){ skips.already=(skips.already||0)+1; continue; }
+      if(!(c in M.budgets)){ skips.nobudget=(skips.nobudget||0)+1; continue; }
+      if(r.total<=0){ skips.zero=(skips.zero||0)+1; continue; }
+      if(r.total > remaining[c]+1e-9){ skips.overbudget=(skips.overbudget||0)+1; continue; }
+      able.push(c);
+    }
+    /* Spread: whoever has used least of their own budget goes first, so the
+       share evens out. Priority: straight down the list. Position breaks ties. */
+    if(spread) able.sort((a,b)=>{
+      const fa=before[a]>0 ? (before[a]-remaining[a])/before[a] : 1;
+      const fb=before[b]>0 ? (before[b]-remaining[b])/before[b] : 1;
+      return fa!==fb ? fa-fb : pos[a]-pos[b];
+    });
+    for(const c of able){
+      if(holders.size>=cap) break;
+      remaining[c]-=r.total; holders.add(c); assigned[c].push(r);
+    }
+    countsAfter[r.asin]=holders.size;
+  }
+  for(const c of M.stores) after[c]=remaining[c];
+  const lines=Object.values(assigned).reduce((s,v)=>s+v.length,0);
+  const value=Object.values(assigned).reduce((s,v)=>s+v.reduce((t,r)=>t+r.total,0),0);
+  return {date, cap, assigned, skips, before, after, countsAfter, exhausted, lines, value,
+          served:Object.values(assigned).filter(v=>v.length).length};
+}
+/* Dropping a client frees what it held for the clients after it, which can
+   only raise the others' totals, so a growing exclusion list settles fast. */
+function allocateWithMinimum(){
+  const min=M.cfg.minOrder;
+  const excluded=new Set();
+  let result=allocate(excluded), passes=1;
+  if(min>0){
+    for(; passes<=25; passes++){
+      const under=M.stores.filter(c=>!excluded.has(c) && result.assigned[c].length>0
+        && (result.before[c]-result.after[c]) < min-1e-9);
+      if(!under.length) break;
+      under.forEach(c=>excluded.add(c));
+      result=allocate(excluded);
+    }
+  }
+  result.passes=passes; result.minOrder=min; result.dropped=[...excluded];
+  return result;
+}
+
+/* ---------------------------------------------------------------------------
+   Workbooks
+   --------------------------------------------------------------------------- */
+const SHEET_HEADERS=["Store Code","Tracking Code","ASIN","ASIN Eligible","ASIN Desired",
+  "Total Price","UPC","Unit Cost","Recommended Sellable Qty","90Days Average","Status",
+  "Notes","Bundle Size","ROI %","Profit Per Unit","30D Profit","Brand","Distributor"];
+const SHEET_WIDTHS=[11,16,14,12,12,13,16,11,22,14,14,15,12,9,15,12,24,16];
+const MONEY_FMT='$#,##0.00;($#,##0.00);-';
+
+function fillSheet(ws, code, items, date){
+  const last=2+items.length;
+  ws.getCell("A1").value=code;
+  ws.getCell("A1").font={name:"Arial",size:11,bold:true};
+  ws.getCell("F1").value={formula:`SUM(F3:F${last})`};
+  ws.getCell("F1").font={name:"Arial",size:11,bold:true};
+  ws.getCell("F1").numFmt=MONEY_FMT;
+  /* Amount-weighted, so a big line counts for more than a small one. */
+  ws.getCell("N1").value={formula:`IFERROR(SUMPRODUCT(F3:F${last},N3:N${last})/SUM(F3:F${last}),"")`};
+  ws.getCell("N1").font={name:"Arial",size:11,bold:true};
+  ws.getCell("N1").numFmt="0.0%";
+  SHEET_HEADERS.forEach((h,i)=>{
+    const c=ws.getCell(2,i+1); c.value=h;
+    c.font={name:"Arial",size:10,bold:true};
+    c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFD9D9D9"}};
+    c.alignment={horizontal:"center",wrapText:true};
+  });
+  items.forEach((r,i)=>{
+    const row=3+i;
+    const vals=[code,`${date}_${i+1}`,r.asin,true,true,+r.total.toFixed(2),r.upc,
+      +r.unitCost.toFixed(2),r.qty,+r.avg90.toFixed(2),r.status,r.notes,r.bundle,
+      +r.roi.toFixed(4),+r.ppu.toFixed(2),+r.p30.toFixed(2),r.brand,r.dist];
+    vals.forEach((v,j)=>{ const c=ws.getCell(row,j+1); c.value=v; c.font={name:"Arial",size:10}; });
+    [6,8,10,15,16].forEach(col=>ws.getCell(row,col).numFmt=MONEY_FMT);
+    ws.getCell(row,14).numFmt="0.0%";
+  });
+  SHEET_WIDTHS.forEach((w,i)=>{ ws.getColumn(i+1).width=w; });
+  ws.views=[{state:"frozen",ySplit:2}];
+}
+
+const LIST_HEADERS=["Title","MSKU","FNSKU","ASIN","UPC","Inventory Tags","Category","Condition",
+  "Hazmat","Purchased","Price","Cost","Source","Expires","Fulfillment Channel","Quantity",
+  "Batch Item Tags","Shopper","Condition Notes","Errors"];
+const LIST_WIDTHS=[30,28,12,14,16,14,14,11,10,11,9,9,12,11,18,10,16,12,18,10];
+function fillListing(ws, code, items){
+  LIST_HEADERS.forEach((t,i)=>{
+    const c=ws.getCell(1,i+1); c.value=t; c.font={name:"Arial",size:10,bold:true};
+  });
+  items.forEach((r,i)=>{
+    const row=2+i, pack=Math.max(1,r.bundle||1);
+    ws.getCell(row,2).value=`${code}-${r.asin}-${pack}PACK`;
+    ws.getCell(row,4).value=r.asin;
+    ws.getCell(row,8).value="NEW";
+    ws.getCell(row,11).value=1;
+    for(const col of [2,4,8,11]) ws.getCell(row,col).font={name:"Arial",size:10};
+  });
+  LIST_WIDTHS.forEach((w,i)=>{ ws.getColumn(i+1).width=w; });
+  ws.views=[{state:"frozen",ySplit:1}];
+}
+
+async function saveBook(wb, name){
+  const buf=await wb.xlsx.writeBuffer();
+  const url=URL.createObjectURL(new Blob([buf],
+    {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  const a=document.createElement("a"); a.href=url; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+async function downloadOne(code){
+  const R=M.result; if(!R) return;
+  const wb=new ExcelJS.Workbook();
+  fillSheet(wb.addWorksheet(code.slice(0,31)), code, R.assigned[code], R.date);
+  await saveBook(wb, `${code}_Offer_Sheet_${R.date}.xlsx`);
+}
+async function downloadListing(code){
+  const R=M.result; if(!R) return;
+  const wb=new ExcelJS.Workbook();
+  fillListing(wb.addWorksheet("Test_Listing"), code, R.assigned[code]);
+  await saveBook(wb, `${code}_Listing_${R.date}.xlsx`);
+}
+async function downloadAll(){
+  const R=M.result; if(!R) return;
+  const wb=new ExcelJS.Workbook();
+  const sum=wb.addWorksheet("Summary");
+  ["Store Code","Line Items","Allocated","Budget","Left","Used %"].forEach((h,i)=>{
+    const c=sum.getCell(1,i+1); c.value=h;
+    c.font={name:"Arial",size:10,bold:true};
+    c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFD9D9D9"}};
+  });
+  let n=2;
+  for(const code of M.stores){
+    const items=R.assigned[code]; if(!items.length) continue;
+    sum.getCell(n,1).value=code;
+    sum.getCell(n,2).value=items.length;
+    sum.getCell(n,3).value=+(R.before[code]-R.after[code]).toFixed(2);
+    sum.getCell(n,4).value=+R.before[code].toFixed(2);
+    sum.getCell(n,5).value=+R.after[code].toFixed(2);
+    sum.getCell(n,6).value={formula:`IFERROR((D${n}-E${n})/D${n},0)`};
+    [3,4,5].forEach(c=>sum.getCell(n,c).numFmt=MONEY_FMT);
+    sum.getCell(n,6).numFmt="0.0%";
+    for(let c=1;c<=6;c++) sum.getCell(n,c).font={name:"Arial",size:10};
+    n++;
+  }
+  [12,11,15,15,15,10].forEach((w,i)=>sum.getColumn(i+1).width=w);
+  for(const code of M.stores){
+    const items=R.assigned[code];
+    if(items.length) fillSheet(wb.addWorksheet(code.slice(0,31)), code, items, R.date);
+  }
+  await saveBook(wb, `Offer_Sheets_${R.date}.xlsx`);
+}
+async function downloadEach(kind){
+  const R=M.result; if(!R) return;
+  const codes=M.stores.filter(c=>R.assigned[c].length);
+  const b=el(kind==="listing"?"mos-listings":"mos-separate");
+  b.disabled=true;
+  for(let i=0;i<codes.length;i++){
+    b.textContent=`${i+1} of ${codes.length}`;
+    await (kind==="listing" ? downloadListing(codes[i]) : downloadOne(codes[i]));
+    await new Promise(r=>setTimeout(r,350));
+  }
+  b.disabled=false;
+  b.textContent = kind==="listing" ? "Listing extracts" : "One sheet per client";
+  note(`${codes.length} file${codes.length===1?"":"s"} saved`);
+}
+
+/* ---------------------------------------------------------------------------
+   Commit
+   --------------------------------------------------------------------------- */
+async function commit(){
+  const R=M.result; if(!R||!R.lines) return;
+  const b=el("mos-commit"); b.disabled=true; b.textContent="Working";
+  const batch=`${R.date}_${Math.random().toString(36).slice(2,10)}`;
+  try{
+    await downloadAll();
+    const rows=[];
+    for(const code of M.stores){
+      R.assigned[code].forEach((r,i)=>rows.push({
+        batch_id:batch, asin:r.asin, store_code:code, tracking_code:`${R.date}_${i+1}`,
+        sheet_date:R.date, year:M.cfg.year, quarter:M.cfg.quarter, channel:M.cfg.channel,
+        total_price:+r.total.toFixed(2), unit_cost:+r.unitCost.toFixed(2),
+        qty:r.qty, distributor:r.dist, brand:r.brand,
+        allocated_by: me ? me.id : null,
+      }));
+    }
+    await writeChunks("mos_allocations", rows);
+    M.ledger.push(...rows); recompute();
+    note(`Recorded ${rows.length.toLocaleString()} allocations. Run id ${batch}`);
+    el("mos-batch").value=batch;
+    M.result=null;
+  }catch(e){
+    note("The workbook downloaded but the database refused the write, so no slots were used: "+e.message, true);
+  }finally{
+    b.disabled=false; b.textContent="Generate and record"; renderMos();
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Rendering
+   --------------------------------------------------------------------------- */
+function renderMos(){
+  if(!M.on) return;
+  document.querySelectorAll("#mos-tabs button").forEach(b=>
+    b.setAttribute("aria-current", String(b.dataset.mv===M.view)));
+  el("mos-asins").hidden = M.view!=="asins";
+  el("mos-sheet").hidden = M.view!=="sheet";
+  if(M.view==="asins") renderAsins(); else renderSheet();
+}
+
+function renderAsins(){
+  el("mos-asin-stats").innerHTML = M.pool.length
+    ? `<div class="mos-stat"><b>${M.pool.length.toLocaleString()}</b><span>unique ASINs</span></div>
+       <div class="mos-stat"><b>${M.dupes.length.toLocaleString()}</b><span>ASINs with duplicates</span></div>
+       <div class="mos-stat"><b>${cash0(M.pool.reduce((s,r)=>s+r.total,0))}</b><span>catalogue value</span></div>`
+    : `<div class="mos-empty">No ASINs yet. Drop the Asins CSV below and everyone on the team gets it.</div>`;
+  el("mos-dupes").innerHTML = M.dupes.length
+    ? `<table class="mos-table"><thead><tr><th>ASIN</th><th>Kept</th>
+       <th class="r">Unit cost</th><th class="r">Line total</th><th>Rejected</th></tr></thead><tbody>`+
+      M.dupes.slice(0,300).map(d=>`<tr><td class="mono">${esc(d.asin)}</td><td>${esc(d.dist)}</td>
+        <td class="r">${cash(d.cost)}</td><td class="r">${cash(d.total)}</td>
+        <td class="dim">${d.rejected.map(esc).join(" &middot; ")}</td></tr>`).join("")+
+      `</tbody></table>`
+    : "";
+}
+
+function renderSheet(){
+  /* staged import */
+  const s=M.staged ? summarise(M.staged) : null;
+  el("mos-staged").innerHTML = s
+    ? `<table class="mos-table"><thead><tr><th>Client</th><th class="r">Rows</th>
+        <th class="r">Ungated</th><th class="r">Gated</th><th></th></tr></thead><tbody>`+
+      s.map(g=>`<tr><td class="mono"><b>${esc(g.code||"?")}</b></td><td class="r">${g.rows}</td>
+        <td class="r">${g.ungated}</td><td class="r">${g.gated}</td>
+        <td>${g.known?"":`<span class="mos-pill">new client</span>`}
+            ${g.unknown?`<span class="mos-pill warn">${g.unknown} not in the ASIN list</span>`:""}</td></tr>`).join("")+
+      `</tbody></table>
+       <div class="mos-row"><button class="mos-btn" id="mos-apply">Apply to the matrix</button>
+       <button class="mos-btn quiet" id="mos-cancel">Cancel</button></div>`
+    : "";
+  if(M.staged){
+    el("mos-apply").onclick=()=>applyBatch(M.staged);
+    el("mos-cancel").onclick=()=>{ M.staged=null; renderMos(); };
+  }
+
+  /* clients */
+  el("mos-clients").innerHTML = M.stores.length
+    ? `<table class="mos-table"><thead><tr><th class="r">#</th><th>Client</th>
+        <th class="r">Budget left</th><th class="r">Ungated</th><th class="r">Pending</th>
+        <th class="r">Held</th><th></th></tr></thead><tbody>`+
+      M.stores.map((c,i)=>{
+        const rem=remainingFor(c);
+        let u=0,p=0; for(const k of M.ungated) if(k.endsWith("|"+c)) u++;
+        for(const k of M.pending) if(k.endsWith("|"+c)) p++;
+        const held=M.ledger.filter(r=>r.store_code===c).length;
+        return `<tr><td class="r dim">${i+1}</td><td class="mono"><b>${esc(c)}</b></td>
+          <td class="r">${rem===null?`<span class="mos-pill warn">no budget</span>`:cash(rem)}</td>
+          <td class="r">${u.toLocaleString()}</td><td class="r dim">${p.toLocaleString()}</td>
+          <td class="r dim">${held.toLocaleString()}</td>
+          <td class="nowrap"><button class="mos-mini" data-mv-up="${i}">&#8593;</button>
+          <button class="mos-mini" data-mv-dn="${i}">&#8595;</button>
+          <button class="mos-mini" data-mv-rm="${i}">&times;</button></td></tr>`;
+      }).join("")+`</tbody></table>`
+    : `<div class="mos-empty">No clients yet. Upload a Batch Details file above and they appear here.</div>`;
+
+  /* settings reflect shared state */
+  el("mos-method").value=M.cfg.method;
+  el("mos-min").value=M.cfg.minOrder;
+  el("mos-max").value=M.cfg.maxClients;
+  el("mos-pending").checked=M.cfg.pendingOn;
+  el("mos-method-note").textContent = M.cfg.method==="spread"
+    ? "Each ASIN goes to whoever has used the least of their own budget so far, so every client ends up with a similar share. Position only breaks ties."
+    : "Each ASIN is offered straight down the list. The clients at the top fill up first and the ones below may get little or nothing.";
+  el("mos-pending-note").textContent = M.pending.size
+    ? (M.cfg.pendingOn
+       ? `The ${M.pending.size.toLocaleString()} Pending cells are being offered, exactly like Ungated.`
+       : `${M.pending.size.toLocaleString()} Pending cells are being held back and will never be offered.`)
+    : "No Pending cells.";
+
+  /* records */
+  const entries=Object.entries(M.counts);
+  el("mos-records").innerHTML=
+    `<div class="mos-stat"><b>${entries.length.toLocaleString()}</b><span>ASINs with a client</span></div>
+     <div class="mos-stat"><b>${entries.filter(([,v])=>v.size>=M.cfg.maxClients).length.toLocaleString()}</b><span>at the cap</span></div>
+     <div class="mos-stat"><b>${M.ledger.length.toLocaleString()}</b><span>allocations on record</span></div>`;
+
+  renderResult();
+  el("mos-busy").hidden = !M.busy;
+}
+
+function renderResult(){
+  const R=M.result;
+  el("mos-out").hidden = !R;
+  el("mos-commit").disabled = !R || !R.lines;
+  el("mos-separate").disabled = !R || !R.lines;
+  el("mos-listings").disabled = !R || !R.lines;
+  if(!R) return;
+
+  el("mos-totals").innerHTML=
+    `<div class="mos-stat"><b>${R.lines.toLocaleString()}</b><span>line items</span></div>
+     <div class="mos-stat"><b>${R.served}</b><span>clients served</span></div>
+     <div class="mos-stat"><b>${cash0(R.value)}</b><span>allocated</span></div>
+     <div class="mos-stat"><b>${Object.values(R.skips).reduce((a,b)=>a+b,0).toLocaleString()}</b><span>pass-overs</span></div>`;
+
+  el("mos-dropped").innerHTML = (R.dropped && R.dropped.length)
+    ? `<p class="mos-warn">Dropped for falling under ${cash0(R.minOrder)}: <b>${R.dropped.map(esc).join(", ")}</b>.
+       Their ASINs went back to the pool${R.passes>1?` over ${R.passes} passes`:""}, so no client slots were used on them.</p>`
+    : (R.minOrder>0 ? `<p class="mos-ok">Every client served reached the ${cash0(R.minOrder)} minimum.</p>` : "");
+
+  const rows=M.stores.map((c,i)=>{
+    const spend=R.before[c]-R.after[c];
+    return {pos:i+1, code:c, lines:R.assigned[c].length, spend,
+            budget:R.before[c], left:R.after[c],
+            pct:R.before[c]>0 ? spend/R.before[c] : 0};
+  });
+  const {by,dir}=M.sort;
+  rows.sort((a,b)=>{
+    const x=a[by], y=b[by];
+    const c = typeof x==="string" ? x.localeCompare(y) : x-y;
+    return c!==0 ? c*dir : a.pos-b.pos;
+  });
+  const arrow=col => M.sort.by===col ? (dir<0?" \u2193":" \u2191") : "";
+  el("mos-per-client").innerHTML=
+    `<table class="mos-table"><thead><tr>
+      <th class="r s" data-s="pos">#${arrow("pos")}</th>
+      <th class="s" data-s="code">Client${arrow("code")}</th>
+      <th class="r s" data-s="lines">Lines${arrow("lines")}</th>
+      <th class="r s" data-s="spend">Allocated${arrow("spend")}</th>
+      <th class="r s" data-s="budget">Budget${arrow("budget")}</th>
+      <th class="r s" data-s="left">Left${arrow("left")}</th>
+      <th class="r s" data-s="pct">Used${arrow("pct")}</th><th></th></tr></thead><tbody>`+
+    rows.map(r=>`<tr><td class="r dim">${r.pos}</td><td class="mono"><b>${esc(r.code)}</b></td>
+      <td class="r">${r.lines}</td><td class="r">${cash(r.spend)}</td>
+      <td class="r">${cash(r.budget)}</td><td class="r">${cash(r.left)}</td>
+      <td class="r">${(r.pct*100).toFixed(1)}%</td>
+      <td class="nowrap">${r.lines?`<button class="mos-mini" data-dl="${esc(r.code)}">Offer sheet</button>
+        <button class="mos-mini" data-dlist="${esc(r.code)}">Listing</button>`:""}</td></tr>`).join("")+
+    `</tbody></table>`;
+
+  const sk=Object.entries(R.skips).sort((a,b)=>b[1]-a[1]);
+  el("mos-skips").innerHTML = sk.length
+    ? `<table class="mos-table"><thead><tr><th>Reason</th><th class="r">Count</th><th>What it means</th></tr></thead><tbody>`+
+      sk.map(([k,n])=>`<tr><td>${esc(k)}</td><td class="r">${n.toLocaleString()}</td>
+        <td class="dim">${esc(REASONS[k]||"")}</td></tr>`).join("")+`</tbody></table>`
+    : `<div class="mos-empty">Nobody was passed over.</div>`;
+}
+
+/* ---------------------------------------------------------------------------
+   Wiring
+   --------------------------------------------------------------------------- */
+function readFiles(files, fn){
+  const all=[]; let left=files.length; if(!left) return;
+  for(const f of files){
+    f.text().then(txt=>{
+      try{ fn(txt, f.name, all); }
+      catch(e){ note(e.message, true); }
+      if(--left===0 && all.length){ M.staged=all; renderMos(); }
+    });
+  }
+}
+function dropZone(id, onFiles){
+  const z=el(id), input=el(id+"-input");
+  z.onclick=()=>input.click();
+  input.onchange=e=>onFiles([...e.target.files]);
+  ["dragenter","dragover"].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.add("over");}));
+  ["dragleave","drop"].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.remove("over");}));
+  z.addEventListener("drop",e=>{e.preventDefault();onFiles([...e.dataTransfer.files]);});
+}
+
+async function enterMos(){
+  M.on=true;
+  document.body.classList.add("mos-on");
+  if(!M.ready){
+    M.busy=true; renderMos();
+    try{ await loadAll(); }
+    catch(e){ note("Could not load: "+e.message, true); }
+    finally{ M.busy=false; }
+    if(M.pool.length){
+      const {dupes}=dedupe(M.pool);   // for the duplicates panel only
+      M.dupes=dupes;
+    }
+  }
+  renderMos();
+}
+function leaveMos(){
+  M.on=false;
+  document.body.classList.remove("mos-on");
+}
+
+document.addEventListener("DOMContentLoaded", init);
+if(document.readyState!=="loading") init();
+let started=false;
+function init(){
+  if(started) return; started=true;
+
+  el("mos-switch").addEventListener("click", e=>{
+    const b=e.target.closest("button[data-app]"); if(!b) return;
+    document.querySelectorAll("#mos-switch button").forEach(x=>
+      x.setAttribute("aria-current", String(x===b)));
+    if(b.dataset.app==="mos") enterMos(); else leaveMos();
+  });
+  el("mos-tabs").addEventListener("click", e=>{
+    const b=e.target.closest("button[data-mv]"); if(!b) return;
+    M.view=b.dataset.mv; renderMos();
+  });
+
+  dropZone("mos-asin-drop", files=>{
+    if(!files.length) return;
+    files[0].text().then(txt=>{
+      try{ replaceAsins(parseAsinCsv(txt)); }
+      catch(e){ note(e.message, true); }
+    });
+  });
+  dropZone("mos-batch-drop", files=>{
+    if(!M.pool.length){ note("Load the ASIN list on the ASINs tab first.", true); return; }
+    readFiles(files, (txt,name,all)=>{ all.push(...readBatch(txt,name)); });
+  });
+
+  el("mos-method").onchange = async e => { M.cfg.method=e.target.value; M.result=null; await saveSettings(); renderMos(); };
+  el("mos-min").onchange    = async e => { M.cfg.minOrder=Number(e.target.value)||0; M.result=null; await saveSettings(); renderMos(); };
+  el("mos-max").onchange    = async e => { M.cfg.maxClients=Number(e.target.value)||3; M.result=null; await saveSettings(); renderMos(); };
+  el("mos-pending").onchange= async e => { M.cfg.pendingOn=e.target.checked; M.result=null; await saveSettings(); renderMos(); };
+
+  el("mos-preview").onclick = () => {
+    if(!M.pool.length){ note("Load the ASIN list first.", true); return; }
+    if(!M.stores.length){ note("Upload a Batch Details file so there are clients.", true); return; }
+    if(!M.ungated.size && !(M.cfg.pendingOn && M.pending.size)){
+      note("Nothing is marked Ungated, so there is nothing to offer.", true); return; }
+    M.result=allocateWithMinimum(); renderMos();
+    if(!M.result.lines) note("Nothing could be allocated. The reasons are listed below.", true);
+  };
+  el("mos-commit").onclick   = commit;
+  el("mos-separate").onclick = ()=>downloadEach("offer");
+  el("mos-listings").onclick = ()=>downloadEach("listing");
+
+  el("mos-sheet").addEventListener("click", async e=>{
+    const t=e.target.closest("button"); if(!t) return;
+    if(t.dataset.dl)    return downloadOne(t.dataset.dl);
+    if(t.dataset.dlist) return downloadListing(t.dataset.dlist);
+    if(t.dataset.mvUp!==undefined || t.dataset.mvDn!==undefined){
+      const i=Number(t.dataset.mvUp ?? t.dataset.mvDn);
+      const j=i+(t.dataset.mvUp!==undefined?-1:1);
+      if(j<0||j>=M.stores.length) return;
+      [M.stores[i],M.stores[j]]=[M.stores[j],M.stores[i]];
+      M.result=null; renderMos(); await saveClients(); return;
+    }
+    if(t.dataset.mvRm!==undefined){
+      const i=Number(t.dataset.mvRm), code=M.stores[i];
+      if(!confirm(`Remove ${code}? Its gating is forgotten for everyone. Allocations already recorded stay.`)) return;
+      M.stores.splice(i,1);
+      for(const k of [...M.ungated]) if(k.endsWith("|"+code)) M.ungated.delete(k);
+      for(const k of [...M.pending]) if(k.endsWith("|"+code)) M.pending.delete(k);
+      M.result=null; renderMos();
+      await sb.from("mos_gating").delete().eq("store_code",code);
+      await saveClients();
+      return;
+    }
+  });
+  el("mos-per-client").addEventListener("click", e=>{
+    const th=e.target.closest("th.s"); if(!th || !M.result) return;
+    const by=th.dataset.s;
+    M.sort = M.sort.by===by ? {by, dir:-M.sort.dir} : {by, dir: by==="code"?1:-1};
+    renderResult();
+  });
+
+  el("mos-reset").onclick = async () => {
+    const list=el("mos-reset-input").value.split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean);
+    if(!list.length){ note("Paste at least one ASIN.", true); return; }
+    if(!confirm(`Reset ${list.length} ASIN${list.length>1?"s":""}? Their client slots open again for everyone.`)) return;
+    const {error}=await sb.from("mos_allocations").delete().in("asin",list);
+    if(error){ note(error.message, true); return; }
+    M.ledger=M.ledger.filter(r=>!list.includes(r.asin));
+    recompute(); M.result=null; el("mos-reset-input").value="";
+    renderMos(); note(`${list.length} ASIN${list.length>1?"s":""} reset`);
+  };
+  el("mos-undo").onclick = async () => {
+    const b=el("mos-batch").value.trim();
+    if(!b){ note("Paste a run id.", true); return; }
+    if(!confirm(`Undo run ${b}? Every allocation it made is removed for everyone.`)) return;
+    const {error}=await sb.from("mos_allocations").delete().eq("batch_id",b);
+    if(error){ note(error.message, true); return; }
+    const before=M.ledger.length;
+    M.ledger=M.ledger.filter(r=>r.batch_id!==b);
+    recompute(); M.result=null; renderMos();
+    note(`${before-M.ledger.length} allocations removed`);
+  };
+
+  el("mos-date").value=new Date().toISOString().slice(0,10);
+}
 })();
 </script>
