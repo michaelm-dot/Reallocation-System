@@ -388,9 +388,9 @@ body{padding-left:214px}
 #mos-ungate .ungtbl th.cor{position:sticky;left:40px;background:#fff;z-index:1;text-align:left;font:600 10.5px var(--mono);color:var(--ink);width:118px;min-width:118px;padding-left:8px;border-left:1px solid #eef1ef}
 #mos-ungate .ungtbl thead th.cor{z-index:3;background:#121a17;color:#fff}
 #mos-ungate .ungtbl td.g{background:#f7e7e4;color:#b0655c} #mos-ungate .ungtbl td.u{background:#dcefe5;color:#1c6043} #mos-ungate .ungtbl td.p{background:#f7ecd2;color:#8a6a12} #mos-ungate .ungtbl td.n{background:#fbfcfb;color:#c2c8c4}
-#mos-ungate .ungtbl td.cell{cursor:pointer}
-#mos-ungate .ungtbl td.cell:hover{outline:2px solid #121a17;outline-offset:-2px}
-#mos-ungate .ungtbl td.cell .ung-pick{font:600 10.5px var(--sans);border:1px solid #121a17;border-radius:5px;padding:1px 2px;background:#fff;color:var(--ink);cursor:pointer;width:100%}
+#mos-ungate .ungtbl td.ucell{cursor:pointer}
+#mos-ungate .ungtbl td.ucell:hover{outline:2px solid #121a17;outline-offset:-2px}
+#mos-ungate .ungtbl td.ucell .ung-pick{font:600 10.5px var(--sans);border:1px solid #121a17;border-radius:5px;padding:1px 2px;background:#fff;color:var(--ink);cursor:pointer;width:100%}
 @media print{#sidenav{display:none!important}body{padding-left:0}}
 </style>
 
@@ -3701,7 +3701,7 @@ function _ungPaintGrid(){
     if(sInp) sInp.addEventListener('input', function(){ clearTimeout(window._ungT); window._ungT=setTimeout(renderUngate,180); });
     if(onlyInp) onlyInp.addEventListener('change', renderUngate);
     var grid=el('ung-grid');
-    if(grid) grid.addEventListener('click', function(ev){ var td=ev.target.closest && ev.target.closest('td.cell'); if(td) _ungEdit(td); });
+    if(grid) grid.addEventListener('click', function(ev){ var td=ev.target.closest && ev.target.closest('td.ucell'); if(td) _ungEdit(td); });
   }
   var q=((sInp&&sInp.value)||'').trim().toUpperCase();
   var onlyRes=onlyInp&&onlyInp.checked, resSet=onlyRes?_ungResSet():null;
@@ -3720,7 +3720,7 @@ function _ungPaintGrid(){
       if(M.ungated.has(k)){cls='u';ch='Ungated';st='ungated';}
       else if(M.pending.has(k)){cls='p';ch='Pending';st='pending';}
       else {cls='g';ch='Gated';st='gated';}
-      tds+='<td class="cell '+cls+'" data-a="'+a+'" data-c="'+c+'" data-s="'+st+'">'+ch+'</td>';
+      tds+='<td class="ucell '+cls+'" data-a="'+a+'" data-c="'+c+'" data-s="'+st+'">'+ch+'</td>';
     }
     parts.push('<tr><th class="num'+(added?' added':'')+'"'+(added?' title="Idinagdag — wala sa na-upload na sheet"':'')+'>'+rowNum[a]+'</th><th class="cor">'+a+'</th>'+tds+'</tr>');
   }
