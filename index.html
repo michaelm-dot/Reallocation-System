@@ -327,26 +327,47 @@
   </div>
 </div>
 
-<header class="masthead">
-  <div class="wordmark">Reallocation desk<span id="batchchip">O2I &rarr; Amazon &rarr; Walmart &rarr; Dom</span></div>
-  <span id="whoami" style="font:400 12px var(--mono);color:var(--ink3)"></span>
+<aside id="sidenav">
+  <div class="brand"><div class="wordmark">Reallocation desk<span id="batchchip">O2I &rarr; Amazon &rarr; Walmart &rarr; Dom</span></div></div>
+  <div class="navlabel">Apps</div>
   <div id="mos-switch">
-    <button data-app="realloc" aria-current="true">Reallocation desk</button>
-    <button data-app="mos">Manual offer sheet</button>
+    <button data-app="realloc" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Reallocation desk</button>
+    <button data-app="mos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Manual offer sheet</button>
   </div>
+  <div class="navlabel">Views</div>
   <nav class="tabs" id="tabs">
-    <button data-view="queue" aria-current="true">Queue</button>
-    <button data-view="all" data-needs>All items</button>
-    <button data-view="amazon" data-needs>Amazon ungating</button>
-    <button data-view="walmart" data-needs>Walmart</button>
-    <button data-view="dom" data-needs>Dom</button>
-    <button data-view="sheets" data-needs>Offer sheets</button>
+    <button data-view="queue" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>Queue</button>
+    <button data-view="all" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>All items</button>
+    <button data-view="amazon" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0"/></svg>Amazon ungating</button>
+    <button data-view="walmart" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11h16V9"/><path d="M9 22V12h6v10"/></svg>Walmart</button>
+    <button data-view="dom" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Dom</button>
+    <button data-view="sheets" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>Offer sheets</button>
   </nav>
   <nav class="tabs" id="mos-tabs">
-    <button data-mv="asins" aria-current="true">ASINs</button>
-    <button data-mv="sheet">Manual offer sheet</button>
+    <button data-mv="asins" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>ASINs</button>
+    <button data-mv="sheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Manual offer sheet</button>
   </nav>
+</aside>
+<header class="masthead">
+  <span id="whoami" style="font:400 12px var(--mono);color:var(--ink3)"></span>
 </header>
+<style id="sidenav-css">
+#sidenav{position:fixed;top:0;left:0;bottom:0;width:214px;background:#121a17;color:#e6ede9;display:flex;flex-direction:column;gap:1px;padding:14px 10px;overflow-y:auto;z-index:40;border-right:1px solid #223029;box-sizing:border-box}
+#sidenav .brand{padding:4px 8px 6px}
+#sidenav .brand .wordmark{font:600 16px var(--disp);color:#fff;display:block}
+#sidenav #batchchip{display:block;margin-top:4px;font:400 10.5px var(--mono);color:#7f8c85;letter-spacing:.02em}
+#sidenav .navlabel{font:600 10px var(--sans);letter-spacing:.09em;text-transform:uppercase;color:#5c6a63;padding:13px 9px 5px}
+#sidenav #mos-switch{flex-direction:column;gap:1px;background:none;border:0;padding:0;margin:0;border-radius:0}
+#sidenav .tabs{flex-direction:column;gap:1px;flex-wrap:nowrap}
+#sidenav button{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:transparent;border:0;border-radius:8px;padding:9px 10px;cursor:pointer;font:500 13px var(--sans);color:#bcc6c0;white-space:nowrap}
+#sidenav button svg{flex:0 0 17px;width:17px;height:17px;opacity:.9}
+#sidenav button:hover{background:#1c2823;color:#fff}
+#sidenav #mos-switch button[aria-current="true"],#sidenav .tabs button[aria-current="true"]{background:#1f6b4a;color:#fff;box-shadow:none}
+#sidenav button:disabled{opacity:.38;cursor:not-allowed;background:transparent}
+body{padding-left:214px}
+.masthead{justify-content:flex-end;gap:12px}
+@media print{#sidenav{display:none!important}body{padding-left:0}}
+</style>
 
 <div class="cloudbar" id="cloudbar" hidden><span>Live — you are seeing your team's changes as they happen</span>
   <span id="whobar" class="whobar"></span></div>
