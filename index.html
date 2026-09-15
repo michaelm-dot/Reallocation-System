@@ -344,8 +344,8 @@
     <button data-view="sheets" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>Offer sheets</button>
   </nav>
   <nav class="tabs" id="mos-tabs">
-    <button data-mv="asins" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>ASINs</button>
-    <button data-mv="ungate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Ungate Checking</button>
+    
+    <button data-mv="ungate" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Ungate Checking</button>
     <button data-mv="db"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>ASIN database</button>
     <button data-mv="sheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Manual offer sheet</button>
   </nav>
@@ -369,29 +369,66 @@
 body{padding-left:214px}
 .masthead{justify-content:flex-end;gap:12px}
 
-#mos-ungate .ung-bar{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
-#mos-ungate #ung-search{padding:7px 11px;border:1px solid var(--rule);border-radius:8px;font:inherit;min-width:210px}
-#mos-ungate .ung-only{font:500 12.5px var(--sans);color:var(--ink2);display:flex;align-items:center;gap:6px}
-#mos-ungate .ung-legend{display:flex;gap:6px;align-items:center;font:500 12px var(--sans);color:var(--ink2)}
-#mos-ungate .ung-legend i{width:12px;height:12px;border-radius:3px;display:inline-block;margin:0 3px 0 10px;vertical-align:-1px}
-#mos-ungate .ung-legend i.g{background:#f2d9d5} #mos-ungate .ung-legend i.u{background:#cfe6da} #mos-ungate .ung-legend i.p{background:#f6e6c4}
-#mos-ungate .ung-tool{font:600 12px var(--sans);padding:6px 13px;border:1px solid var(--rule);border-radius:8px;background:#fff;color:var(--ink);cursor:pointer}
-#mos-ungate .ung-tool:hover{border-color:#121a17;background:#f4f6f5}
-#mos-ungate .ung-count{margin-left:auto;font:500 12px var(--mono);color:var(--ink3)}
-#mos-ungate .ung-grid{overflow:auto;max-height:74vh;border:1px solid var(--rule);border-radius:10px;background:#fff}
-#mos-ungate table.ungtbl{border-collapse:separate;border-spacing:0;font:600 10.5px var(--mono)}
-#mos-ungate .ungtbl th,#mos-ungate .ungtbl td{border-right:1px solid #eef1ef;border-bottom:1px solid #eef1ef;padding:3px 9px;text-align:center;white-space:nowrap;min-width:66px}
-#mos-ungate .ungtbl tbody tr{content-visibility:auto;contain-intrinsic-size:0 20px}
-#mos-ungate .ungtbl thead th{position:sticky;top:0;background:#121a17;color:#e6ede9;z-index:2;font:600 10.5px var(--sans);padding:6px 0}
-#mos-ungate .ungtbl th.num{position:sticky;left:0;background:#fff;z-index:1;text-align:right;font:500 10px var(--mono);color:var(--ink3);width:40px;min-width:40px;padding:3px 6px}
-#mos-ungate .ungtbl th.num.added{color:#c08a2e}
-#mos-ungate .ungtbl thead th.num{z-index:3;background:#121a17;color:#fff;text-align:center}
-#mos-ungate .ungtbl th.cor{position:sticky;left:40px;background:#fff;z-index:1;text-align:left;font:600 10.5px var(--mono);color:var(--ink);width:118px;min-width:118px;padding-left:8px;border-left:1px solid #eef1ef}
-#mos-ungate .ungtbl thead th.cor{z-index:3;background:#121a17;color:#fff}
-#mos-ungate .ungtbl td.g{background:#f7e7e4;color:#b0655c} #mos-ungate .ungtbl td.u{background:#dcefe5;color:#1c6043} #mos-ungate .ungtbl td.p{background:#f7ecd2;color:#8a6a12} #mos-ungate .ungtbl td.n{background:#fbfcfb;color:#c2c8c4}
-#mos-ungate .ungtbl td.ucell{cursor:pointer}
-#mos-ungate .ungtbl td.ucell:hover{outline:2px solid #121a17;outline-offset:-2px}
-#mos-ungate .ungtbl td.ucell .ung-pick{font:600 10.5px var(--sans);border:1px solid #121a17;border-radius:5px;padding:1px 2px;background:#fff;color:var(--ink);cursor:pointer;width:100%}
+.ungwrap .ung-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 14px;
+  padding:10px 12px;background:var(--panel);border:1px solid var(--rule);border-radius:10px}
+
+/* A reading of the whole grid before you start scrolling it. */
+.ung-tally{display:flex;gap:0;flex-wrap:wrap;margin:0 0 14px;border:1px solid var(--rule);
+  border-radius:10px;overflow:hidden;background:var(--panel)}
+.ung-tally .cell{flex:1 1 150px;padding:12px 16px;border-right:1px solid var(--rule)}
+.ung-tally .cell:last-child{border-right:0}
+.ung-tally b{display:block;font:600 20px/1.15 var(--mono);letter-spacing:-.02em;color:var(--ink)}
+.ung-tally span{display:block;margin-top:3px;font:500 11px var(--sans);color:var(--ink3);
+  text-transform:uppercase;letter-spacing:.07em}
+.ung-tally .cell.u b{color:#1c6043}
+.ung-tally .cell.p b{color:#8a6a12}
+.ung-tally .cell.b b{color:var(--ink3)}
+.ung-tally .bar{height:4px;border-radius:2px;margin-top:9px;background:#eef1ef;overflow:hidden;display:flex}
+.ung-tally .bar i{display:block;height:100%}
+.ung-src{margin:0 0 14px;border:1px solid var(--rule);border-radius:10px;background:var(--panel)}
+.ung-src summary{cursor:pointer;padding:10px 14px;font:500 12.5px var(--sans);color:var(--ink2);
+  list-style:none;display:flex;align-items:center;gap:7px}
+.ung-src summary::-webkit-details-marker{display:none}
+.ung-src summary::before{content:"\25B8";color:var(--ink3);transition:transform .15s}
+.ung-src[open] summary::before{transform:rotate(90deg)}
+.ung-src summary:hover{color:var(--ink)}
+.ung-src summary span{font-family:var(--mono);color:var(--ink3)}
+.ung-src-body{padding:0 14px 14px;border-top:1px solid var(--rule)}
+.ungwrap #ung-search{padding:7px 11px;border:1px solid var(--rule);border-radius:8px;font:inherit;min-width:210px}
+.ungwrap .ung-only{font:500 12.5px var(--sans);color:var(--ink2);display:flex;align-items:center;gap:6px}
+.ungwrap .ung-legend{display:flex;gap:6px;align-items:center;font:500 12px var(--sans);color:var(--ink2)}
+.ungwrap .ung-legend i{width:12px;height:12px;border-radius:3px;display:inline-block;margin:0 3px 0 10px;vertical-align:-1px}
+.ungwrap .ung-legend i.g{background:#f2d9d5} .ungwrap .ung-legend i.u{background:#cfe6da} .ungwrap .ung-legend i.p{background:#f6e6c4}
+.ungwrap .ung-tool{font:600 12px var(--sans);padding:6px 13px;border:1px solid var(--rule);border-radius:8px;background:#fff;color:var(--ink);cursor:pointer}
+.ungwrap .ung-tool:hover{border-color:#121a17;background:#f4f6f5}
+.ungwrap .ung-count{margin-left:auto;font:500 12px var(--mono);color:var(--ink3);text-align:right}
+.ungwrap .ung-grid{overflow:auto;max-height:74vh;border:1px solid var(--rule);
+  border-radius:10px;background:#fff;box-shadow:0 1px 2px rgba(18,26,23,.04)}
+.ungwrap table.ungtbl{border-collapse:separate;border-spacing:0;font:600 10.5px var(--mono)}
+.ungwrap .ungtbl th,.ungwrap .ungtbl td{border-right:1px solid #eef1ef;border-bottom:1px solid #eef1ef;padding:3px 9px;text-align:center;white-space:nowrap;min-width:66px}
+.ungwrap .ungtbl tbody tr{content-visibility:auto;contain-intrinsic-size:0 20px}
+.ungwrap .ungtbl tbody tr:hover td{background-image:linear-gradient(rgba(18,26,23,.055),rgba(18,26,23,.055))}
+.ungwrap .ungtbl tbody tr:hover th.num,
+.ungwrap .ungtbl tbody tr:hover th.cor{background:#f1f4f2;color:var(--ink)}
+.ungwrap .ungtbl thead th{position:sticky;top:0;background:#121a17;color:#e6ede9;z-index:2;font:600 10.5px var(--sans);padding:6px 0}
+.ungwrap .ungtbl th.num{position:sticky;left:0;background:#fff;z-index:1;text-align:right;font:500 10px var(--mono);color:var(--ink3);width:40px;min-width:40px;padding:3px 6px}
+.ungwrap .ungtbl th.num.added{color:#c08a2e}
+.ungwrap .ungtbl thead th.num{z-index:3;background:#121a17;color:#fff;text-align:center}
+.ungwrap .ungtbl th.slot{position:sticky;left:158px;background:#fff;z-index:1;
+  width:58px;min-width:58px;font:600 10px var(--mono);color:var(--ink3);
+  border-left:1px solid #eef1ef}
+.ungwrap .ungtbl thead th.slot{z-index:3;background:#121a17;color:#fff}
+.ungwrap .ungtbl th.slot.s1{color:#7a5c08;background:#fdf8ec}
+.ungwrap .ungtbl th.slot.s2{color:#8a4b12;background:#fdf3e8}
+.ungwrap .ungtbl th.slot.s3{color:#9b2c20;background:#fbecea}
+.ungwrap .ungtbl th.cor{position:sticky;left:40px;background:#fff;z-index:1;text-align:left;font:600 10.5px var(--mono);color:var(--ink);width:118px;min-width:118px;padding-left:8px;border-left:1px solid #eef1ef}
+.ungwrap .ungtbl thead th.cor{z-index:3;background:#121a17;color:#fff}
+.ungwrap .ungtbl td.g{background:#fdf6f5;color:#cba9a3;font-weight:500} .ungwrap .ungtbl td.u{background:#cfe9db;color:#12513a;font-weight:700;
+  box-shadow:inset 2px 0 0 #2f8a63} .ungwrap .ungtbl td.p{background:#f8e9c6;color:#7a5c08;font-weight:700;
+  box-shadow:inset 2px 0 0 #c9971f} .ungwrap .ungtbl td.n{background:#fbfcfb;color:#c2c8c4}
+.ungwrap .ungtbl td.ucell{cursor:pointer}
+.ungwrap .ungtbl td.ucell:hover{outline:2px solid #121a17;outline-offset:-2px}
+.ungwrap .ungtbl td.ucell .ung-pick{font:600 10.5px var(--sans);border:1px solid #121a17;border-radius:5px;padding:1px 2px;background:#fff;color:var(--ink);cursor:pointer;width:100%}
 @media print{#sidenav{display:none!important}body{padding-left:0}}
 </style>
 
@@ -543,26 +580,10 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
   <div id="mos-busy" hidden>Working&hellip;</div>
 
   <!-- ===== ASINs ===== -->
-  <section id="mos-asins">
-    <h2>ASINs</h2>
-    <p class="lede">The unique ASINs from Ungate List 3.0, shared with everyone on the team. Duplicates collapse to the row with the lowest unit cost; on an exact tie the order is KEHE DC27, DC15, DC18, DC19, DC01, then any other distributor consistently at random.</p>
-
-    <div class="mos-stats" id="mos-asin-stats"></div>
-
-    <div class="mos-card">
-      <div class="mos-drop" id="mos-asin-drop">
-        <div><b>Drop a new Asins CSV here</b>, or click to choose a file</div>
-        <small>In Ungate List 3.0: File &rarr; Download &rarr; Comma-separated values, with the Asins tab open. Replaces the list for the whole team; clients, gating and history stay.</small>
-      </div>
-      <input type="file" id="mos-asin-drop-input" accept=".csv,.tsv,text/csv" hidden>
-    </div>
-
-    <h3>Duplicates resolved</h3>
-    <div class="mos-scroll" id="mos-dupes"></div>
-  </section>
+  
 
   <!-- ===== MANUAL OFFER SHEET ===== -->
-  <section id="mos-ungate" hidden>
+  <section id="mos-ungate" class="ungwrap" hidden>
     <h2>Ungate Checking</h2>
     <p class="lede">ASINs down the side, the manual-offer-sheet clients across the top, and each client's ungating result in the cell &mdash; same shape as the Ungate Checking sheet. Rows are the unique ASINs plus any extra ASINs from the sheet.</p>
     <div class="ung-bar">
@@ -575,10 +596,11 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
       <input type="file" id="ung-import-input" accept=".csv,.tsv,.xlsx,.xls,text/csv" hidden>
       <span id="ung-count" class="ung-count"></span>
     </div>
+    <div id="ung-tally" class="ung-tally"></div>
     <div id="ung-picker" class="ung-picker" hidden></div>
     <div id="ung-grid" class="ung-grid"></div>
   </section>
-  <section id="mos-db" hidden>
+  <section id="mos-db" class="ungwrap" hidden>
     <h2>ASIN database</h2>
     <p class="lede">Every ASIN whose clients all have a real answer, Gated or Ungated. Anything still blank or Pending stays on Ungate Checking until it is settled, then it lands here. Cells are editable, and sending one back to blank moves the row back.</p>
     <div class="ung-bar">
@@ -587,26 +609,32 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
       <button class="ung-tool" id="db-extract" type="button">Extract&hellip;</button>
       <span id="db-count" class="ung-count"></span>
     </div>
+    <div id="db-tally" class="ung-tally"></div>
+    <details class="ung-src">
+      <summary>ASIN list &mdash; <span id="mos-asin-line">not loaded</span></summary>
+      <div class="ung-src-body">
+        <p class="lede" style="margin:0 0 10px">The rows of both grids come from the Asins tab of Ungate List 3.0. Duplicates collapse to the row with the lowest unit cost; on an exact tie the order is KEHE DC27, DC15, DC18, DC19, DC01, then any other distributor consistently at random.</p>
+        <div class="mos-drop" id="mos-asin-drop">
+          <div><b>Drop a new Asins CSV here</b>, or click to choose a file</div>
+          <small>File &rarr; Download &rarr; Comma-separated values, with the Asins tab open. Replaces the list for the whole team; clients, gating and history stay.</small>
+        </div>
+        <input type="file" id="mos-asin-drop-input" accept=".csv,.tsv,text/csv" hidden>
+        <div class="mos-stats" id="mos-asin-stats"></div>
+        <div class="mos-scroll" style="max-height:260px" id="mos-dupes"></div>
+      </div>
+    </details>
     <div id="db-picker" class="ung-picker" hidden></div>
     <div id="db-grid" class="ung-grid"></div>
   </section>
 
   <section id="mos-sheet" hidden>
     <h2>Manual offer sheet</h2>
-    <p class="lede">Upload the Batch Details exports and the clients and their gating come straight out of them. A row counts as Ungated when it has an FNSKU and no errors; anything else is Gated.</p>
+    <p class="lede">Tick the clients you are making sheets for. Each one is offered whatever the ASIN database says it is Ungated for, up to three clients per ASIN. A client holds an ASIN for thirty days from the sheet date; after that the slot frees itself and the ASIN can go out again.</p>
 
-    <div class="mos-card">
-      <div class="mos-drop" id="mos-batch-drop">
-        <div><b>Drop the gating files here</b>, or click to choose them &mdash; one file or many</div>
-        <small>Either shape works. A Batch Details export reads the client from the MSKU and calls a row Ungated when it has an FNSKU and no errors. An Ungate Checking sheet reads ASINs down the first column and client codes across the top, with Gated, Ungated or Pending in each cell. Only the ASINs in the file are touched.</small>
-      </div>
-      <input type="file" id="mos-batch-drop-input" accept=".csv,text/csv" multiple hidden>
-      <div id="mos-staged"></div>
-    </div>
-
-    <h3>Clients</h3>
+    <div id="mos-picked-bar" class="ung-tally"></div>
     <p class="lede" style="margin-bottom:10px" id="mos-picked"></p>
-    <div class="mos-scroll" style="max-height:340px" id="mos-clients"></div>
+    <div class="mos-scroll" style="max-height:420px" id="mos-clients"></div>
+    <div id="mos-staged" hidden></div>
 
     <h3>Settings</h3>
     <div class="mos-card">
@@ -3097,7 +3125,7 @@ document.addEventListener("change", e=>{
 "use strict";
 
 const M = {
-  on:false, ready:false, view:"asins", busy:false,
+  on:false, ready:false, view:"ungate", busy:false,
   budgets:{},                 // code -> budget
   pool:[],                    // deduped ASINs
   dupes:[],
@@ -3124,6 +3152,28 @@ const key = (a,s) => a+"|"+s;
 const offerable = k => M.ungated.has(k) || (M.cfg.pendingOn && M.pending.has(k));
 /* picked is null until someone unticks a box, so the usual case is everyone. */
 const inRun = c => M.picked===null || M.picked.has(c);
+
+/* A client holds an ASIN for thirty days from the sheet date. After that the
+   slot comes back on its own, so an ASIN given to three clients on the same
+   day is 3/3 for a month and 0/3 the day after. */
+const SLOT_DAYS = 30;
+function slotLive(row){
+  var d = row.sheet_date || (row.allocated_at||"").slice(0,10);
+  if(!d) return true;
+  return (Date.now() - new Date(d+"T00:00:00").getTime()) / 86400000 < SLOT_DAYS;
+}
+function slotsUsed(asin){ return (M.counts[asin] ? M.counts[asin].size : 0); }
+function slotExpiry(asin){
+  /* When the first of the held slots comes back. */
+  var best=null;
+  for(var i=0;i<M.ledger.length;i++){
+    var r=M.ledger[i];
+    if(r.asin!==asin || !slotLive(r)) continue;
+    var d=new Date((r.sheet_date||(r.allocated_at||"").slice(0,10))+"T00:00:00").getTime()+SLOT_DAYS*86400000;
+    if(best===null || d<best) best=d;
+  }
+  return best;
+}
 
 let noteTimer;
 function note(msg, bad){
@@ -3217,7 +3267,9 @@ async function loadAll(){
 function recompute(){
   M.counts={}; M.spent={};
   for(const r of M.ledger){
-    (M.counts[r.asin] ||= new Set()).add(r.store_code);
+    /* Only a slot still inside its thirty days blocks the ASIN. Spend is a
+       different matter: the quarter's budget stays spent either way. */
+    if(slotLive(r)) (M.counts[r.asin] ||= new Set()).add(r.store_code);
     if(r.year===M.cfg.year && r.quarter===M.cfg.quarter)
       M.spent[r.store_code]=(M.spent[r.store_code]||0)+(Number(r.total_price)||0);
   }
@@ -3434,7 +3486,7 @@ async function applyBatch(rows){
    Nothing is ever split.
    --------------------------------------------------------------------------- */
 const REASONS={
-  already:"Client already received this ASIN in an earlier run",
+  already:"Client still holds this ASIN from a sheet less than 30 days old",
   nobudget:"No budget on record for this client",
   overbudget:"Line costs more than the client has left",
   zero:"ASIN has no line price",
@@ -3459,7 +3511,7 @@ function allocate(excluded){
     const able=[];
     for(const c of live){
       if(!offerable(key(r.asin,c))) continue;
-      if(holders.has(c)){ skips.already=(skips.already||0)+1; continue; }
+      if(holders.has(c)){ skips.already=(skips.already||0)+1; continue; }   /* still inside its 30 days */
       if(!(c in M.budgets)){ skips.nobudget=(skips.nobudget||0)+1; continue; }
       if(r.total<=0){ skips.zero=(skips.zero||0)+1; continue; }
       if(r.total > remaining[c]+1e-9){ skips.overbudget=(skips.overbudget||0)+1; continue; }
@@ -3744,9 +3796,45 @@ function renderDb(){
   _ungPaint2("db");
 }
 function _ungPaintGrid(){ _ungPaint2("ungate"); }
+function ungTally(open){
+  var clients=ungCols(), rows=(M.pool||[]);
+  var u=0,p=0,b=0,g=0;
+  for(var i=0;i<rows.length;i++) for(var j=0;j<clients.length;j++){
+    var k=key(rows[i].asin,clients[j]);
+    if(M.ungated.has(k)) u++; else if(M.pending.has(k)) p++;
+    else if(M.blank.has(k)) b++; else g++;
+  }
+  var total=u+p+b+g, settled=u+g, left=p+b;
+  var box=el(open?'ung-tally':'db-tally'); if(!box) return;
+  var pct=function(n){ return total? (n/total*100).toFixed(1)+'%' : '0%'; };
+  box.innerHTML = open
+    ? '<div class="cell"><b>'+left.toLocaleString()+'</b><span>still to check</span>'+
+        '<div class="bar"><i style="width:'+(total?left/total*100:0)+'%;background:#c9971f"></i>'+
+        '<i style="flex:1;background:#eef1ef"></i></div></div>'+
+      '<div class="cell p"><b>'+p.toLocaleString()+'</b><span>pending</span></div>'+
+      '<div class="cell b"><b>'+b.toLocaleString()+'</b><span>never checked</span></div>'+
+      '<div class="cell"><b>'+pct(settled)+'</b><span>of the grid settled</span></div>'
+    : '<div class="cell"><b>'+settled.toLocaleString()+'</b><span>settled cells</span>'+
+        '<div class="bar"><i style="width:'+(total?u/total*100:0)+'%;background:#2f8a63"></i>'+
+        '<i style="width:'+(total?g/total*100:0)+'%;background:#e8cbc5"></i>'+
+        '<i style="flex:1;background:#eef1ef"></i></div></div>'+
+      '<div class="cell u"><b>'+u.toLocaleString()+'</b><span>ungated</span></div>'+
+      '<div class="cell"><b>'+g.toLocaleString()+'</b><span>gated</span></div>'+
+      '<div class="cell"><b>'+pct(u)+'</b><span>of the grid ungated</span></div>';
+}
+
 function _ungPaint2(which){
   var open = which==="ungate";
-  var clients=ungCols();
+  var clients=ungColsFor(open);
+  if(!clients.length){
+    el(open?'ung-grid':'db-grid').innerHTML=
+      '<div class="mos-empty" style="padding:22px">'+
+      (open ? 'Nothing left to check. Every client has a real answer on every ASIN.'
+            : 'Nothing settled yet. Results land here as clients come back Gated or Ungated.')+
+      '</div>';
+    var c0=el(open?'ung-count':'db-count'); if(c0) c0.textContent='';
+    return;
+  }
   var pool=(M.pool||[]).map(function(r){return r.asin;});
   var fileSet=window._ungFileSet;if(!fileSet){fileSet=window._ungFileSet=Object.create(null);(window.UNGATE_ASINS||[]).forEach(function(x){fileSet[x]=1;});}
   var seen=Object.create(null), rows=[];
@@ -3772,7 +3860,9 @@ function _ungPaint2(which){
     return ungRowOn(a, clients, open);
   });
   var MAXR=2000;
-  var head='<tr><th class="num">#</th><th class="cor">ASIN</th>'+clients.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr>';
+  var head='<tr><th class="num">#</th><th class="cor">ASIN</th>'+
+    (open?'':'<th class="slot">Clients</th>')+
+    clients.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr>';
   var parts=[], lim=Math.min(shown.length,MAXR);
   for(var i=0;i<lim;i++){
     var a=shown[i], added=!fileSet[a], tds='';
@@ -3786,16 +3876,28 @@ function _ungPaint2(which){
         tds+='<td class="ucell '+s[0]+'" data-a="'+a+'" data-c="'+c+'" data-s="'+s[2]+'">'+s[1]+'</td>';
       }
     }
-    parts.push('<tr><th class="num'+(added?' added':'')+'"'+(added?' title="Idinagdag — wala sa na-upload na sheet"':'')+'>'+rowNum[a]+'</th><th class="cor">'+a+'</th>'+tds+'</tr>');
+    var slotTd='';
+    if(!open){
+      var used=slotsUsed(a), cap=(M.cfg&&M.cfg.maxClients)||3;
+      var back=used?slotExpiry(a):null;
+      slotTd='<th class="slot s'+used+'" title="'+
+        (used ? used+' of '+cap+' taken. The first frees up '+
+                new Date(back).toISOString().slice(0,10)
+              : 'Nobody holds this ASIN')+
+        '">'+used+'/'+cap+'</th>';
+    }
+    parts.push('<tr><th class="num'+(added?' added':'')+'"'+(added?' title="Idinagdag — wala sa na-upload na sheet"':'')+'>'+rowNum[a]+'</th><th class="cor">'+a+'</th>'+slotTd+tds+'</tr>');
   }
   el(open?'ung-grid':'db-grid').innerHTML='<table class="ungtbl"><thead>'+head+'</thead><tbody>'+parts.join('')+'</tbody></table>';
+  ungTally(open);
   if(!open){
     var dc=el('db-count');
     var settledCells=0;
     for(var z=0;z<shown.length;z++) for(var y=0;y<clients.length;y++)
       if(!ungCellOpen(key(shown[z],clients[y]))) settledCells++;
     if(dc) dc.textContent='showing '+Math.min(shown.length,MAXR).toLocaleString()+
-      ' of '+shown.length.toLocaleString()+' ASINs \u00b7 '+settledCells.toLocaleString()+' settled cells';
+      ' of '+shown.length.toLocaleString()+' ASINs \u00b7 '+clients.length+' of '+
+      ungCols().length+' clients \u00b7 '+settledCells.toLocaleString()+' settled cells';
     return;
   }
   var cnt=el('ung-count');
@@ -3858,6 +3960,11 @@ function ungCellState(k){
 function ungCols(){
   return (M.stores && M.stores.length) ? M.stores : (window.UNGATE_CLIENTS||[]);
 }
+/* Both tabs show every client, even one with nothing on this side yet. An
+   empty column is the point: MDH sitting blank in the database is how you
+   see it is still being checked, and it fills in on its own as answers come
+   back on Ungate Checking. */
+function ungColsFor(openTab){ return ungCols(); }
 
 /* New clients go to the far left, because the leftmost column is the one
    that gets first claim when two clients are otherwise level. */
@@ -3884,10 +3991,13 @@ async function ungAddClients(){
 let ungPick=null;                      // null means every client
 const ungIn = c => ungPick===null || ungPick.has(c);
 
-function ungTogglePicker(){
-  const box=el("ung-picker");
+function ungTogglePicker(which){
+  which = which==="db" ? "db" : "ung";
+  const box=el(which+"-picker");
   if(!box.hidden){ box.hidden=true; return; }
-  const cols=ungCols();
+  const cols=ungColsFor(which!=="db");
+  if(!cols.length){ note("This tab has no columns to extract yet.", true); return; }
+  box.dataset.tab=which;
   box.innerHTML=
     `<div class="ung-pick-head">
        <b>Columns to extract</b>
@@ -3900,15 +4010,18 @@ function ungTogglePicker(){
      </div>
      <div class="ung-pick-list">`+
     cols.map(c=>`<label><input type="checkbox" data-ungcol="${c}" ${ungIn(c)?"checked":""}>${c}</label>`).join("")+
-    `</div><div class="ung-pick-note" id="ung-pick-note"></div>`;
+    `</div><div class="ung-pick-note"></div>`;
   box.hidden=false;
-  ungPickNote();
+  ungPickNote(box);
 }
-function ungPickNote(){
-  const n=ungCols().filter(ungIn).length, all=ungCols().length;
-  const e=el("ung-pick-note");
+function ungPickNote(box){
+  if(!box) box = (el("db-picker") && !el("db-picker").hidden) ? el("db-picker") : el("ung-picker");
+  if(!box) return;
+  const cols=ungColsFor(box.dataset.tab!=="db");
+  const n=cols.filter(ungIn).length, all=cols.length;
+  const e=box.querySelector(".ung-pick-note");
   if(e) e.textContent = n===all
-    ? `All ${all} clients will be in the sheet.`
+    ? `All ${all} client${all===1?"":"s"} on this tab will be in the sheet.`
     : `${n} of ${all} clients will be in the sheet.`;
 }
 
@@ -3919,7 +4032,7 @@ function _ungExtract(which){ _ungExtractRows(which==="db" ? "db" : "ungate"); }
 function _ungExtractRows(which){
   if(typeof XLSX==="undefined"){ note("Hindi na-load ang spreadsheet writer — i-reload ang page.", true); return; }
   var openWanted = which!=="db";
-  var all=ungCols(), clients=all.filter(ungIn);
+  var all=ungColsFor(openWanted), clients=all.filter(ungIn);
   if(!clients.length){ note("No columns are ticked, so there is nothing to extract.", true); return; }
 
   var pool=(M.pool||[]).map(function(r){return r.asin;});
@@ -3955,17 +4068,22 @@ function renderMos(){
   if(!M.on) return;
   document.querySelectorAll("#mos-tabs button").forEach(b=>
     b.setAttribute("aria-current", String(b.dataset.mv===M.view)));
-  el("mos-asins").hidden = M.view!=="asins";
-  el("mos-sheet").hidden = M.view!=="sheet";
+  el("mos-sheet").hidden  = M.view!=="sheet";
   el("mos-ungate").hidden = M.view!=="ungate";
   el("mos-db").hidden     = M.view!=="db";
-  if(M.view==="ungate")     renderUngate();
-  else if(M.view==="db")    renderDb();
-  else if(M.view==="asins") renderAsins();
-  else                      renderSheet();
+  renderAsins();                      // the ASIN panel now lives inside the database tab
+  if(M.view==="ungate")   renderUngate();
+  else if(M.view==="db")  renderDb();
+  else                    renderSheet();
 }
 
 function renderAsins(){
+  var line=el("mos-asin-line");
+  if(line) line.textContent = M.pool.length
+    ? M.pool.length.toLocaleString()+" ASINs"+
+      (M.asinMeta&&M.asinMeta.importedAt ? ", loaded "+M.asinMeta.importedAt : "")
+    : "not loaded";
+  if(!el("mos-asin-stats")) return;
   el("mos-asin-stats").innerHTML = M.pool.length
     ? `<div class="mos-stat"><b>${M.pool.length.toLocaleString()}</b><span>unique ASINs</span></div>
        <div class="mos-stat"><b>${M.dupes.length.toLocaleString()}</b><span>ASINs with duplicates</span></div>
@@ -4007,12 +4125,12 @@ function renderSheet(){
           ${M.picked===null?"checked":""} title="Tick to cover every client"></th>
         <th class="r">#</th><th>Client</th>
         <th class="r">Budget left</th><th class="r">Ungated</th><th class="r">Pending</th>
-        <th class="r">Held</th><th></th></tr></thead><tbody>`+
+        <th class="r">Holding</th><th></th></tr></thead><tbody>`+
       M.stores.map((c,i)=>{
         const rem=remainingFor(c);
         let u=0,p=0; for(const k of M.ungated) if(k.endsWith("|"+c)) u++;
         for(const k of M.pending) if(k.endsWith("|"+c)) p++;
-        const held=M.ledger.filter(r=>r.store_code===c).length;
+        const held=M.ledger.filter(r=>r.store_code===c && slotLive(r)).length;
         return `<tr${inRun(c)?"":' class="mos-off"'}>
           <td><input type="checkbox" data-client="${esc(c)}" ${inRun(c)?"checked":""}></td>
           <td class="r dim">${i+1}</td><td class="mono"><b>${esc(c)}</b></td>
@@ -4024,6 +4142,19 @@ function renderSheet(){
           <button class="mos-mini" data-mv-rm="${i}">&times;</button></td></tr>`;
       }).join("")+`</tbody></table>`
     : `<div class="mos-empty">No clients yet. Upload a Batch Details file above and they appear here.</div>`;
+
+  var cap=(M.cfg&&M.cfg.maxClients)||3;
+  var free=0, part=0, full=0;
+  for(var z=0;z<(M.pool||[]).length;z++){
+    var used=slotsUsed(M.pool[z].asin);
+    if(used===0) free++; else if(used>=cap) full++; else part++;
+  }
+  var bar=el("mos-picked-bar");
+  if(bar) bar.innerHTML=
+    '<div class="cell"><b>'+M.stores.filter(inRun).length+'</b><span>clients in this run</span></div>'+
+    '<div class="cell u"><b>'+free.toLocaleString()+'</b><span>ASINs with all '+cap+' slots open</span></div>'+
+    '<div class="cell p"><b>'+part.toLocaleString()+'</b><span>partly taken</span></div>'+
+    '<div class="cell b"><b>'+full.toLocaleString()+'</b><span>full for now</span></div>';
 
   const chosen=M.stores.filter(inRun);
   el("mos-picked").innerHTML = M.stores.length
@@ -4189,7 +4320,7 @@ function init(){
       catch(e){ note(e.message, true); }
     });
   });
-  dropZone("mos-batch-drop", files=>{
+  if(el("mos-batch-drop")) dropZone("mos-batch-drop", files=>{
     if(!M.pool.length){ note("Load the ASIN list on the ASINs tab first.", true); return; }
     readFiles(files, (txt,name,all)=>{
       const wb=XLSX.read(txt,{type:"string"});
@@ -4214,14 +4345,15 @@ function init(){
       if(a==="go"){ _ungExtractRows(p[1]); return; }
       ungPick = a==="all" ? null : new Set();
       box.querySelectorAll("input[data-ungcol]").forEach(function(x){ x.checked = a==="all"; });
-      ungPickNote();
+      ungPickNote(box);
     });
     box.addEventListener("change", function(ev){
       var x=ev.target.closest("input[data-ungcol]"); if(!x) return;
-      if(ungPick===null) ungPick=new Set(ungCols());
+      var cols=ungColsFor(p[1]==="ungate");
+      if(ungPick===null) ungPick=new Set(cols);
       if(x.checked) ungPick.add(x.dataset.ungcol); else ungPick.delete(x.dataset.ungcol);
-      if(ungPick.size===ungCols().length) ungPick=null;
-      ungPickNote();
+      if(cols.every(ungIn)) ungPick=null;
+      ungPickNote(box);
     });
   });
 
