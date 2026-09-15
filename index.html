@@ -345,7 +345,8 @@
   </nav>
   <nav class="tabs" id="mos-tabs">
     
-    <button data-mv="ungate" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Ungate Checking</button>
+    <button data-mv="goods" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Good to Order ASINs</button>
+    <button data-mv="ungate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Ungate Checking</button>
     <button data-mv="db"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>ASIN database</button>
     <button data-mv="sheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Manual offer sheet</button>
   </nav>
@@ -399,6 +400,8 @@ body{padding-left:214px}
 .ungwrap .ung-legend{display:flex;gap:6px;align-items:center;font:500 12px var(--sans);color:var(--ink2)}
 .ungwrap .ung-legend i{width:12px;height:12px;border-radius:3px;display:inline-block;margin:0 3px 0 10px;vertical-align:-1px}
 .ungwrap .ung-legend i.g{background:#f2d9d5} .ungwrap .ung-legend i.u{background:#cfe6da} .ungwrap .ung-legend i.p{background:#f6e6c4}
+.ungwrap .ung-legend i.b{background:repeating-linear-gradient(45deg,#fff,#fff 3px,#e4e8e6 3px,#e4e8e6 6px);border:1px solid #e4e8e6}
+.ungwrap .ung-legend i.d{background:#f2f8f5;border:1px solid #cfe6da}
 .ungwrap .ung-tool{font:600 12px var(--sans);padding:6px 13px;border:1px solid var(--rule);border-radius:8px;background:#fff;color:var(--ink);cursor:pointer}
 .ungwrap .ung-tool:hover{border-color:#121a17;background:#f4f6f5}
 .ungwrap .ung-count{margin-left:auto;font:500 12px var(--mono);color:var(--ink3);text-align:right}
@@ -411,8 +414,26 @@ body{padding-left:214px}
 .ungwrap .ungtbl tbody tr:hover th.num,
 .ungwrap .ungtbl tbody tr:hover th.cor{background:#f1f4f2;color:var(--ink)}
 .ungwrap .ungtbl thead th{position:sticky;top:0;background:#121a17;color:#e6ede9;z-index:2;font:600 10.5px var(--sans);padding:6px 0}
+.ungwrap .ungtbl thead tr.subhead th{top:24px;background:#1c2723;color:#9fb3aa;
+  font:600 10px var(--mono);padding:4px 0;border-bottom:1px solid #2a3833}
+.ungwrap .ungtbl thead tr.subhead th.cor{background:#1c2723;color:#7e948b;
+  font:500 9.5px var(--sans);text-transform:uppercase;letter-spacing:.06em;text-align:left}
+.ungwrap .ungtbl thead tr.subhead th.num,
+.ungwrap .ungtbl thead tr.subhead th.slot{background:#1c2723}
+.ungwrap .ungtbl thead tr.subhead th.cnt.zero{color:#4a5d56}
 .ungwrap .ungtbl th.num{position:sticky;left:0;background:#fff;z-index:1;text-align:right;font:500 10px var(--mono);color:var(--ink3);width:40px;min-width:40px;padding:3px 6px}
 .ungwrap .ungtbl th.num.added{color:#c08a2e}
+.ungwrap table.ungtbl.goods{font:500 11px var(--sans);width:100%}
+.ungwrap .goods td{text-align:left;padding:5px 10px;min-width:0}
+.ungwrap .goods td.gn{text-align:right;font-family:var(--mono);font-size:10.5px;white-space:nowrap}
+.ungwrap .goods td.gs{color:var(--ink2);font-size:10.5px}
+.ungwrap .goods td.gb{color:var(--ink2)}
+.ungwrap .goods thead th{text-align:left;padding:6px 10px}
+.ungwrap .goods thead th.gn{text-align:right}
+.ungwrap .goods tbody tr:nth-child(even) td{background:#fbfcfb}
+.ungwrap .ungtbl tr.retired th.cor{color:var(--ink3)}
+.ungwrap .ungtbl tr.retired th.cor .gone{display:block;font:500 8.5px var(--sans);
+  color:#a08a5c;text-transform:uppercase;letter-spacing:.08em;margin-top:-1px}
 .ungwrap .ungtbl thead th.num{z-index:3;background:#121a17;color:#fff;text-align:center}
 .ungwrap .ungtbl th.slot{position:sticky;left:158px;background:#fff;z-index:1;
   width:58px;min-width:58px;font:600 10px var(--mono);color:var(--ink3);
@@ -531,6 +552,10 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
 .ungtbl td.ucell.b{background:repeating-linear-gradient(45deg,transparent,transparent 5px,
   rgba(0,0,0,.05) 5px,rgba(0,0,0,.05) 10px);color:var(--ink3)}
 .ungtbl td.ucell.o{background:transparent;color:var(--ink3);opacity:.45}
+/* Answered already: readable, but clearly settled rather than outstanding. */
+.ungtbl td.ucell.done{font-weight:500;font-size:9.5px;letter-spacing:.02em}
+.ungtbl td.ucell.dg{background:#fbf7f6;color:#b9a19c}
+.ungtbl td.ucell.du{background:#f2f8f5;color:#5f9b82}
 .ung-picker{border:1px solid var(--rule);border-radius:8px;background:var(--panel);
   padding:12px 14px;margin-bottom:10px}
 .ung-pick-head{display:flex;justify-content:space-between;align-items:center;gap:10px;
@@ -583,13 +608,37 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
   
 
   <!-- ===== MANUAL OFFER SHEET ===== -->
+  <section id="mos-goods" class="ungwrap">
+    <h2>Good to Order ASINs</h2>
+    <p class="lede">The Asins tab of Ungate List 3.0, dropped in here. Ungate Checking follows this list: an ASIN you add turns up there to be checked, and one you drop leaves it. Nothing is thrown away, so an ASIN taken off the list keeps its answers in the ASIN database and comes straight back if you add it again.</p>
+
+    <div id="goods-tally" class="ung-tally"></div>
+
+    <div class="ung-bar">
+      <input id="goods-search" placeholder="Filter ASIN or brand&hellip;" autocomplete="off">
+      <label class="ung-only"><input type="checkbox" id="goods-retired"> Show retired too</label>
+      <button class="ung-tool" id="goods-upload" type="button">Upload the Asins tab</button>
+      <input type="file" id="mos-asin-drop-input" accept=".csv,.tsv,.xlsx,.xls,text/csv" hidden>
+      <span id="goods-count" class="ung-count"></span>
+    </div>
+
+    <div class="mos-drop" id="mos-asin-drop" style="margin-bottom:14px">
+      <div><b>Drop the Asins CSV here</b>, or click to choose a file</div>
+      <small>In Ungate List 3.0: File &rarr; Download &rarr; Comma-separated values, with the Asins tab open. Duplicate ASINs collapse to the row with the lowest unit cost; on a tie the order is KEHE DC27, DC15, DC18, DC19, DC01, then any other distributor consistently.</small>
+    </div>
+
+    <div class="ung-grid" id="goods-grid"></div>
+    <div class="mos-scroll" style="max-height:240px;margin-top:16px" id="mos-dupes"></div>
+    <div class="mos-stats" id="mos-asin-stats" hidden></div>
+  </section>
+
   <section id="mos-ungate" class="ungwrap" hidden>
     <h2>Ungate Checking</h2>
     <p class="lede">ASINs down the side, the manual-offer-sheet clients across the top, and each client's ungating result in the cell &mdash; same shape as the Ungate Checking sheet. Rows are the unique ASINs plus any extra ASINs from the sheet.</p>
     <div class="ung-bar">
       <input id="ung-search" placeholder="Filter ASIN&hellip;" autocomplete="off">
       <label class="ung-only"><input type="checkbox" id="ung-onlyres"> With Ungated/Pending only</label>
-      <span class="ung-legend"><i class="g"></i>Gated<i class="u"></i>Ungated<i class="p"></i>Pending</span>
+      <span class="ung-legend"><i class="p"></i>Pending<i class="b"></i>Not checked<i class="d"></i>Already answered</span>
       <button class="ung-tool" id="ung-import" type="button">Import</button>
       <button class="ung-tool" id="ung-add" type="button">Add client</button>
       <button class="ung-tool" id="ung-extract" type="button">Extract&hellip;</button>
@@ -610,19 +659,7 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
       <span id="db-count" class="ung-count"></span>
     </div>
     <div id="db-tally" class="ung-tally"></div>
-    <details class="ung-src">
-      <summary>ASIN list &mdash; <span id="mos-asin-line">not loaded</span></summary>
-      <div class="ung-src-body">
-        <p class="lede" style="margin:0 0 10px">The rows of both grids come from the Asins tab of Ungate List 3.0. Duplicates collapse to the row with the lowest unit cost; on an exact tie the order is KEHE DC27, DC15, DC18, DC19, DC01, then any other distributor consistently at random.</p>
-        <div class="mos-drop" id="mos-asin-drop">
-          <div><b>Drop a new Asins CSV here</b>, or click to choose a file</div>
-          <small>File &rarr; Download &rarr; Comma-separated values, with the Asins tab open. Replaces the list for the whole team; clients, gating and history stay.</small>
-        </div>
-        <input type="file" id="mos-asin-drop-input" accept=".csv,.tsv,text/csv" hidden>
-        <div class="mos-stats" id="mos-asin-stats"></div>
-        <div class="mos-scroll" style="max-height:260px" id="mos-dupes"></div>
-      </div>
-    </details>
+    
     <div id="db-picker" class="ung-picker" hidden></div>
     <div id="db-grid" class="ung-grid"></div>
   </section>
@@ -635,38 +672,6 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
     <p class="lede" style="margin-bottom:10px" id="mos-picked"></p>
     <div class="mos-scroll" style="max-height:420px" id="mos-clients"></div>
     <div id="mos-staged" hidden></div>
-
-    <h3>Settings</h3>
-    <div class="mos-card">
-      <div class="mos-row">
-        <div class="mos-field" style="width:250px">
-          <label for="mos-method">How to share the ASINs</label>
-          <select id="mos-method">
-            <option value="priority">Priority order &mdash; top to bottom</option>
-            <option value="spread">Spread evenly across clients</option>
-          </select>
-          <div class="hint" id="mos-method-note"></div>
-        </div>
-        <div class="mos-field" style="width:165px">
-          <label for="mos-date">Sheet date</label>
-          <input type="date" id="mos-date">
-        </div>
-        <div class="mos-field" style="width:185px">
-          <label for="mos-max">Maximum clients per ASIN</label>
-          <input type="number" id="mos-max" min="1" max="20">
-        </div>
-        <div class="mos-field" style="width:175px">
-          <label for="mos-min">Minimum per client</label>
-          <input type="number" id="mos-min" min="0" step="50">
-          <div class="hint">A client under this is dropped, and what it held goes back for the clients after it.</div>
-        </div>
-      </div>
-      <label style="display:flex;gap:9px;align-items:flex-start;cursor:pointer;margin-top:14px">
-        <input type="checkbox" id="mos-pending" style="width:auto;margin-top:3px">
-        <span><b>Offer the Pending cells too</b>
-        <span class="hint" id="mos-pending-note"></span></span>
-      </label>
-    </div>
 
     <div class="mos-card">
       <div class="mos-row" style="margin-top:0">
@@ -687,25 +692,7 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
       <div class="mos-scroll" style="max-height:260px" id="mos-skips"></div>
     </div>
 
-    <h3>Records</h3>
-    <div class="mos-card">
-      <div class="mos-stats" style="margin-top:0" id="mos-records"></div>
-      <div class="mos-row">
-        <div class="mos-field" style="width:320px">
-          <label for="mos-reset-input">Reset specific ASINs</label>
-          <textarea id="mos-reset-input" rows="2" placeholder="B00T6BOA3C, B0BLDRVWCV"></textarea>
-        </div>
-        <div class="mos-field" style="width:250px">
-          <label for="mos-batch">Undo a whole run</label>
-          <input type="text" id="mos-batch" placeholder="2026-09-14_a1b2c3d4" spellcheck="false">
-        </div>
-      </div>
-      <div class="mos-row">
-        <button class="mos-btn flag" id="mos-reset">Reset these ASINs</button>
-        <button class="mos-btn flag" id="mos-undo">Undo run</button>
-      </div>
-    </div>
-  </section>
+    </section>
 </div>
 
 <div class="mos-note" id="mos-note" hidden></div>
@@ -3125,9 +3112,10 @@ document.addEventListener("change", e=>{
 "use strict";
 
 const M = {
-  on:false, ready:false, view:"ungate", busy:false,
+  on:false, ready:false, view:"goods", busy:false,
   budgets:{},                 // code -> budget
-  pool:[],                    // deduped ASINs
+  all:[],                     // every ASIN ever loaded, retired ones included
+  pool:[],                    // the ones still in Ungate List 3.0
   dupes:[],
   stores:[],                  // ordered client codes
   ungated:new Set(),          // "ASIN|CODE"
@@ -3240,12 +3228,14 @@ async function loadAll(){
   ]);
   M.budgets={};
   for(const b of budgets) M.budgets[b.store_code]=Number(b.budget)||0;
-  M.pool=asins.map(r=>({
+  M.all=asins.map(r=>({
     asin:r.asin, n:r.pos, upc:r.upc||"", status:r.status||"", notes:r.notes||"",
     qty:r.qty||0, unitCost:Number(r.unit_cost)||0, avg90:Number(r.avg90)||0,
     bundle:r.bundle||1, ppu:Number(r.ppu)||0, roi:Number(r.roi)||0,
     total:Number(r.total)||0, p30:Number(r.p30)||0, brand:r.brand||"", dist:r.dist||"",
+    active:r.active!==false,
   }));
+  M.pool=M.all.filter(r=>r.active);
   M.stores=clients.map(c=>c.store_code);
   M.ungated=new Set(); M.pending=new Set(); M.blank=new Set();
   for(const g of gating){
@@ -3348,18 +3338,37 @@ function parseAsinCsv(text){
     };
   }).filter(r=>r.asin);
 }
+/* Replacing the ASIN list never deletes anything. An ASIN missing from the
+   new CSV is retired: it leaves Ungate Checking and stops being offered, but
+   whatever was already answered about it stays in the ASIN database. One that
+   comes back later simply becomes active again. */
 async function replaceAsins(raw){
   const {pool,dupes}=dedupe(raw);
+  const coming=new Set(pool.map(r=>r.asin));
+  const known=new Set((M.all||[]).map(r=>r.asin));
+  const added=pool.filter(r=>!known.has(r.asin)).length;
+  const retired=(M.all||[]).filter(r=>r.active && !coming.has(r.asin)).map(r=>r.asin);
+  const revived=(M.all||[]).filter(r=>!r.active && coming.has(r.asin)).length;
+
   M.busy=true; renderMos();
   try{
-    await sb.from("mos_asins").delete().neq("asin","\u0000");
     await writeChunks("mos_asins", pool.map(r=>({
       asin:r.asin, pos:r.n, upc:r.upc, status:r.status, notes:r.notes, qty:r.qty,
       unit_cost:r.unitCost, avg90:r.avg90, bundle:r.bundle, ppu:r.ppu, roi:r.roi,
-      total:r.total, p30:r.p30, brand:r.brand, dist:r.dist,
+      total:r.total, p30:r.p30, brand:r.brand, dist:r.dist, active:true,
     })), "asin");
-    M.pool=pool; M.dupes=dupes;
-    note(`${pool.length.toLocaleString()} ASINs saved for everyone — ${raw.length-pool.length} duplicate rows dropped`);
+    for(let i=0;i<retired.length;i+=200){
+      const {error}=await sb.from("mos_asins").update({active:false})
+        .in("asin", retired.slice(i,i+200));
+      if(error) throw error;
+    }
+    M.dupes=dupes;
+    await loadAll();
+    note(`${pool.length.toLocaleString()} ASINs in the list`+
+      (added          ? ` \u00b7 ${added} new` : "")+
+      (retired.length ? ` \u00b7 ${retired.length} retired, their answers kept` : "")+
+      (revived        ? ` \u00b7 ${revived} back` : "")+
+      (raw.length-pool.length ? ` \u00b7 ${raw.length-pool.length} duplicate rows dropped` : ""));
   }catch(e){ note("Could not save the ASINs: "+e.message, true); }
   finally{ M.busy=false; renderMos(); }
 }
@@ -3494,7 +3503,7 @@ const REASONS={
 function allocate(excluded){
   excluded = excluded || new Set();
   const cap=M.cfg.maxClients, spread=M.cfg.method==="spread";
-  const date=el("mos-date").value || new Date().toISOString().slice(0,10);
+  const date=M.cfg.sheetDate || new Date().toISOString().slice(0,10);
   const remaining={}, assigned={}, skips={}, before={}, after={};
   const pos={}; M.stores.forEach((c,i)=>{ pos[c]=i; });
   const live=M.stores.filter(c=>!excluded.has(c) && inRun(c));
@@ -3700,7 +3709,7 @@ async function commit(){
     await writeChunks("mos_allocations", rows);
     M.ledger.push(...rows); recompute();
     note(`Recorded ${rows.length.toLocaleString()} allocations. Run id ${batch}`);
-    el("mos-batch").value=batch;
+    M.lastBatch=batch;
     M.result=null;
   }catch(e){
     note("The workbook downloaded but the database refused the write, so no slots were used: "+e.message, true);
@@ -3797,7 +3806,7 @@ function renderDb(){
 }
 function _ungPaintGrid(){ _ungPaint2("ungate"); }
 function ungTally(open){
-  var clients=ungCols(), rows=(M.pool||[]);
+  var clients=ungCols(), rows=ungRowsFor(open);
   var u=0,p=0,b=0,g=0;
   for(var i=0;i<rows.length;i++) for(var j=0;j<clients.length;j++){
     var k=key(rows[i].asin,clients[j]);
@@ -3813,7 +3822,7 @@ function ungTally(open){
         '<i style="flex:1;background:#eef1ef"></i></div></div>'+
       '<div class="cell p"><b>'+p.toLocaleString()+'</b><span>pending</span></div>'+
       '<div class="cell b"><b>'+b.toLocaleString()+'</b><span>never checked</span></div>'+
-      '<div class="cell"><b>'+pct(settled)+'</b><span>of the grid settled</span></div>'
+      '<div class="cell"><b>'+settled.toLocaleString()+'</b><span>already answered</span></div>'
     : '<div class="cell"><b>'+settled.toLocaleString()+'</b><span>settled cells</span>'+
         '<div class="bar"><i style="width:'+(total?u/total*100:0)+'%;background:#2f8a63"></i>'+
         '<i style="width:'+(total?g/total*100:0)+'%;background:#e8cbc5"></i>'+
@@ -3835,11 +3844,10 @@ function _ungPaint2(which){
     var c0=el(open?'ung-count':'db-count'); if(c0) c0.textContent='';
     return;
   }
-  var pool=(M.pool||[]).map(function(r){return r.asin;});
   var fileSet=window._ungFileSet;if(!fileSet){fileSet=window._ungFileSet=Object.create(null);(window.UNGATE_ASINS||[]).forEach(function(x){fileSet[x]=1;});}
+  var live=Object.create(null); (M.pool||[]).forEach(function(r){ live[r.asin]=1; });
   var seen=Object.create(null), rows=[];
-  (window.UNGATE_ASINS||[]).forEach(function(a){ if(a&&!seen[a]){seen[a]=1;rows.push(a);} });
-  pool.forEach(function(a){ if(a&&!seen[a]){seen[a]=1;rows.push(a);} });
+  ungRowsFor(open).forEach(function(r){ if(r.asin&&!seen[r.asin]){seen[r.asin]=1;rows.push(r.asin);} });
   var rowNum=Object.create(null); for(var r=0;r<rows.length;r++) rowNum[rows[r]]=r+1;
   var sInp=el(open?'ung-search':'db-search'), onlyInp=open?el('ung-onlyres'):null;
   if(!window._ungWired){ window._ungWired=1;
@@ -3863,15 +3871,40 @@ function _ungPaint2(which){
   var head='<tr><th class="num">#</th><th class="cor">ASIN</th>'+
     (open?'':'<th class="slot">Clients</th>')+
     clients.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr>';
+  /* How much of this tab each client still accounts for. On Ungate Checking
+     that is the work left on them; in the database it is what they have
+     answered. Counted over the rows on screen, so it follows the filter. */
+  var perClient=new Array(clients.length).fill(0);
+  for(var q=0;q<shown.length;q++)
+    for(var w=0;w<clients.length;w++)
+      if(ungCellOpen(key(shown[q],clients[w]))===open) perClient[w]++;
+  head += '<tr class="subhead"><th class="num"></th>'+
+    '<th class="cor">'+(open?'left to check':'answered')+'</th>'+
+    (open?'':'<th class="slot"></th>')+
+    clients.map(function(c,ix){
+      var n=perClient[ix];
+      return '<th class="cnt'+(n?'':' zero')+'" title="'+c+': '+n.toLocaleString()+
+        (open?' ASINs still to check':' ASINs answered')+'">'+n.toLocaleString()+'</th>';
+    }).join('')+'</tr>';
+
   var parts=[], lim=Math.min(shown.length,MAXR);
   for(var i=0;i<lim;i++){
-    var a=shown[i], added=!fileSet[a], tds='';
+    var a=shown[i], added=!fileSet[a], gone=!live[a], tds='';
     for(var j=0;j<clients.length;j++){
       var c=clients[j], k=key(a,c), s=ungCellState(k);
       if(ungCellOpen(k)!==open){
-        /* Belongs to the other tab. Shown hollow so the grid keeps its shape. */
-        tds+='<td class="ucell o" data-a="'+a+'" data-c="'+c+'" data-s="'+s[2]+'" title="'+s[1]+
-             ' — on the '+(open?'ASIN database':'Ungate Checking')+' tab">&middot;</td>';
+        if(open){
+          /* Already answered and living in the ASIN database. Shown faintly
+             with a tick, so you can see what is done and which way it went
+             without it competing with the work still to do. */
+          tds+='<td class="ucell done d'+s[0]+'" data-a="'+a+'" data-c="'+c+'" data-s="'+s[2]+
+               '" title="'+s[1]+' — already in the ASIN database">\u2713 '+s[1]+'</td>';
+        } else {
+          /* Still being checked, so there is nothing in the database yet. */
+          tds+='<td class="ucell o" data-a="'+a+'" data-c="'+c+'" data-s="'+s[2]+
+               '" title="'+(s[2]==='pending'?'Pending':'Not checked yet')+
+               ' — still on Ungate Checking">&middot;</td>';
+        }
       } else {
         tds+='<td class="ucell '+s[0]+'" data-a="'+a+'" data-c="'+c+'" data-s="'+s[2]+'">'+s[1]+'</td>';
       }
@@ -3886,7 +3919,10 @@ function _ungPaint2(which){
               : 'Nobody holds this ASIN')+
         '">'+used+'/'+cap+'</th>';
     }
-    parts.push('<tr><th class="num'+(added?' added':'')+'"'+(added?' title="Idinagdag — wala sa na-upload na sheet"':'')+'>'+rowNum[a]+'</th><th class="cor">'+a+'</th>'+slotTd+tds+'</tr>');
+    parts.push('<tr'+(gone?' class="retired"':'')+'><th class="num'+(added?' added':'')+'"'+
+      (added?' title="Idinagdag — wala sa na-upload na sheet"':'')+'>'+rowNum[a]+'</th>'+
+      '<th class="cor"'+(gone?' title="No longer in Ungate List 3.0, kept here for its answers"':'')+'>'+
+      a+(gone?'<span class="gone">retired</span>':'')+'</th>'+slotTd+tds+'</tr>');
   }
   el(open?'ung-grid':'db-grid').innerHTML='<table class="ungtbl"><thead>'+head+'</thead><tbody>'+parts.join('')+'</tbody></table>';
   ungTally(open);
@@ -3965,6 +4001,8 @@ function ungCols(){
    see it is still being checked, and it fills in on its own as answers come
    back on Ungate Checking. */
 function ungColsFor(openTab){ return ungCols(); }
+/* Open work only exists on ASINs still in the list; the database keeps all. */
+function ungRowsFor(openTab){ return openTab ? (M.pool||[]) : (M.all||[]); }
 
 /* New clients go to the far left, because the leftmost column is the one
    that gets first claim when two clients are otherwise level. */
@@ -4035,10 +4073,8 @@ function _ungExtractRows(which){
   var all=ungColsFor(openWanted), clients=all.filter(ungIn);
   if(!clients.length){ note("No columns are ticked, so there is nothing to extract.", true); return; }
 
-  var pool=(M.pool||[]).map(function(r){return r.asin;});
   var seen=Object.create(null), rows=[];
-  (window.UNGATE_ASINS||[]).forEach(function(a){ if(a&&!seen[a]){seen[a]=1;rows.push(a);} });
-  pool.forEach(function(a){ if(a&&!seen[a]){seen[a]=1;rows.push(a);} });
+  ungRowsFor(openWanted).forEach(function(r){ if(r.asin&&!seen[r.asin]){seen[r.asin]=1;rows.push(r.asin);} });
   rows=rows.filter(function(a){ return ungRowOn(a, all, openWanted); });
   if(!rows.length){ note("There is nothing on this tab to extract.", true); return; }
 
@@ -4071,18 +4107,66 @@ function renderMos(){
   el("mos-sheet").hidden  = M.view!=="sheet";
   el("mos-ungate").hidden = M.view!=="ungate";
   el("mos-db").hidden     = M.view!=="db";
-  renderAsins();                      // the ASIN panel now lives inside the database tab
-  if(M.view==="ungate")   renderUngate();
-  else if(M.view==="db")  renderDb();
-  else                    renderSheet();
+  el("mos-goods").hidden  = M.view!=="goods";
+  if(M.view==="ungate")     renderUngate();
+  else if(M.view==="db")    renderDb();
+  else if(M.view==="goods") renderGoods();
+  else                      renderSheet();
+}
+
+function renderGoods(){
+  var showGone = el("goods-retired") && el("goods-retired").checked;
+  var q=((el("goods-search")&&el("goods-search").value)||"").trim().toUpperCase();
+  var rows=(M.all||[]).filter(function(r){
+    if(!showGone && !r.active) return false;
+    if(q && r.asin.toUpperCase().indexOf(q)<0 && (r.brand||"").toUpperCase().indexOf(q)<0) return false;
+    return true;
+  });
+
+  var live=(M.all||[]).filter(function(r){return r.active;});
+  var gone=(M.all||[]).length - live.length;
+  var value=live.reduce(function(s,r){return s+(r.total||0);},0);
+  var profitable=live.filter(function(r){
+    return /profitable/i.test(r.status||"") && !/not\s*profitable/i.test(r.status||"");}).length;
+  var tally=el("goods-tally");
+  if(tally) tally.innerHTML=
+    '<div class="cell"><b>'+live.length.toLocaleString()+'</b><span>on the list</span></div>'+
+    '<div class="cell u"><b>'+profitable.toLocaleString()+'</b><span>marked profitable</span></div>'+
+    '<div class="cell"><b>'+cash0(value)+'</b><span>catalogue value</span></div>'+
+    '<div class="cell b"><b>'+gone.toLocaleString()+'</b><span>retired</span></div>';
+
+  var MAXR=2000, lim=Math.min(rows.length,MAXR);
+  var head='<tr><th class="num">#</th><th class="cor">ASIN</th><th class="gb">Brand</th>'+
+    '<th class="gs">Status</th><th class="gs">Notes</th><th class="gn">Qty</th>'+
+    '<th class="gn">Unit cost</th><th class="gn">Line total</th><th class="gn">ROI</th>'+
+    '<th class="gb">Distributor</th></tr>';
+  var parts=[];
+  for(var i=0;i<lim;i++){
+    var r=rows[i];
+    parts.push('<tr'+(r.active?'':' class="retired"')+'>'+
+      '<th class="num">'+r.n+'</th>'+
+      '<th class="cor">'+r.asin+(r.active?'':'<span class="gone">retired</span>')+'</th>'+
+      '<td class="gb">'+esc(r.brand||'')+'</td>'+
+      '<td class="gs">'+esc(r.status||'')+'</td>'+
+      '<td class="gs">'+esc(r.notes||'')+'</td>'+
+      '<td class="gn">'+(r.qty||0).toLocaleString()+'</td>'+
+      '<td class="gn">'+cash(r.unitCost)+'</td>'+
+      '<td class="gn">'+cash(r.total)+'</td>'+
+      '<td class="gn">'+((r.roi||0)*100).toFixed(1)+'%</td>'+
+      '<td class="gb">'+esc(r.dist||'')+'</td></tr>');
+  }
+  var g=el("goods-grid");
+  if(g) g.innerHTML = rows.length
+    ? '<table class="ungtbl goods"><thead>'+head+'</thead><tbody>'+parts.join('')+'</tbody></table>'
+    : '<div class="mos-empty" style="padding:22px">'+
+      ((M.all&&M.all.length) ? 'Nothing matches that filter.'
+       : 'No ASINs yet. Drop the Asins CSV below and everyone on the team gets it.')+'</div>';
+  var c=el("goods-count");
+  if(c) c.textContent = rows.length ? 'showing '+lim.toLocaleString()+' of '+rows.length.toLocaleString() : '';
+  renderAsins();
 }
 
 function renderAsins(){
-  var line=el("mos-asin-line");
-  if(line) line.textContent = M.pool.length
-    ? M.pool.length.toLocaleString()+" ASINs"+
-      (M.asinMeta&&M.asinMeta.importedAt ? ", loaded "+M.asinMeta.importedAt : "")
-    : "not loaded";
   if(!el("mos-asin-stats")) return;
   el("mos-asin-stats").innerHTML = M.pool.length
     ? `<div class="mos-stat"><b>${M.pool.length.toLocaleString()}</b><span>unique ASINs</span></div>
@@ -4173,26 +4257,6 @@ function renderSheet(){
   };
 
   /* settings reflect shared state */
-  el("mos-method").value=M.cfg.method;
-  el("mos-min").value=M.cfg.minOrder;
-  el("mos-max").value=M.cfg.maxClients;
-  el("mos-pending").checked=M.cfg.pendingOn;
-  el("mos-method-note").textContent = M.cfg.method==="spread"
-    ? "Each ASIN goes to whoever has used the least of their own budget so far, so every client ends up with a similar share. Position only breaks ties."
-    : "Each ASIN is offered straight down the list. The clients at the top fill up first and the ones below may get little or nothing.";
-  el("mos-pending-note").textContent = M.pending.size
-    ? (M.cfg.pendingOn
-       ? `The ${M.pending.size.toLocaleString()} Pending cells are being offered, exactly like Ungated.`
-       : `${M.pending.size.toLocaleString()} Pending cells are being held back and will never be offered.`)
-    : "No Pending cells.";
-
-  /* records */
-  const entries=Object.entries(M.counts);
-  el("mos-records").innerHTML=
-    `<div class="mos-stat"><b>${entries.length.toLocaleString()}</b><span>ASINs with a client</span></div>
-     <div class="mos-stat"><b>${entries.filter(([,v])=>v.size>=M.cfg.maxClients).length.toLocaleString()}</b><span>at the cap</span></div>
-     <div class="mos-stat"><b>${M.ledger.length.toLocaleString()}</b><span>allocations on record</span></div>`;
-
   renderResult();
   el("mos-busy").hidden = !M.busy;
 }
@@ -4320,7 +4384,12 @@ function init(){
       catch(e){ note(e.message, true); }
     });
   });
-  if(el("mos-batch-drop")) dropZone("mos-batch-drop", files=>{
+  if(el("goods-upload")) el("goods-upload").onclick=function(){ el("mos-asin-drop-input").click(); };
+  if(el("goods-search")) el("goods-search").addEventListener("input", function(){
+    clearTimeout(window._goodsT); window._goodsT=setTimeout(renderGoods,180); });
+  if(el("goods-retired")) el("goods-retired").addEventListener("change", renderGoods);
+
+  if(el("mos-batch-drop")) dropZone("mos-batch-drop", files=>{   /* only if the tab still has one */
     if(!M.pool.length){ note("Load the ASIN list on the ASINs tab first.", true); return; }
     readFiles(files, (txt,name,all)=>{
       const wb=XLSX.read(txt,{type:"string"});
@@ -4357,10 +4426,6 @@ function init(){
     });
   });
 
-  el("mos-method").onchange = async e => { M.cfg.method=e.target.value; M.result=null; await saveSettings(); renderMos(); };
-  el("mos-min").onchange    = async e => { M.cfg.minOrder=Number(e.target.value)||0; M.result=null; await saveSettings(); renderMos(); };
-  el("mos-max").onchange    = async e => { M.cfg.maxClients=Number(e.target.value)||3; M.result=null; await saveSettings(); renderMos(); };
-  el("mos-pending").onchange= async e => { M.cfg.pendingOn=e.target.checked; M.result=null; await saveSettings(); renderMos(); };
 
   el("mos-preview").onclick = () => {
     if(!M.pool.length){ note("Load the ASIN list first.", true); return; }
@@ -4419,29 +4484,10 @@ function init(){
     renderResult();
   });
 
-  el("mos-reset").onclick = async () => {
-    const list=el("mos-reset-input").value.split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean);
-    if(!list.length){ note("Paste at least one ASIN.", true); return; }
-    if(!confirm(`Reset ${list.length} ASIN${list.length>1?"s":""}? Their client slots open again for everyone.`)) return;
-    const {error}=await sb.from("mos_allocations").delete().in("asin",list);
-    if(error){ note(error.message, true); return; }
-    M.ledger=M.ledger.filter(r=>!list.includes(r.asin));
-    recompute(); M.result=null; el("mos-reset-input").value="";
-    renderMos(); note(`${list.length} ASIN${list.length>1?"s":""} reset`);
-  };
-  el("mos-undo").onclick = async () => {
-    const b=el("mos-batch").value.trim();
-    if(!b){ note("Paste a run id.", true); return; }
-    if(!confirm(`Undo run ${b}? Every allocation it made is removed for everyone.`)) return;
-    const {error}=await sb.from("mos_allocations").delete().eq("batch_id",b);
-    if(error){ note(error.message, true); return; }
-    const before=M.ledger.length;
-    M.ledger=M.ledger.filter(r=>r.batch_id!==b);
-    recompute(); M.result=null; renderMos();
-    note(`${before-M.ledger.length} allocations removed`);
-  };
+  
+  
 
-  el("mos-date").value=new Date().toISOString().slice(0,10);
+  M.cfg.sheetDate = M.cfg.sheetDate || new Date().toISOString().slice(0,10);
 }
 })();
 </script>
