@@ -346,6 +346,7 @@
   <nav class="tabs" id="mos-tabs">
     <button data-mv="asins" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>ASINs</button>
     <button data-mv="ungate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Ungate Checking</button>
+    <button data-mv="db"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>ASIN database</button>
     <button data-mv="sheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Manual offer sheet</button>
   </nav>
 </aside>
@@ -490,6 +491,22 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
 .mos-table .mono{font-family:var(--mono)}
 .mos-table .nowrap{white-space:nowrap}
 .mos-table tbody tr:hover{background:var(--wash-dom)}
+.ungtbl td.ucell.b{background:repeating-linear-gradient(45deg,transparent,transparent 5px,
+  rgba(0,0,0,.05) 5px,rgba(0,0,0,.05) 10px);color:var(--ink3)}
+.ungtbl td.ucell.o{background:transparent;color:var(--ink3);opacity:.45}
+.ung-picker{border:1px solid var(--rule);border-radius:8px;background:var(--panel);
+  padding:12px 14px;margin-bottom:10px}
+.ung-pick-head{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  flex-wrap:wrap;margin-bottom:10px;font-size:13px}
+.ung-pick-head span{display:flex;gap:6px}
+.ung-pick-list{display:flex;flex-wrap:wrap;gap:4px 14px;max-height:200px;overflow:auto;
+  padding:4px 2px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.ung-pick-list label{display:flex;align-items:center;gap:5px;font:400 12.5px/1.6 var(--mono);
+  color:var(--ink2);cursor:pointer;white-space:nowrap}
+.ung-pick-list input{margin:0}
+.ung-pick-note{margin-top:9px;font-size:12px;color:var(--ink3)}
+.mos-table tr.mos-off td{opacity:.4}
+.mos-table tr.mos-off td:first-child{opacity:1}
 
 .mos-row{display:flex;gap:9px;flex-wrap:wrap;align-items:flex-end;margin-top:12px}
 .mos-field{flex:0 0 auto}
@@ -553,12 +570,27 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
       <label class="ung-only"><input type="checkbox" id="ung-onlyres"> With Ungated/Pending only</label>
       <span class="ung-legend"><i class="g"></i>Gated<i class="u"></i>Ungated<i class="p"></i>Pending</span>
       <button class="ung-tool" id="ung-import" type="button">Import</button>
-      <button class="ung-tool" id="ung-extract" type="button">Extract</button>
+      <button class="ung-tool" id="ung-add" type="button">Add client</button>
+      <button class="ung-tool" id="ung-extract" type="button">Extract&hellip;</button>
       <input type="file" id="ung-import-input" accept=".csv,.tsv,.xlsx,.xls,text/csv" hidden>
       <span id="ung-count" class="ung-count"></span>
     </div>
+    <div id="ung-picker" class="ung-picker" hidden></div>
     <div id="ung-grid" class="ung-grid"></div>
   </section>
+  <section id="mos-db" hidden>
+    <h2>ASIN database</h2>
+    <p class="lede">Every ASIN whose clients all have a real answer, Gated or Ungated. Anything still blank or Pending stays on Ungate Checking until it is settled, then it lands here. Cells are editable, and sending one back to blank moves the row back.</p>
+    <div class="ung-bar">
+      <input id="db-search" placeholder="Filter ASIN&hellip;" autocomplete="off">
+      <span class="ung-legend"><i class="g"></i>Gated<i class="u"></i>Ungated</span>
+      <button class="ung-tool" id="db-extract" type="button">Extract&hellip;</button>
+      <span id="db-count" class="ung-count"></span>
+    </div>
+    <div id="db-picker" class="ung-picker" hidden></div>
+    <div id="db-grid" class="ung-grid"></div>
+  </section>
+
   <section id="mos-sheet" hidden>
     <h2>Manual offer sheet</h2>
     <p class="lede">Upload the Batch Details exports and the clients and their gating come straight out of them. A row counts as Ungated when it has an FNSKU and no errors; anything else is Gated.</p>
@@ -573,6 +605,7 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
     </div>
 
     <h3>Clients</h3>
+    <p class="lede" style="margin-bottom:10px" id="mos-picked"></p>
     <div class="mos-scroll" style="max-height:340px" id="mos-clients"></div>
 
     <h3>Settings</h3>
@@ -3071,11 +3104,13 @@ const M = {
   stores:[],                  // ordered client codes
   ungated:new Set(),          // "ASIN|CODE"
   pending:new Set(),
+  blank:new Set(),            // nobody has checked this pair yet
   ledger:[],
   counts:{}, spent:{},
   cfg:{method:"spread", minOrder:500, maxClients:3, pendingOn:false,
        year:2026, quarter:"Q3", channel:"amazon"},
   result:null, staged:null,
+  picked:null,                // null means every client; a Set is an explicit choice
   sort:{by:"pct", dir:-1},
 };
 const KEHE=["KEHE DC27","KEHE DC15","KEHE DC18","KEHE DC19","KEHE DC01"];
@@ -3087,6 +3122,8 @@ const cash0 = n => "$"+Math.round(Number(n)||0).toLocaleString("en-US");
 const norm = d => String(d??"").trim().replace(/\s+/g," ").toUpperCase();
 const key = (a,s) => a+"|"+s;
 const offerable = k => M.ungated.has(k) || (M.cfg.pendingOn && M.pending.has(k));
+/* picked is null until someone unticks a box, so the usual case is everyone. */
+const inRun = c => M.picked===null || M.picked.has(c);
 
 let noteTimer;
 function note(msg, bad){
@@ -3160,10 +3197,12 @@ async function loadAll(){
     total:Number(r.total)||0, p30:Number(r.p30)||0, brand:r.brand||"", dist:r.dist||"",
   }));
   M.stores=clients.map(c=>c.store_code);
-  M.ungated=new Set(); M.pending=new Set();
+  M.ungated=new Set(); M.pending=new Set(); M.blank=new Set();
   for(const g of gating){
     const k=key(g.asin,g.store_code);
-    if(g.state==="pending") M.pending.add(k); else M.ungated.add(k);
+    if(g.state==="pending")    M.pending.add(k);
+    else if(g.state==="blank") M.blank.add(k);
+    else                       M.ungated.add(k);
   }
   M.ledger=ledger;
   if(settings && settings.data){
@@ -3320,7 +3359,8 @@ function readMatrix(rows, fileName){
       const v=String(r[h]||"").trim().toLowerCase();
       if(v==="ungated")      out.push({asin, code, ungated:true});
       else if(v==="pending") out.push({asin, code, pending:true});
-      else                   out.push({asin, code, ungated:false});   // gated, or blank
+      else if(v==="gated")   out.push({asin, code, ungated:false});
+      else                   out.push({asin, code, blank:true});      // nobody checked it
     }
   }
   return out;
@@ -3348,13 +3388,16 @@ async function applyBatch(rows){
     if(!asin){ missing++; continue; }
     const k=key(asin,r.code);
     if(r.pending){
-      M.ungated.delete(k); M.pending.add(k);
+      M.ungated.delete(k); M.blank.delete(k); M.pending.add(k);
       add.push({asin, store_code:r.code, state:"pending"});
+    } else if(r.blank){
+      M.ungated.delete(k); M.pending.delete(k); M.blank.add(k);
+      add.push({asin, store_code:r.code, state:"blank"});
     } else if(r.ungated){
-      M.pending.delete(k); M.ungated.add(k);
+      M.pending.delete(k); M.blank.delete(k); M.ungated.add(k);
       add.push({asin, store_code:r.code, state:"ungated"});
     } else {
-      M.ungated.delete(k); M.pending.delete(k);
+      M.ungated.delete(k); M.pending.delete(k); M.blank.delete(k);
       drop.push([asin, r.code]);
     }
   }
@@ -3372,8 +3415,9 @@ async function applyBatch(rows){
         await sb.from("mos_gating").delete().eq("store_code",code).in("asin",list.slice(i,i+200));
     }
     const nUng=add.filter(a=>a.state==="ungated").length;
-    const nPend=add.length-nUng;
-    note(`${nUng} Ungated${nPend?`, ${nPend} Pending`:""}, ${drop.length} Gated`+
+    const nPend=add.filter(a=>a.state==="pending").length;
+    const nBlank=add.filter(a=>a.state==="blank").length;
+    note(`${nUng} Ungated${nPend?`, ${nPend} Pending`:""}${nBlank?`, ${nBlank} still to check`:""}, ${drop.length} Gated`+
       (added?`, ${added} new client${added>1?"s":""}`:"")+
       (missing?`, ${missing} not in the ASIN list`:""));
   }catch(e){ note("Could not save the gating: "+e.message, true); }
@@ -3401,7 +3445,7 @@ function allocate(excluded){
   const date=el("mos-date").value || new Date().toISOString().slice(0,10);
   const remaining={}, assigned={}, skips={}, before={}, after={};
   const pos={}; M.stores.forEach((c,i)=>{ pos[c]=i; });
-  const live=M.stores.filter(c=>!excluded.has(c));
+  const live=M.stores.filter(c=>!excluded.has(c) && inRun(c));
   for(const c of M.stores){
     const rem=remainingFor(c);
     remaining[c] = rem===null ? 0 : rem;
@@ -3649,17 +3693,18 @@ async function _ungSeed(){
 async function _ungApply(a,c,state,td){
   var k=key(a,c);
   try{
-    if(state==='ungated'){ M.pending.delete(k); M.ungated.add(k);
-      var e1=(await sb.from('mos_gating').upsert([{asin:a,store_code:c,state:'ungated'}],{onConflict:'asin,store_code'})).error; if(e1) throw e1;
-    } else if(state==='pending'){ M.ungated.delete(k); M.pending.add(k);
-      var e2=(await sb.from('mos_gating').upsert([{asin:a,store_code:c,state:'pending'}],{onConflict:'asin,store_code'})).error; if(e2) throw e2;
-    } else { M.ungated.delete(k); M.pending.delete(k);
+    if(state==='ungated' || state==='pending' || state==='blank'){
+      M.ungated.delete(k); M.pending.delete(k); M.blank.delete(k);
+      (state==='ungated'?M.ungated:state==='pending'?M.pending:M.blank).add(k);
+      var e1=(await sb.from('mos_gating').upsert([{asin:a,store_code:c,state:state}],{onConflict:'asin,store_code'})).error; if(e1) throw e1;
+    } else {                                   /* Gated is the absence of a row */
+      M.ungated.delete(k); M.pending.delete(k); M.blank.delete(k);
       var e3=(await sb.from('mos_gating').delete().eq('asin',a).eq('store_code',c)).error; if(e3) throw e3;
     }
   }catch(err){ alert('Hindi na-save ang pagbabago: '+(err.message||err)); }
 }
 function _ungPaint(td,state){
-  td.classList.remove('u','p','g');
+  td.classList.remove('u','p','g','b');
   if(state==='ungated'){ td.classList.add('u'); td.textContent='Ungated'; }
   else if(state==='pending'){ td.classList.add('p'); td.textContent='Pending'; }
   else { td.classList.add('g'); td.textContent='Gated'; }
@@ -3668,7 +3713,7 @@ function _ungEdit(td){
   if(td._editing) return; td._editing=1;
   var a=td.getAttribute('data-a'), c=td.getAttribute('data-c'), cur=td.getAttribute('data-s')||'gated';
   var sel=document.createElement('select'); sel.className='ung-pick';
-  [['gated','Gated'],['ungated','Ungated'],['pending','Pending']].forEach(function(o){
+  [['blank','\u2014 not checked'],['gated','Gated'],['ungated','Ungated'],['pending','Pending']].forEach(function(o){
     var op=document.createElement('option'); op.value=o[0]; op.textContent=o[1]; if(o[0]===cur) op.selected=true; sel.appendChild(op);
   });
   td.textContent=''; td.appendChild(sel); sel.focus();
@@ -3677,7 +3722,13 @@ function _ungEdit(td){
     var ns=commit?sel.value:cur;
     td._editing=0;
     td.setAttribute('data-s',ns); _ungPaint(td,ns);
-    if(commit && ns!==cur) _ungApply(a,c,ns,td);
+    if(commit && ns!==cur){
+      _ungApply(a,c,ns,td);
+      /* Moving between blank/pending and a real answer can move the whole row
+         to the other tab, so redraw both. */
+      var was=(cur==='blank'||cur==='pending'), now=(ns==='blank'||ns==='pending');
+      if(was!==now) setTimeout(function(){ renderMos(); }, 0);
+    }
     setTimeout(function(){ td._closed=0; },0);
   };
   sel.addEventListener('change',function(){ done(true); });
@@ -3688,27 +3739,37 @@ function renderUngate(){
   _ungSeed().then(function(){ if(M.view==='ungate') _ungPaintGrid(); });
   _ungPaintGrid();
 }
-function _ungPaintGrid(){
-  var clients=window.UNGATE_CLIENTS||[];
+function renderDb(){
+  _ungSeed().then(function(){ if(M.view==='db') _ungPaint2("db"); });
+  _ungPaint2("db");
+}
+function _ungPaintGrid(){ _ungPaint2("ungate"); }
+function _ungPaint2(which){
+  var open = which==="ungate";
+  var clients=ungCols();
   var pool=(M.pool||[]).map(function(r){return r.asin;});
   var fileSet=window._ungFileSet;if(!fileSet){fileSet=window._ungFileSet=Object.create(null);(window.UNGATE_ASINS||[]).forEach(function(x){fileSet[x]=1;});}
   var seen=Object.create(null), rows=[];
   (window.UNGATE_ASINS||[]).forEach(function(a){ if(a&&!seen[a]){seen[a]=1;rows.push(a);} });
   pool.forEach(function(a){ if(a&&!seen[a]){seen[a]=1;rows.push(a);} });
   var rowNum=Object.create(null); for(var r=0;r<rows.length;r++) rowNum[rows[r]]=r+1;
-  var sInp=el('ung-search'), onlyInp=el('ung-onlyres');
+  var sInp=el(open?'ung-search':'db-search'), onlyInp=open?el('ung-onlyres'):null;
   if(!window._ungWired){ window._ungWired=1;
-    if(sInp) sInp.addEventListener('input', function(){ clearTimeout(window._ungT); window._ungT=setTimeout(renderUngate,180); });
+    var s1=el('ung-search'), s2=el('db-search');
+    if(s1) s1.addEventListener('input', function(){ clearTimeout(window._ungT); window._ungT=setTimeout(renderUngate,180); });
+    if(s2) s2.addEventListener('input', function(){ clearTimeout(window._dbT); window._dbT=setTimeout(renderDb,180); });
     if(onlyInp) onlyInp.addEventListener('change', renderUngate);
-    var grid=el('ung-grid');
-    if(grid) grid.addEventListener('click', function(ev){ var td=ev.target.closest && ev.target.closest('td.ucell'); if(td) _ungEdit(td); });
+    ['ung-grid','db-grid'].forEach(function(id){
+      var g=el(id);
+      if(g) g.addEventListener('click', function(ev){ var td=ev.target.closest && ev.target.closest('td.ucell'); if(td) _ungEdit(td); });
+    });
   }
   var q=((sInp&&sInp.value)||'').trim().toUpperCase();
   var onlyRes=onlyInp&&onlyInp.checked, resSet=onlyRes?_ungResSet():null;
   var shown=rows.filter(function(a){
     if(q && a.toUpperCase().indexOf(q)<0) return false;
     if(onlyRes && !resSet[a]) return false;
-    return true;
+    return ungRowOn(a, clients, open);
   });
   var MAXR=2000;
   var head='<tr><th class="num">#</th><th class="cor">ASIN</th>'+clients.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr>';
@@ -3716,15 +3777,27 @@ function _ungPaintGrid(){
   for(var i=0;i<lim;i++){
     var a=shown[i], added=!fileSet[a], tds='';
     for(var j=0;j<clients.length;j++){
-      var c=clients[j], k=key(a,c), cls, ch, st;
-      if(M.ungated.has(k)){cls='u';ch='Ungated';st='ungated';}
-      else if(M.pending.has(k)){cls='p';ch='Pending';st='pending';}
-      else {cls='g';ch='Gated';st='gated';}
-      tds+='<td class="ucell '+cls+'" data-a="'+a+'" data-c="'+c+'" data-s="'+st+'">'+ch+'</td>';
+      var c=clients[j], k=key(a,c), s=ungCellState(k);
+      if(ungCellOpen(k)!==open){
+        /* Belongs to the other tab. Shown hollow so the grid keeps its shape. */
+        tds+='<td class="ucell o" data-a="'+a+'" data-c="'+c+'" data-s="'+s[2]+'" title="'+s[1]+
+             ' — on the '+(open?'ASIN database':'Ungate Checking')+' tab">&middot;</td>';
+      } else {
+        tds+='<td class="ucell '+s[0]+'" data-a="'+a+'" data-c="'+c+'" data-s="'+s[2]+'">'+s[1]+'</td>';
+      }
     }
     parts.push('<tr><th class="num'+(added?' added':'')+'"'+(added?' title="Idinagdag — wala sa na-upload na sheet"':'')+'>'+rowNum[a]+'</th><th class="cor">'+a+'</th>'+tds+'</tr>');
   }
-  el('ung-grid').innerHTML='<table class="ungtbl"><thead>'+head+'</thead><tbody>'+parts.join('')+'</tbody></table>';
+  el(open?'ung-grid':'db-grid').innerHTML='<table class="ungtbl"><thead>'+head+'</thead><tbody>'+parts.join('')+'</tbody></table>';
+  if(!open){
+    var dc=el('db-count');
+    var settledCells=0;
+    for(var z=0;z<shown.length;z++) for(var y=0;y<clients.length;y++)
+      if(!ungCellOpen(key(shown[z],clients[y]))) settledCells++;
+    if(dc) dc.textContent='showing '+Math.min(shown.length,MAXR).toLocaleString()+
+      ' of '+shown.length.toLocaleString()+' ASINs \u00b7 '+settledCells.toLocaleString()+' settled cells';
+    return;
+  }
   var cnt=el('ung-count');
   var nAdd=0; for(var kk=0;kk<rows.length;kk++){ if(!fileSet[rows[kk]]) nAdd++; }
   if(cnt) cnt.textContent=(shown.length>MAXR?('showing first '+MAXR.toLocaleString()+' of '):'')+shown.length.toLocaleString()+' shown · '+rows.length.toLocaleString()+' ASINs ('+(rows.length-nAdd).toLocaleString()+' from sheet'+(nAdd?(', '+nAdd.toLocaleString()+' added'):'')+') · pindutin ang cell para palitan';
@@ -3758,24 +3831,124 @@ function _ungImport(files){
     r.readAsArrayBuffer(f);
   });
 }
-function _ungExtract(){
+/* The grid columns are the client roster. It lives in M.stores, which is
+   backed by mos_clients and shared with the team; the baked-in list is only
+   a fallback for the very first load. */
+/* A cell is still open while it is blank or Pending; once it says Gated or
+   Ungated it belongs to the ASIN database. Most ASINs have some of each, so
+   the split runs per cell and a row shows on a tab when it has at least one
+   cell that belongs there. */
+function ungCellOpen(k){ return M.blank.has(k) || M.pending.has(k); }
+function ungOpen(asin, clients){
+  for(var i=0;i<clients.length;i++) if(ungCellOpen(key(asin,clients[i]))) return true;
+  return false;
+}
+function ungRowOn(asin, clients, openTab){
+  for(var i=0;i<clients.length;i++)
+    if(ungCellOpen(key(asin,clients[i]))===openTab) return true;
+  return false;
+}
+function ungCellState(k){
+  if(M.ungated.has(k)) return ['u','Ungated','ungated'];
+  if(M.pending.has(k)) return ['p','Pending','pending'];
+  if(M.blank.has(k))   return ['b','',      'blank'];
+  return ['g','Gated','gated'];
+}
+
+function ungCols(){
+  return (M.stores && M.stores.length) ? M.stores : (window.UNGATE_CLIENTS||[]);
+}
+
+/* New clients go to the far left, because the leftmost column is the one
+   that gets first claim when two clients are otherwise level. */
+async function ungAddClients(){
+  const raw=prompt("Add client store codes. Separate several with commas or spaces.\nThey go to the far left.");
+  if(raw===null) return;
+  const codes=raw.split(/[\s,;]+/).map(x=>x.trim().toUpperCase()).filter(Boolean);
+  if(!codes.length) return;
+  if(M.stores.length===0) M.stores=(window.UNGATE_CLIENTS||[]).slice();
+  const fresh=codes.filter(c=>!M.stores.includes(c));
+  const already=codes.filter(c=>M.stores.includes(c));
+  if(fresh.length) M.stores=fresh.concat(M.stores);      // leftmost, in the order typed
+  const noBudget=fresh.filter(c=>!(c in M.budgets));
+  renderMos();
+  if(fresh.length) await saveClients();
+  note(
+    (fresh.length ? `${fresh.join(", ")} added on the left. ` : "")+
+    (already.length ? `${already.join(", ")} ${already.length>1?"were":"was"} already there. ` : "")+
+    (noBudget.length ? `No budget on record for ${noBudget.join(", ")}.` : ""),
+    noBudget.length>0);
+}
+
+/* Which clients to put in the exported sheet. */
+let ungPick=null;                      // null means every client
+const ungIn = c => ungPick===null || ungPick.has(c);
+
+function ungTogglePicker(){
+  const box=el("ung-picker");
+  if(!box.hidden){ box.hidden=true; return; }
+  const cols=ungCols();
+  box.innerHTML=
+    `<div class="ung-pick-head">
+       <b>Columns to extract</b>
+       <span>
+         <button class="ung-tool" data-ungpick="all" type="button">All</button>
+         <button class="ung-tool" data-ungpick="none" type="button">None</button>
+         <button class="ung-tool" data-ungpick="go" type="button">Extract</button>
+         <button class="ung-tool" data-ungpick="close" type="button">Cancel</button>
+       </span>
+     </div>
+     <div class="ung-pick-list">`+
+    cols.map(c=>`<label><input type="checkbox" data-ungcol="${c}" ${ungIn(c)?"checked":""}>${c}</label>`).join("")+
+    `</div><div class="ung-pick-note" id="ung-pick-note"></div>`;
+  box.hidden=false;
+  ungPickNote();
+}
+function ungPickNote(){
+  const n=ungCols().filter(ungIn).length, all=ungCols().length;
+  const e=el("ung-pick-note");
+  if(e) e.textContent = n===all
+    ? `All ${all} clients will be in the sheet.`
+    : `${n} of ${all} clients will be in the sheet.`;
+}
+
+function _ungExtract(which){ _ungExtractRows(which==="db" ? "db" : "ungate"); }
+
+/* Writes whichever half of the grid the tab is showing: the open rows on
+   Ungate Checking, the settled ones in the ASIN database. */
+function _ungExtractRows(which){
   if(typeof XLSX==="undefined"){ note("Hindi na-load ang spreadsheet writer — i-reload ang page.", true); return; }
-  var clients=window.UNGATE_CLIENTS||[];
+  var openWanted = which!=="db";
+  var all=ungCols(), clients=all.filter(ungIn);
+  if(!clients.length){ note("No columns are ticked, so there is nothing to extract.", true); return; }
+
   var pool=(M.pool||[]).map(function(r){return r.asin;});
   var seen=Object.create(null), rows=[];
   (window.UNGATE_ASINS||[]).forEach(function(a){ if(a&&!seen[a]){seen[a]=1;rows.push(a);} });
   pool.forEach(function(a){ if(a&&!seen[a]){seen[a]=1;rows.push(a);} });
+  rows=rows.filter(function(a){ return ungRowOn(a, all, openWanted); });
+  if(!rows.length){ note("There is nothing on this tab to extract.", true); return; }
+
   var aoa=[['Asin'].concat(clients)];
   for(var i=0;i<rows.length;i++){
     var a=rows[i], row=[a];
-    for(var j=0;j<clients.length;j++){ var k=key(a,clients[j]);
-      row.push(M.ungated.has(k)?'Ungated':(M.pending.has(k)?'Pending':'Gated')); }
+    for(var j=0;j<clients.length;j++){
+      var k=key(a,clients[j]);
+      row.push(ungCellOpen(k)===openWanted ? ungCellState(k)[1] : '');
+    }
     aoa.push(row);
   }
+
+  var base = openWanted ? 'Ungate Checking' : 'ASIN database';
   var ws=XLSX.utils.aoa_to_sheet(aoa);
-  var wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Ungate Checking');
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, base);
   var d=new Date(), pad=function(n){return (n<10?'0':'')+n;};
-  XLSX.writeFile(wb, 'Ungate Checking '+d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'.xlsx');
+  var tag = clients.length===all.length ? '' :
+    (clients.length<=4 ? ' '+clients.join('-') : ' '+clients.length+' clients');
+  XLSX.writeFile(wb, base+tag+' '+d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'.xlsx');
+  el("ung-picker").hidden=true; el("db-picker").hidden=true;
+  note(rows.length.toLocaleString()+' ASINs across '+clients.length+' client'+(clients.length>1?'s':'')+' extracted.');
 }
 
 function renderMos(){
@@ -3785,8 +3958,11 @@ function renderMos(){
   el("mos-asins").hidden = M.view!=="asins";
   el("mos-sheet").hidden = M.view!=="sheet";
   el("mos-ungate").hidden = M.view!=="ungate";
-  if(M.view==="ungate") renderUngate();
-  else if(M.view==="asins") renderAsins(); else renderSheet();
+  el("mos-db").hidden     = M.view!=="db";
+  if(M.view==="ungate")     renderUngate();
+  else if(M.view==="db")    renderDb();
+  else if(M.view==="asins") renderAsins();
+  else                      renderSheet();
 }
 
 function renderAsins(){
@@ -3826,7 +4002,10 @@ function renderSheet(){
 
   /* clients */
   el("mos-clients").innerHTML = M.stores.length
-    ? `<table class="mos-table"><thead><tr><th class="r">#</th><th>Client</th>
+    ? `<table class="mos-table"><thead><tr>
+        <th style="width:30px"><input type="checkbox" id="mos-all"
+          ${M.picked===null?"checked":""} title="Tick to cover every client"></th>
+        <th class="r">#</th><th>Client</th>
         <th class="r">Budget left</th><th class="r">Ungated</th><th class="r">Pending</th>
         <th class="r">Held</th><th></th></tr></thead><tbody>`+
       M.stores.map((c,i)=>{
@@ -3834,7 +4013,9 @@ function renderSheet(){
         let u=0,p=0; for(const k of M.ungated) if(k.endsWith("|"+c)) u++;
         for(const k of M.pending) if(k.endsWith("|"+c)) p++;
         const held=M.ledger.filter(r=>r.store_code===c).length;
-        return `<tr><td class="r dim">${i+1}</td><td class="mono"><b>${esc(c)}</b></td>
+        return `<tr${inRun(c)?"":' class="mos-off"'}>
+          <td><input type="checkbox" data-client="${esc(c)}" ${inRun(c)?"checked":""}></td>
+          <td class="r dim">${i+1}</td><td class="mono"><b>${esc(c)}</b></td>
           <td class="r">${rem===null?`<span class="mos-pill warn">no budget</span>`:cash(rem)}</td>
           <td class="r">${u.toLocaleString()}</td><td class="r dim">${p.toLocaleString()}</td>
           <td class="r dim">${held.toLocaleString()}</td>
@@ -3843,6 +4024,22 @@ function renderSheet(){
           <button class="mos-mini" data-mv-rm="${i}">&times;</button></td></tr>`;
       }).join("")+`</tbody></table>`
     : `<div class="mos-empty">No clients yet. Upload a Batch Details file above and they appear here.</div>`;
+
+  const chosen=M.stores.filter(inRun);
+  el("mos-picked").innerHTML = M.stores.length
+    ? (M.picked===null
+       ? `This run covers all <b>${M.stores.length}</b> clients. Untick anyone you want to leave out.`
+       : chosen.length
+         ? `This run covers <b>${chosen.length}</b> of ${M.stores.length}: `+
+           `<span class="mono">${chosen.map(esc).join(", ")}</span>. `+
+           `Everyone else keeps their ASINs for a later run. `+
+           `<button class="mos-mini" id="mos-pick-all">Cover everyone</button>`
+         : `Nobody is ticked, so there is nothing to offer. `+
+           `<button class="mos-mini" id="mos-pick-all">Cover everyone</button>`)
+    : "";
+  if(el("mos-pick-all")) el("mos-pick-all").onclick=()=>{
+    M.picked=null; M.result=null; renderMos();
+  };
 
   /* settings reflect shared state */
   el("mos-method").value=M.cfg.method;
@@ -4005,7 +4202,28 @@ function init(){
   var _uii=el("ung-import-input");
   if(_uii) _uii.onchange=function(e){ _ungImport(e.target.files); e.target.value=""; };
   var _uib=el("ung-import"); if(_uib) _uib.onclick=function(){ el("ung-import-input").click(); };
-  var _uex=el("ung-extract"); if(_uex) _uex.onclick=_ungExtract;
+  var _uex=el("ung-extract"); if(_uex) _uex.onclick=function(){ ungTogglePicker("ung"); };
+  var _dex=el("db-extract");  if(_dex) _dex.onclick=function(){ ungTogglePicker("db"); };
+  var _uad=el("ung-add"); if(_uad) _uad.onclick=ungAddClients;
+  [["ung-picker","ungate"],["db-picker","db"]].forEach(function(p){
+    var box=el(p[0]); if(!box) return;
+    box.addEventListener("click", function(ev){
+      var b=ev.target.closest("button[data-ungpick]"); if(!b) return;
+      var a=b.dataset.ungpick;
+      if(a==="close"){ box.hidden=true; return; }
+      if(a==="go"){ _ungExtractRows(p[1]); return; }
+      ungPick = a==="all" ? null : new Set();
+      box.querySelectorAll("input[data-ungcol]").forEach(function(x){ x.checked = a==="all"; });
+      ungPickNote();
+    });
+    box.addEventListener("change", function(ev){
+      var x=ev.target.closest("input[data-ungcol]"); if(!x) return;
+      if(ungPick===null) ungPick=new Set(ungCols());
+      if(x.checked) ungPick.add(x.dataset.ungcol); else ungPick.delete(x.dataset.ungcol);
+      if(ungPick.size===ungCols().length) ungPick=null;
+      ungPickNote();
+    });
+  });
 
   el("mos-method").onchange = async e => { M.cfg.method=e.target.value; M.result=null; await saveSettings(); renderMos(); };
   el("mos-min").onchange    = async e => { M.cfg.minOrder=Number(e.target.value)||0; M.result=null; await saveSettings(); renderMos(); };
@@ -4015,6 +4233,7 @@ function init(){
   el("mos-preview").onclick = () => {
     if(!M.pool.length){ note("Load the ASIN list first.", true); return; }
     if(!M.stores.length){ note("Upload a Batch Details file so there are clients.", true); return; }
+    if(!M.stores.some(inRun)){ note("No clients are ticked, so there is nobody to offer to.", true); return; }
     if(!M.ungated.size && !(M.cfg.pendingOn && M.pending.size)){
       note("Nothing is marked Ungated, so there is nothing to offer.", true); return; }
     M.result=allocateWithMinimum(); renderMos();
@@ -4023,6 +4242,20 @@ function init(){
   el("mos-commit").onclick   = commit;
   el("mos-separate").onclick = ()=>downloadEach("offer");
   el("mos-listings").onclick = ()=>downloadEach("listing");
+
+  el("mos-sheet").addEventListener("change", e=>{
+    const box=e.target.closest("input[type=checkbox]"); if(!box) return;
+    if(box.id==="mos-all"){
+      M.picked = box.checked ? null : new Set();
+      M.result=null; renderMos(); return;
+    }
+    if(box.dataset.client){
+      if(M.picked===null) M.picked=new Set(M.stores);   // first untick starts from everyone
+      if(box.checked) M.picked.add(box.dataset.client); else M.picked.delete(box.dataset.client);
+      if(M.picked.size===M.stores.length) M.picked=null;
+      M.result=null; renderMos();
+    }
+  });
 
   el("mos-sheet").addEventListener("click", async e=>{
     const t=e.target.closest("button"); if(!t) return;
@@ -4038,7 +4271,7 @@ function init(){
     if(t.dataset.mvRm!==undefined){
       const i=Number(t.dataset.mvRm), code=M.stores[i];
       if(!confirm(`Remove ${code}? Its gating is forgotten for everyone. Allocations already recorded stay.`)) return;
-      M.stores.splice(i,1);
+      M.stores.splice(i,1); if(M.picked) M.picked.delete(code);
       for(const k of [...M.ungated]) if(k.endsWith("|"+code)) M.ungated.delete(k);
       for(const k of [...M.pending]) if(k.endsWith("|"+code)) M.pending.delete(k);
       M.result=null; renderMos();
