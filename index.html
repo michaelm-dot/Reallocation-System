@@ -668,8 +668,6 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
     <div class="ung-bar">
       <input id="ung-search" placeholder="Filter ASIN&hellip;" autocomplete="off">
       <label class="ung-only"><input type="checkbox" id="ung-onlyres"> With Ungated/Pending only</label>
-      <span class="ung-legend"><i class="p"></i>Pending<i class="b"></i>Not checked<i class="d"></i>Already answered</span>
-      <button class="ung-tool" id="ung-mode" type="button">Show the grid</button>
       <button class="ung-tool" id="ung-import" type="button">Import</button>
       <button class="ung-tool" id="ung-add" type="button">Add client</button>
       <button class="ung-tool" id="ung-extract" type="button">Extract&hellip;</button>
@@ -3813,14 +3811,46 @@ async function _ungApply(a,c,state,td){
     }
   }catch(err){ alert('Hindi na-save ang pagbabago: '+(err.message||err)); }
 }
+/* The worklist is the work still to do, so an ASIN that has just been
+   answered leaves it. Rather than redraw the whole table and lose your place,
+   the column is closed up by hand: every cell below slides up one. */
+function ungRemoveCell(td){
+  var tr=td.parentNode, col=Array.prototype.indexOf.call(tr.children, td);
+  var body=tr.parentNode, i=Array.prototype.indexOf.call(body.children, tr);
+  for(var r=i; r<body.children.length-1; r++){
+    var here=body.children[r].children[col], next=body.children[r+1].children[col];
+    here.className=next.className; here.textContent=next.textContent;
+    if(next.hasAttribute('data-a')){
+      here.setAttribute('data-a', next.getAttribute('data-a'));
+      here.setAttribute('data-c', next.getAttribute('data-c'));
+      here.setAttribute('data-s', next.getAttribute('data-s'));
+    } else { here.removeAttribute('data-a'); here.removeAttribute('data-c'); here.removeAttribute('data-s'); }
+  }
+  var last=body.children[body.children.length-1].children[col];
+  last.className='wcell empty'; last.textContent='';
+  last.removeAttribute('data-a'); last.removeAttribute('data-c'); last.removeAttribute('data-s');
+
+  /* Keep the count over the column honest. */
+  var th=td.closest('table').tHead.rows[0].cells[col];
+  if(th){
+    var n=0, body2=body;
+    for(var r2=0;r2<body2.children.length;r2++) if(body2.children[r2].children[col].hasAttribute('data-a')) n++;
+    var wn=th.querySelector('.wn');
+    if(wn){ wn.textContent = n ? n.toLocaleString() : 'clear'; }
+    if(!n) th.classList.add('done');
+  }
+  ungTally(true);
+}
+
 function _ungPaint(td,state){
   if(td.classList.contains('wcell')){
-    /* On the worklist the cell is the ASIN itself. It stays where it is and
-       takes the colour of the answer, so you can see what you just did
-       instead of it vanishing from under the cursor. */
-    td.classList.remove('wg','wu','wp','wb');
-    td.classList.add(state==='ungated'?'wu':state==='pending'?'wp':state==='blank'?'wb':'wg');
-    td.setAttribute('data-s', state);
+    if(state==='blank' || state==='pending'){
+      td.classList.remove('wg','wu','wp','wb');
+      if(state==='pending') td.classList.add('wp');
+      td.setAttribute('data-s', state);
+    } else {
+      ungRemoveCell(td);          // Gated or Ungated: it belongs to the database now
+    }
     return;
   }
   td.classList.remove('u','p','g','b');
@@ -3832,7 +3862,7 @@ function _ungEdit(td){
   if(td._editing) return; td._editing=1;
   var a=td.getAttribute('data-a'), c=td.getAttribute('data-c'), cur=td.getAttribute('data-s')||'gated';
   var sel=document.createElement('select'); sel.className='ung-pick';
-  [['blank','\u2014 not checked'],['gated','Gated'],['ungated','Ungated'],['pending','Pending']].forEach(function(o){
+  [['gated','Gated'],['ungated','Ungated'],['pending','Pending'],['blank','\u2014 not checked']].forEach(function(o){
     var op=document.createElement('option'); op.value=o[0]; op.textContent=o[1]; if(o[0]===cur) op.selected=true; sel.appendChild(op);
   });
   td.textContent=''; td.appendChild(sel); sel.focus();
@@ -3846,9 +3876,8 @@ function _ungEdit(td){
       /* Moving between blank/pending and a real answer can move the whole row
          to the other tab, so redraw both. */
       var was=(cur==='blank'||cur==='pending'), now=(ns==='blank'||ns==='pending');
-      /* The worklist repaints the one cell; the grid needs the row moved. */
+      /* The worklist closes its own gap; the grid needs the row moved. */
       if(was!==now && !td.classList.contains('wcell')) setTimeout(function(){ renderMos(); }, 0);
-      if(was!==now && td.classList.contains('wcell')) ungTally(true);
     }
     setTimeout(function(){ td._closed=0; },0);
   };
@@ -3909,9 +3938,8 @@ function _ungPaintList(){
 }
 
 function renderUngate(){
-  var paint = (M.ungMode==='grid') ? _ungPaintGrid : _ungPaintList;
-  _ungSeed().then(function(){ if(M.view==='ungate') paint(); });
-  paint();
+  _ungSeed().then(function(){ if(M.view==='ungate') _ungPaintList(); });
+  _ungPaintList();
 }
 function renderDb(){
   _ungSeed().then(function(){ if(M.view==='db') _ungPaint2("db"); });
@@ -4611,12 +4639,6 @@ function init(){
   var _uii=el("ung-import-input");
   if(_uii) _uii.onchange=function(e){ _ungImport(e.target.files); e.target.value=""; };
   var _uib=el("ung-import"); if(_uib) _uib.onclick=function(){ el("ung-import-input").click(); };
-  var _umd=el("ung-mode");
-  if(_umd) _umd.onclick=function(){
-    M.ungMode = M.ungMode==='grid' ? 'list' : 'grid';
-    _umd.textContent = M.ungMode==='grid' ? 'Show the worklist' : 'Show the grid';
-    renderUngate();
-  };
   var _uex=el("ung-extract"); if(_uex) _uex.onclick=function(){ ungTogglePicker("ung"); };
   var _dex=el("db-extract");  if(_dex) _dex.onclick=function(){ ungTogglePicker("db"); };
   var _uad=el("ung-add"); if(_uad) _uad.onclick=ungAddClients;
