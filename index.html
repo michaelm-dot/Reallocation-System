@@ -423,6 +423,17 @@ body{padding-left:214px}
 .ungwrap .ungtbl thead tr.subhead th.cnt.zero{color:#4a5d56}
 .ungwrap .ungtbl th.num{position:sticky;left:0;background:#fff;z-index:1;text-align:right;font:500 10px var(--mono);color:var(--ink3);width:40px;min-width:40px;padding:3px 6px}
 .ungwrap .ungtbl th.num.added{color:#c08a2e}
+.ungwrap table.ungtbl.worklist{table-layout:auto;width:auto;min-width:100%}
+.ungwrap .worklist thead th{padding:7px 12px;text-align:left;white-space:nowrap;vertical-align:bottom}
+.ungwrap .worklist thead th .wc{display:block;font:700 11px var(--mono);letter-spacing:.04em}
+.ungwrap .worklist thead th .wn{display:block;font:500 9.5px var(--sans);color:#8fa79d;margin-top:1px}
+.ungwrap .worklist td.wcell{font:500 11px var(--mono);padding:3px 12px;text-align:left;
+  white-space:nowrap;border-right:1px solid #f0f3f1;color:var(--ink);cursor:pointer}
+.ungwrap .worklist td.wcell:hover{background:#eaf3ee;color:#12513a}
+.ungwrap .worklist td.wcell.empty{cursor:default;background:#fcfdfc}
+.ungwrap .worklist td.wcell.empty:hover{background:#fcfdfc}
+.ungwrap .worklist tbody tr:nth-child(even) td.wcell{background:#fbfcfb}
+.ungwrap .worklist tbody tr:nth-child(even) td.wcell:hover{background:#eaf3ee}
 .ungwrap table.ungtbl.goods{font:500 11px var(--sans);width:100%}
 .ungwrap .goods td{text-align:left;padding:5px 10px;min-width:0}
 .ungwrap .goods td.gn{text-align:right;font-family:var(--mono);font-size:10.5px;white-space:nowrap}
@@ -639,6 +650,7 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
       <input id="ung-search" placeholder="Filter ASIN&hellip;" autocomplete="off">
       <label class="ung-only"><input type="checkbox" id="ung-onlyres"> With Ungated/Pending only</label>
       <span class="ung-legend"><i class="p"></i>Pending<i class="b"></i>Not checked<i class="d"></i>Already answered</span>
+      <button class="ung-tool" id="ung-mode" type="button">Show the grid</button>
       <button class="ung-tool" id="ung-import" type="button">Import</button>
       <button class="ung-tool" id="ung-add" type="button">Add client</button>
       <button class="ung-tool" id="ung-extract" type="button">Extract&hellip;</button>
@@ -3112,7 +3124,7 @@ document.addEventListener("change", e=>{
 "use strict";
 
 const M = {
-  on:false, ready:false, view:"goods", busy:false,
+  on:false, ready:false, view:"goods", busy:false, ungMode:"list",
   budgets:{},                 // code -> budget
   all:[],                     // every ASIN ever loaded, retired ones included
   pool:[],                    // the ones still in Ungate List 3.0
@@ -3612,8 +3624,10 @@ function fillListing(ws, code, items){
     const c=ws.getCell(1,i+1); c.value=t; c.font={name:"Arial",size:10,bold:true};
   });
   items.forEach((r,i)=>{
-    const row=2+i, pack=Math.max(1,r.bundle||1);
-    ws.getCell(row,2).value=`${code}-${r.asin}-${pack}PACK`;
+    const row=2+i;
+    /* Always 1PACK, never the bundle size: the listing tool wants one line
+       per ASIN regardless of how the case is packed. */
+    ws.getCell(row,2).value=`${code}-${r.asin}-1PACK`;
     ws.getCell(row,4).value=r.asin;
     ws.getCell(row,8).value="NEW";
     ws.getCell(row,11).value=1;
@@ -3796,9 +3810,59 @@ function _ungEdit(td){
   sel.addEventListener('blur',function(){ done(false); });
   sel.addEventListener('keydown',function(ev){ if(ev.key==='Escape'){ done(false); } });
 }
+/* The matrix is mostly answered, so the work left is easier to read as a
+   column per client: the ASINs that client still has to check, busiest client
+   on the left. Clients with nothing left drop out. */
+function _ungPaintList(){
+  var q=((el('ung-search')&&el('ung-search').value)||'').trim().toUpperCase();
+  var cols=[];
+  ungCols().forEach(function(c){
+    var list=[];
+    (M.pool||[]).forEach(function(r){
+      if(!ungCellOpen(key(r.asin,c))) return;
+      if(q && r.asin.toUpperCase().indexOf(q)<0) return;
+      list.push(r.asin);
+    });
+    if(list.length) cols.push({code:c, list:list});
+  });
+  cols.sort(function(a,b){ return b.list.length-a.list.length || a.code.localeCompare(b.code); });
+
+  var box=el('ung-grid');
+  if(!cols.length){
+    box.innerHTML='<div class="mos-empty" style="padding:22px">'+
+      (q ? 'No ASIN matches that filter.' : 'Nothing left to check. Every client has an answer on every ASIN.')+
+      '</div>';
+    el('ung-count').textContent='';
+    return;
+  }
+  var MAXR=400;
+  var deep=Math.min(MAXR, Math.max.apply(null, cols.map(function(c){return c.list.length;})));
+  var head='<tr>'+cols.map(function(c){
+    return '<th><span class="wc">'+c.code+'</span><span class="wn">'+c.list.length.toLocaleString()+'</span></th>';
+  }).join('')+'</tr>';
+  var rows=[];
+  for(var i=0;i<deep;i++){
+    var tds='';
+    for(var j=0;j<cols.length;j++){
+      var a=cols[j].list[i];
+      tds += a
+        ? '<td class="wcell" data-a="'+a+'" data-c="'+cols[j].code+'" data-s="'+
+          (M.pending.has(key(a,cols[j].code))?'pending':'blank')+'">'+a+'</td>'
+        : '<td class="wcell empty"></td>';
+    }
+    rows.push('<tr>'+tds+'</tr>');
+  }
+  box.innerHTML='<table class="ungtbl worklist"><thead>'+head+'</thead><tbody>'+rows.join('')+'</tbody></table>';
+  var total=cols.reduce(function(s,c){return s+c.list.length;},0);
+  el('ung-count').textContent=cols.length+' client'+(cols.length>1?'s':'')+' \u00b7 '+
+    total.toLocaleString()+' to check'+(deep>=MAXR?' \u00b7 first '+MAXR+' each':'');
+  ungTally(true);
+}
+
 function renderUngate(){
-  _ungSeed().then(function(){ if(M.view==='ungate') _ungPaintGrid(); });
-  _ungPaintGrid();
+  var paint = (M.ungMode==='grid') ? _ungPaintGrid : _ungPaintList;
+  _ungSeed().then(function(){ if(M.view==='ungate') paint(); });
+  paint();
 }
 function renderDb(){
   _ungSeed().then(function(){ if(M.view==='db') _ungPaint2("db"); });
@@ -3857,7 +3921,11 @@ function _ungPaint2(which){
     if(onlyInp) onlyInp.addEventListener('change', renderUngate);
     ['ung-grid','db-grid'].forEach(function(id){
       var g=el(id);
-      if(g) g.addEventListener('click', function(ev){ var td=ev.target.closest && ev.target.closest('td.ucell'); if(td) _ungEdit(td); });
+      if(!g) return;
+      g.addEventListener('click', function(ev){
+        var td=ev.target.closest && ev.target.closest('td.ucell,td.wcell');
+        if(td && !td.classList.contains('empty')) _ungEdit(td);
+      });
     });
   }
   var q=((sInp&&sInp.value)||'').trim().toUpperCase();
@@ -4036,13 +4104,15 @@ function ungTogglePicker(which){
   const cols=ungColsFor(which!=="db");
   if(!cols.length){ note("This tab has no columns to extract yet.", true); return; }
   box.dataset.tab=which;
+  const listing = which!=="db";
   box.innerHTML=
     `<div class="ung-pick-head">
-       <b>Columns to extract</b>
+       <b>${listing ? "Clients to make a listing file for" : "Columns to extract"}</b>
        <span>
          <button class="ung-tool" data-ungpick="all" type="button">All</button>
          <button class="ung-tool" data-ungpick="none" type="button">None</button>
          <button class="ung-tool" data-ungpick="go" type="button">Extract</button>
+         <button class="ung-tool" data-ungpick="grid" type="button">Grid instead</button>
          <button class="ung-tool" data-ungpick="close" type="button">Cancel</button>
        </span>
      </div>
@@ -4058,12 +4128,38 @@ function ungPickNote(box){
   const cols=ungColsFor(box.dataset.tab!=="db");
   const n=cols.filter(ungIn).length, all=cols.length;
   const e=box.querySelector(".ung-pick-note");
-  if(e) e.textContent = n===all
-    ? `All ${all} client${all===1?"":"s"} on this tab will be in the sheet.`
-    : `${n} of ${all} clients will be in the sheet.`;
+  const isListing = box.dataset.tab!=="db";
+  if(e) e.textContent = isListing
+    ? `${n===all?"All "+all:n+" of "+all} client${all===1?"":"s"} \u2014 one file each, listing only the ASINs still to check for that client. "Grid instead" gives the whole matrix as a sheet.`
+    : (n===all ? `All ${all} client${all===1?"":"s"} will be in the sheet.`
+               : `${n} of ${all} clients will be in the sheet.`);
 }
 
 function _ungExtract(which){ _ungExtractRows(which==="db" ? "db" : "ungate"); }
+
+/* Ungate Checking hands you the file you upload to the listing tool: one row
+   per ASIN still to check for that client, in the Test_Listing layout. What
+   comes back is the Batch Details export, which Import reads straight in. */
+async function ungExtractListing(){
+  if(typeof ExcelJS==="undefined"){ note("Hindi na-load ang writer — i-reload ang page.", true); return; }
+  var codes=ungColsFor(true).filter(ungIn);
+  if(!codes.length){ note("No clients are ticked.", true); return; }
+  var stamp=new Date().toISOString().slice(0,10), made=0, empty=[];
+  el("ung-picker").hidden=true;
+  for(var i=0;i<codes.length;i++){
+    var c=codes[i];
+    var rows=(M.pool||[]).filter(function(r){ return ungCellOpen(key(r.asin,c)); });
+    if(!rows.length){ empty.push(c); continue; }
+    var wb=new ExcelJS.Workbook();
+    fillListing(wb.addWorksheet("Sheet1"), c, rows);
+    await saveBook(wb, c+"_To_Check_"+stamp+".xlsx");
+    made++;
+    await new Promise(function(r){ setTimeout(r,350); });
+  }
+  note(made
+    ? made+" file"+(made>1?"s":"")+" saved"+(empty.length?" \u00b7 "+empty.join(", ")+" had nothing left to check":"")
+    : "Every client ticked has already been checked on every ASIN.", !made);
+}
 
 /* Writes whichever half of the grid the tab is showing: the open rows on
    Ungate Checking, the settled ones in the ASIN database. */
@@ -4082,8 +4178,10 @@ function _ungExtractRows(which){
   for(var i=0;i<rows.length;i++){
     var a=rows[i], row=[a];
     for(var j=0;j<clients.length;j++){
-      var k=key(a,clients[j]);
-      row.push(ungCellOpen(k)===openWanted ? ungCellState(k)[1] : '');
+      var k=key(a,clients[j]), s=ungCellState(k);
+      /* Blank stays blank; everything else says what it is. The file can then
+         be imported back without losing which cells were already answered. */
+      row.push(s[2]==='blank' ? '' : s[1]);
     }
     aoa.push(row);
   }
@@ -4402,6 +4500,12 @@ function init(){
   var _uii=el("ung-import-input");
   if(_uii) _uii.onchange=function(e){ _ungImport(e.target.files); e.target.value=""; };
   var _uib=el("ung-import"); if(_uib) _uib.onclick=function(){ el("ung-import-input").click(); };
+  var _umd=el("ung-mode");
+  if(_umd) _umd.onclick=function(){
+    M.ungMode = M.ungMode==='grid' ? 'list' : 'grid';
+    _umd.textContent = M.ungMode==='grid' ? 'Show the worklist' : 'Show the grid';
+    renderUngate();
+  };
   var _uex=el("ung-extract"); if(_uex) _uex.onclick=function(){ ungTogglePicker("ung"); };
   var _dex=el("db-extract");  if(_dex) _dex.onclick=function(){ ungTogglePicker("db"); };
   var _uad=el("ung-add"); if(_uad) _uad.onclick=ungAddClients;
@@ -4411,7 +4515,8 @@ function init(){
       var b=ev.target.closest("button[data-ungpick]"); if(!b) return;
       var a=b.dataset.ungpick;
       if(a==="close"){ box.hidden=true; return; }
-      if(a==="go"){ _ungExtractRows(p[1]); return; }
+      if(a==="grid"){ _ungExtractRows(p[1]); return; }   /* the whole matrix, for reading */
+      if(a==="go"){ if(p[1]==="ungate") ungExtractListing(); else _ungExtractRows(p[1]); return; }
       ungPick = a==="all" ? null : new Set();
       box.querySelectorAll("input[data-ungcol]").forEach(function(x){ x.checked = a==="all"; });
       ungPickNote(box);
