@@ -607,6 +607,17 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
 .ung-pick-list label .pc{font:600 11.5px var(--mono);letter-spacing:.03em}
 .ung-pick-list label .pn{margin-left:auto;font:500 10.5px var(--mono);color:var(--ink3)}
 .ung-pick-list input{margin:0;flex:none}
+.ung-warn{background:#fbecea;color:#9b2c20;padding:9px 11px;border-radius:7px;
+  font:500 12.5px var(--sans);line-height:1.5;margin-bottom:10px}
+.ung-ok{background:#eaf3ee;color:#12513a;padding:9px 11px;border-radius:7px;
+  font:500 12.5px var(--sans);margin-bottom:10px}
+.ungtbl.imp{width:100%;font:500 11.5px var(--mono)}
+.ungtbl.imp thead th{position:static;background:#121a17;color:#e6ede9;text-align:right;
+  padding:5px 9px;font:600 10px var(--sans);letter-spacing:.04em}
+.ungtbl.imp thead th:first-child{text-align:left}
+.ungtbl.imp td{text-align:right;padding:4px 9px;border-bottom:1px solid var(--rule);color:var(--ink2)}
+.ungtbl.imp td.c{text-align:left;font-weight:700;color:var(--ink)}
+.ungtbl.imp td.bad{color:#9b2c20;font-weight:700}
 .ung-pick-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;
   flex-wrap:wrap;margin-top:10px}
 .ung-pick-foot span{display:flex;gap:6px;align-items:center}
@@ -3497,15 +3508,35 @@ function readMatrix(rows, fileName){
   return out;
 }
 
+function fileState(r){ return r.pending ? "pending" : r.blank ? "blank" : r.ungated ? "ungated" : "gated"; }
+function dbState(k){
+  if(M.ungated.has(k)) return "ungated";
+  if(M.pending.has(k)) return "pending";
+  if(M.blank.has(k))   return "blank";
+  return "gated";
+}
+
 function summarise(rows){
-  const known=new Set(M.pool.map(r=>r.asin.toUpperCase()));
+  const byUpper=new Map(M.pool.map(r=>[r.asin.toUpperCase(),r.asin]));
   const by={};
   for(const r of rows){
     const g=(by[r.code] ||= {code:r.code, rows:0, ungated:0, gated:0, pending:0, unknown:0,
-                             known:M.stores.includes(r.code)});
+                             changes:0, overwrites:0, known:M.stores.includes(r.code)});
     g.rows++;
-    if(!known.has(r.asin.toUpperCase())) g.unknown++;
-    if(r.pending) g.pending++; else if(r.ungated) g.ungated++; else g.gated++;
+    const asin=byUpper.get(r.asin.toUpperCase());
+    if(!asin) g.unknown++;
+    if(r.pending) g.pending++; else if(r.ungated) g.ungated++; else if(!r.blank) g.gated++;
+    if(asin){
+      const was=dbState(key(asin,r.code)), now=fileState(r);
+      if(was!==now){
+        g.changes++;
+        /* Only an Ungated on record proves somebody decided something. Gated
+           is stored as the absence of a row, so it cannot be told apart from
+           a pair nobody has looked at yet. Losing an Ungated is the case
+           worth stopping for. */
+        if(was==="ungated") g.overwrites++;
+      }
+    }
   }
   return Object.values(by).sort((a,b)=>b.rows-a.rows);
 }
@@ -3535,16 +3566,33 @@ async function applyBatch(rows){
   M.busy=true; renderMos();
   try{
     if(added) await saveClients();
-    if(add.length) await writeChunks("mos_gating", add, "asin,store_code");
-    /* A full matrix carries a quarter of a million gated cells. Delete them
-       per client in blocks rather than one request each. */
-    const byCode={};
-    for(const [asin,code] of drop) (byCode[code] ||= []).push(asin);
-    for(const code in byCode){
-      const list=byCode[code];
-      for(let i=0;i<list.length;i+=200)
-        await sb.from("mos_gating").delete().eq("store_code",code).in("asin",list.slice(i,i+200));
+    /* A full sheet carries a quarter of a million Gated cells, and deleting
+       those two hundred at a time is thousands of round trips. When the file
+       covers the whole ASIN list it is a complete snapshot for the clients in
+       it, so each client's gating is cleared in one request and only the
+       Ungated and Pending rows are written back. A partial file still goes
+       cell by cell, because there the rest of the column must survive. */
+    const touched=[...new Set(rows.map(r=>r.code).filter(Boolean))];
+    const seenAsins=new Set(rows.map(r=>r.asin.toUpperCase()));
+    const poolSize=(M.pool||[]).length || 1;
+    const covered=(M.pool||[]).filter(r=>seenAsins.has(r.asin.toUpperCase())).length;
+    const wholeSheet = covered/poolSize >= 0.95;
+
+    if(wholeSheet){
+      for(const code of touched){
+        const {error}=await sb.from("mos_gating").delete().eq("store_code",code);
+        if(error) throw error;
+      }
+    } else {
+      const byCode={};
+      for(const [asin,code] of drop) (byCode[code] ||= []).push(asin);
+      for(const code in byCode){
+        const list=byCode[code];
+        for(let i=0;i<list.length;i+=200)
+          await sb.from("mos_gating").delete().eq("store_code",code).in("asin",list.slice(i,i+200));
+      }
     }
+    if(add.length) await writeChunks("mos_gating", add, "asin,store_code");
     const nUng=add.filter(a=>a.state==="ungated").length;
     const nPend=add.filter(a=>a.state==="pending").length;
     const nBlank=add.filter(a=>a.state==="blank").length;
@@ -4165,11 +4213,53 @@ function _ungPaint2(which){
    Ginagamit ang mismong parser at gating-write ng app (applyBatch), kaya
    live at shared. Ang mga ASIN na wala pa sa ASIN list ay lalaktawan.
    Extract: dina-download ang kasalukuyang matrix (lahat ng row x client). */
+/* Nothing is written until you have seen what it would do. An import can
+   replace answers that are already on record, so the count of those is the
+   first thing on the panel. */
+function ungShowImport(rows){
+  const box=el("ung-picker");
+  const s=summarise(rows);
+  const ch=s.reduce((a,g)=>a+g.changes,0);
+  const ow=s.reduce((a,g)=>a+g.overwrites,0);
+  const newClients=s.filter(g=>!g.known).map(g=>g.code);
+
+  box.innerHTML=
+    '<div class="ung-pick-head"><b>What this file would do</b></div>'+
+    (ow ? '<div class="ung-warn"><b>'+ow.toLocaleString()+'</b> cell'+(ow===1?'':'s')+
+          ' now marked Ungated would stop being Ungated, out of '+
+          ch.toLocaleString()+' change'+(ch===1?'':'s')+' in all. If this file is older than '+
+          'work done in the app, that work is lost. Cancel and export a fresh copy if you are unsure.</div>'
+        : ch ? '<div class="ung-ok">'+ch.toLocaleString()+' cell'+(ch===1?'':'s')+
+               ' would change. None of them replace an answer already on record.</div>'
+             : '<div class="ung-ok">Nothing would change. The file matches what is already on record.</div>')+
+    (newClients.length ? '<div class="ung-ok">New client'+(newClients.length>1?'s':'')+
+       ': '+newClients.join(', ')+'</div>' : '')+
+    '<div class="ung-pick-list" style="display:block">'+
+      '<table class="ungtbl imp"><thead><tr><th>Client</th><th>Rows</th><th>Ungated</th>'+
+      '<th>Pending</th><th>Gated</th><th>Changes</th><th>Ungated lost</th></tr></thead><tbody>'+
+      s.map(g=>'<tr><td class="c">'+g.code+'</td><td>'+g.rows.toLocaleString()+'</td>'+
+        '<td>'+g.ungated.toLocaleString()+'</td><td>'+g.pending.toLocaleString()+'</td>'+
+        '<td>'+g.gated.toLocaleString()+'</td><td>'+g.changes.toLocaleString()+'</td>'+
+        '<td'+(g.overwrites?' class="bad"':'')+'>'+g.overwrites.toLocaleString()+'</td></tr>').join('')+
+      '</tbody></table>'+
+    '</div>'+
+    '<div class="ung-pick-foot"><span class="ung-pick-note">'+
+      rows.length.toLocaleString()+' cells read from the file</span><span>'+
+      '<button class="ung-tool go" data-ungimp="go" type="button">Apply</button>'+
+      '<button class="ung-tool" data-ungimp="no" type="button">Cancel</button></span></div>';
+  box.hidden=false;
+  box.onclick=function(ev){
+    const b=ev.target.closest("button[data-ungimp]"); if(!b) return;
+    box.hidden=true; box.onclick=null;
+    if(b.dataset.ungimp==="go") applyBatch(rows);
+  };
+}
+
 function _ungImport(files){
   files=[...files]; if(!files.length) return;
   if(typeof XLSX==="undefined"){ note("Hindi na-load ang spreadsheet reader — i-reload ang page.", true); return; }
   if(!M.pool.length){ note("I-load muna ang ASIN list sa ASINs tab bago mag-import.", true); return; }
-  var all=[], left=files.length;
+  var all=[], left=files.length, failed=[];
   files.forEach(function(f){
     var r=new FileReader();
     r.onload=function(e){
@@ -4180,8 +4270,12 @@ function _ungImport(files){
         if(!rows.length) throw new Error(f.name+": walang laman.");
         if(looksLikeMatrix(rows)) all.push.apply(all, readMatrix(rows,f.name));
         else all.push.apply(all, readBatch(XLSX.utils.sheet_to_csv(ws), f.name));
-      }catch(err){ note(err.message, true); }
-      if(--left===0){ if(all.length) applyBatch(all); else note("Walang mabasa sa file.", true); }
+      }catch(err){ failed.push(f.name+": "+err.message); }
+      if(--left===0){
+        if(all.length) ungShowImport(all);
+        else note(failed.length ? failed.join(" \u00b7 ")
+                                : "Walang mabasa sa file.", true);
+      }
     };
     r.onerror=function(){ note("Hindi mabasa ang "+f.name, true); if(--left===0 && all.length) applyBatch(all); };
     r.readAsArrayBuffer(f);
