@@ -430,6 +430,12 @@ body{padding-left:214px}
 .ungwrap .worklist td.wcell{font:500 11px var(--mono);padding:3px 12px;text-align:left;
   white-space:nowrap;border-right:1px solid #f0f3f1;color:var(--ink);cursor:pointer}
 .ungwrap .worklist td.wcell:hover{background:#eaf3ee;color:#12513a}
+.ungwrap .worklist td.wcell.wg{background:#fbecea;color:#9b2c20;font-weight:600}
+.ungwrap .worklist td.wcell.wu{background:#d7efe2;color:#12513a;font-weight:600}
+.ungwrap .worklist td.wcell.wp{background:#f8e9c6;color:#7a5c08}
+.ungwrap .worklist td.wcell.wb{background:transparent;color:var(--ink)}
+.ungwrap .worklist thead th.done .wc{color:#6f867c}
+.ungwrap .worklist thead th.done .wn{color:#5d7268;font-style:italic}
 .ungwrap .worklist td.wcell.empty{cursor:default;background:#fcfdfc}
 .ungwrap .worklist td.wcell.empty:hover{background:#fcfdfc}
 .ungwrap .worklist tbody tr:nth-child(even) td.wcell{background:#fbfcfb}
@@ -572,12 +578,25 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
 .ung-pick-head{display:flex;justify-content:space-between;align-items:center;gap:10px;
   flex-wrap:wrap;margin-bottom:10px;font-size:13px}
 .ung-pick-head span{display:flex;gap:6px}
-.ung-pick-list{display:flex;flex-wrap:wrap;gap:4px 14px;max-height:200px;overflow:auto;
-  padding:4px 2px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
-.ung-pick-list label{display:flex;align-items:center;gap:5px;font:400 12.5px/1.6 var(--mono);
-  color:var(--ink2);cursor:pointer;white-space:nowrap}
-.ung-pick-list input{margin:0}
-.ung-pick-note{margin-top:9px;font-size:12px;color:var(--ink3)}
+.ung-pick-find{width:100%;padding:6px 9px;margin:0 0 8px;border:1px solid var(--rule);
+  border-radius:6px;font:400 12.5px var(--sans);color:var(--ink);background:var(--panel)}
+.ung-pick-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:1px 8px;
+  max-height:230px;overflow:auto;padding:6px 2px;
+  border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.ung-pick-list label{display:flex;align-items:center;gap:6px;padding:3px 5px;border-radius:5px;
+  font:400 12px var(--sans);color:var(--ink2);cursor:pointer;white-space:nowrap}
+.ung-pick-list label:hover{background:var(--wash-dom)}
+.ung-pick-list label.spent{opacity:.45}
+.ung-pick-list label .pc{font:600 11.5px var(--mono);letter-spacing:.03em}
+.ung-pick-list label .pn{margin-left:auto;font:500 10.5px var(--mono);color:var(--ink3)}
+.ung-pick-list input{margin:0;flex:none}
+.ung-pick-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  flex-wrap:wrap;margin-top:10px}
+.ung-pick-foot span{display:flex;gap:6px;align-items:center}
+.ung-pick-note{font-size:12px;color:var(--ink3)}
+.ung-tool.go{background:var(--amazon);color:#fff;border-color:var(--amazon)}
+.ung-tool.go:hover{filter:brightness(1.08)}
+.ung-tool:disabled{opacity:.4;cursor:not-allowed}
 .mos-table tr.mos-off td{opacity:.4}
 .mos-table tr.mos-off td:first-child{opacity:1}
 
@@ -3411,12 +3430,28 @@ function readBatch(text, fileName){
 /* The other shape people paste in: the gating matrix itself, ASINs down the
    first column and client codes across the top, each cell Gated / Ungated /
    Pending / blank. Blank counts as Gated. */
+/* Two shapes arrive as a matrix: the full 98-column sheet and a single
+   client's column. Counting three-letter headers was too crude — the Asins
+   CSV starts ASIN, UPC, Status and UPC is three letters too. So the cells
+   decide: a matrix is one whose columns hold nothing but Gated, Ungated,
+   Pending or blank. */
 function looksLikeMatrix(rows){
-  const heads=Object.keys(rows[0]||{}).map(h=>h.trim().toLowerCase());
+  const keys=Object.keys(rows[0]||{});
+  const heads=keys.map(h=>h.trim().toLowerCase());
   if(heads.includes("msku")) return false;
-  const first=heads[0]||"";
-  if(!/^asins?$/.test(first)) return false;
-  return heads.slice(1).filter(h=>/^[a-z]{3}$/.test(h)).length >= 3;
+  if(!/^asins?$/.test(heads[0]||"")) return false;
+  if(keys.length<2) return false;
+  const ok={gated:1, ungated:1, pending:1};
+  let seen=0;
+  for(let i=0;i<Math.min(rows.length,60);i++){
+    for(let j=1;j<keys.length;j++){
+      const v=String(rows[i][keys[j]]??"").trim().toLowerCase();
+      if(!v) continue;                       // blank is fine, it just says nothing
+      if(!ok[v]) return false;
+      seen++;
+    }
+  }
+  return seen>0;
 }
 function readMatrix(rows, fileName){
   const heads=Object.keys(rows[0]);
@@ -3779,6 +3814,15 @@ async function _ungApply(a,c,state,td){
   }catch(err){ alert('Hindi na-save ang pagbabago: '+(err.message||err)); }
 }
 function _ungPaint(td,state){
+  if(td.classList.contains('wcell')){
+    /* On the worklist the cell is the ASIN itself. It stays where it is and
+       takes the colour of the answer, so you can see what you just did
+       instead of it vanishing from under the cursor. */
+    td.classList.remove('wg','wu','wp','wb');
+    td.classList.add(state==='ungated'?'wu':state==='pending'?'wp':state==='blank'?'wb':'wg');
+    td.setAttribute('data-s', state);
+    return;
+  }
   td.classList.remove('u','p','g','b');
   if(state==='ungated'){ td.classList.add('u'); td.textContent='Ungated'; }
   else if(state==='pending'){ td.classList.add('p'); td.textContent='Pending'; }
@@ -3802,7 +3846,9 @@ function _ungEdit(td){
       /* Moving between blank/pending and a real answer can move the whole row
          to the other tab, so redraw both. */
       var was=(cur==='blank'||cur==='pending'), now=(ns==='blank'||ns==='pending');
-      if(was!==now) setTimeout(function(){ renderMos(); }, 0);
+      /* The worklist repaints the one cell; the grid needs the row moved. */
+      if(was!==now && !td.classList.contains('wcell')) setTimeout(function(){ renderMos(); }, 0);
+      if(was!==now && td.classList.contains('wcell')) ungTally(true);
     }
     setTimeout(function(){ td._closed=0; },0);
   };
@@ -3823,12 +3869,13 @@ function _ungPaintList(){
       if(q && r.asin.toUpperCase().indexOf(q)<0) return;
       list.push(r.asin);
     });
-    if(list.length) cols.push({code:c, list:list});
+    cols.push({code:c, list:list});      /* a client with nothing left keeps an empty column */
   });
   cols.sort(function(a,b){ return b.list.length-a.list.length || a.code.localeCompare(b.code); });
 
   var box=el('ung-grid');
-  if(!cols.length){
+  var working=cols.filter(function(c){ return c.list.length; }).length;
+  if(!working){
     box.innerHTML='<div class="mos-empty" style="padding:22px">'+
       (q ? 'No ASIN matches that filter.' : 'Nothing left to check. Every client has an answer on every ASIN.')+
       '</div>';
@@ -3838,23 +3885,25 @@ function _ungPaintList(){
   var MAXR=400;
   var deep=Math.min(MAXR, Math.max.apply(null, cols.map(function(c){return c.list.length;})));
   var head='<tr>'+cols.map(function(c){
-    return '<th><span class="wc">'+c.code+'</span><span class="wn">'+c.list.length.toLocaleString()+'</span></th>';
+    return '<th'+(c.list.length?'':' class="done"')+'><span class="wc">'+c.code+'</span>'+
+      '<span class="wn">'+(c.list.length?c.list.length.toLocaleString():'clear')+'</span></th>';
   }).join('')+'</tr>';
   var rows=[];
   for(var i=0;i<deep;i++){
     var tds='';
     for(var j=0;j<cols.length;j++){
       var a=cols[j].list[i];
-      tds += a
-        ? '<td class="wcell" data-a="'+a+'" data-c="'+cols[j].code+'" data-s="'+
-          (M.pending.has(key(a,cols[j].code))?'pending':'blank')+'">'+a+'</td>'
-        : '<td class="wcell empty"></td>';
+      if(a){
+        var st=M.pending.has(key(a,cols[j].code))?'pending':'blank';
+        tds += '<td class="wcell'+(st==='pending'?' wp':'')+'" data-a="'+a+
+               '" data-c="'+cols[j].code+'" data-s="'+st+'">'+a+'</td>';
+      } else tds += '<td class="wcell empty"></td>';
     }
     rows.push('<tr>'+tds+'</tr>');
   }
   box.innerHTML='<table class="ungtbl worklist"><thead>'+head+'</thead><tbody>'+rows.join('')+'</tbody></table>';
   var total=cols.reduce(function(s,c){return s+c.list.length;},0);
-  el('ung-count').textContent=cols.length+' client'+(cols.length>1?'s':'')+' \u00b7 '+
+  el('ung-count').textContent=working+' of '+cols.length+' clients have work \u00b7 '+
     total.toLocaleString()+' to check'+(deep>=MAXR?' \u00b7 first '+MAXR+' each':'');
   ungTally(true);
 }
@@ -4097,42 +4146,75 @@ async function ungAddClients(){
 let ungPick=null;                      // null means every client
 const ungIn = c => ungPick===null || ungPick.has(c);
 
+function ungWork(c){
+  var n=0, rows=(M.pool||[]);
+  for(var i=0;i<rows.length;i++) if(ungCellOpen(key(rows[i].asin,c))) n++;
+  return n;
+}
 function ungTogglePicker(which){
   which = which==="db" ? "db" : "ung";
   const box=el(which+"-picker");
   if(!box.hidden){ box.hidden=true; return; }
-  const cols=ungColsFor(which!=="db");
-  if(!cols.length){ note("This tab has no columns to extract yet.", true); return; }
   box.dataset.tab=which;
-  const listing = which!=="db";
-  box.innerHTML=
-    `<div class="ung-pick-head">
-       <b>${listing ? "Clients to make a listing file for" : "Columns to extract"}</b>
-       <span>
-         <button class="ung-tool" data-ungpick="all" type="button">All</button>
-         <button class="ung-tool" data-ungpick="none" type="button">None</button>
-         <button class="ung-tool" data-ungpick="go" type="button">Extract</button>
-         <button class="ung-tool" data-ungpick="grid" type="button">Grid instead</button>
-         <button class="ung-tool" data-ungpick="close" type="button">Cancel</button>
-       </span>
-     </div>
-     <div class="ung-pick-list">`+
-    cols.map(c=>`<label><input type="checkbox" data-ungcol="${c}" ${ungIn(c)?"checked":""}>${c}</label>`).join("")+
-    `</div><div class="ung-pick-note"></div>`;
   box.hidden=false;
-  ungPickNote(box);
+  ungDrawPicker(box);
+}
+
+/* Clients ordered by how much is left on them, with the count beside each and
+   a search box, because ninety-eight unlabelled tick boxes is not a list you
+   can work with. */
+function ungDrawPicker(box){
+  const listing = box.dataset.tab!=="db";
+  const q=(box.dataset.q||"").trim().toUpperCase();
+  const cols=ungColsFor(listing).map(function(c){ return {code:c, n: listing ? ungWork(c) : 0}; });
+  if(listing) cols.sort(function(a,b){ return b.n-a.n || a.code.localeCompare(b.code); });
+  const shown=q ? cols.filter(function(c){ return c.code.indexOf(q)>=0; }) : cols;
+
+  const picked=cols.filter(function(c){ return ungIn(c.code); });
+  const files=listing ? picked.filter(function(c){ return c.n>0; }) : picked;
+  const asins=files.reduce(function(s,c){ return s+c.n; }, 0);
+
+  box.innerHTML=
+    '<div class="ung-pick-head">'+
+      '<b>'+(listing ? "Clients to make a listing file for" : "Columns to extract")+'</b>'+
+      '<span>'+
+        (listing ? '<button class="ung-tool" data-ungpick="work" type="button">Only those with work</button>' : '')+
+        '<button class="ung-tool" data-ungpick="all" type="button">All</button>'+
+        '<button class="ung-tool" data-ungpick="none" type="button">None</button>'+
+      '</span>'+
+    '</div>'+
+    '<input class="ung-pick-find" data-ungfind placeholder="Find a client\u2026" value="'+esc(box.dataset.q||"")+'">'+
+    '<div class="ung-pick-list">'+
+      shown.map(function(c){
+        return '<label class="'+(listing&&!c.n?"spent":"")+'">'+
+          '<input type="checkbox" data-ungcol="'+c.code+'" '+(ungIn(c.code)?"checked":"")+'>'+
+          '<span class="pc">'+c.code+'</span>'+
+          (listing ? '<span class="pn">'+(c.n?c.n.toLocaleString():"clear")+'</span>' : '')+
+        '</label>';
+      }).join('') +
+      (shown.length?'':'<div class="mos-empty" style="padding:10px">No client matches that.</div>')+
+    '</div>'+
+    '<div class="ung-pick-foot">'+
+      '<span class="ung-pick-note">'+
+        (listing
+          ? (files.length
+              ? files.length+' file'+(files.length>1?'s':'')+' \u00b7 '+asins.toLocaleString()+' ASIN'+(asins===1?'':'s')+' to check'
+              : 'Nothing to extract: every client ticked is already clear.')
+          : picked.length+' of '+cols.length+' client'+(cols.length===1?'':'s')+' in the sheet')+
+      '</span>'+
+      '<span>'+
+        (listing
+          ? '<button class="ung-tool" data-ungpick="one" type="button"'+(files.length?'':' disabled')+'>One file for all</button>'+
+            '<button class="ung-tool go" data-ungpick="go" type="button"'+(files.length?'':' disabled')+'>A file each</button>'+
+            '<button class="ung-tool" data-ungpick="grid" type="button">Grid sheet</button>'
+          : '<button class="ung-tool go" data-ungpick="go" type="button">Extract</button>')+
+        '<button class="ung-tool" data-ungpick="close" type="button">Cancel</button>'+
+      '</span>'+
+    '</div>';
 }
 function ungPickNote(box){
   if(!box) box = (el("db-picker") && !el("db-picker").hidden) ? el("db-picker") : el("ung-picker");
-  if(!box) return;
-  const cols=ungColsFor(box.dataset.tab!=="db");
-  const n=cols.filter(ungIn).length, all=cols.length;
-  const e=box.querySelector(".ung-pick-note");
-  const isListing = box.dataset.tab!=="db";
-  if(e) e.textContent = isListing
-    ? `${n===all?"All "+all:n+" of "+all} client${all===1?"":"s"} \u2014 one file each, listing only the ASINs still to check for that client. "Grid instead" gives the whole matrix as a sheet.`
-    : (n===all ? `All ${all} client${all===1?"":"s"} will be in the sheet.`
-               : `${n} of ${all} clients will be in the sheet.`);
+  if(box && !box.hidden) ungDrawPicker(box);
 }
 
 function _ungExtract(which){ _ungExtractRows(which==="db" ? "db" : "ungate"); }
@@ -4140,6 +4222,35 @@ function _ungExtract(which){ _ungExtractRows(which==="db" ? "db" : "ungate"); }
 /* Ungate Checking hands you the file you upload to the listing tool: one row
    per ASIN still to check for that client, in the Test_Listing layout. What
    comes back is the Batch Details export, which Import reads straight in. */
+async function ungExtractListingOne(){
+  if(typeof ExcelJS==="undefined"){ note("Hindi na-load ang writer — i-reload ang page.", true); return; }
+  var codes=ungColsFor(true).filter(ungIn);
+  var rows=[];
+  codes.forEach(function(c){
+    (M.pool||[]).forEach(function(r){ if(ungCellOpen(key(r.asin,c))) rows.push({code:c, r:r}); });
+  });
+  if(!rows.length){ note("Nothing to extract.", true); return; }
+  el("ung-picker").hidden=true;
+  var wb=new ExcelJS.Workbook();
+  var ws=wb.addWorksheet("Sheet1");
+  LIST_HEADERS.forEach(function(t,i){
+    var cc=ws.getCell(1,i+1); cc.value=t; cc.font={name:"Arial",size:10,bold:true};
+  });
+  rows.forEach(function(x,i){
+    var row=2+i;
+    ws.getCell(row,2).value=x.code+"-"+x.r.asin+"-1PACK";
+    ws.getCell(row,4).value=x.r.asin;
+    ws.getCell(row,8).value="NEW";
+    ws.getCell(row,11).value=1;
+    [2,4,8,11].forEach(function(cl){ ws.getCell(row,cl).font={name:"Arial",size:10}; });
+  });
+  LIST_WIDTHS.forEach(function(w,i){ ws.getColumn(i+1).width=w; });
+  ws.views=[{state:"frozen",ySplit:1}];
+  await saveBook(wb, "To_Check_"+new Date().toISOString().slice(0,10)+".xlsx");
+  note(rows.length.toLocaleString()+" rows across "+
+    [...new Set(rows.map(function(x){return x.code;}))].length+" clients, in one file.");
+}
+
 async function ungExtractListing(){
   if(typeof ExcelJS==="undefined"){ note("Hindi na-load ang writer — i-reload ang page.", true); return; }
   var codes=ungColsFor(true).filter(ungIn);
@@ -4515,11 +4626,16 @@ function init(){
       var b=ev.target.closest("button[data-ungpick]"); if(!b) return;
       var a=b.dataset.ungpick;
       if(a==="close"){ box.hidden=true; return; }
-      if(a==="grid"){ _ungExtractRows(p[1]); return; }   /* the whole matrix, for reading */
+      if(a==="grid"){ _ungExtractRows(p[1]); return; }
+      if(a==="one"){ ungExtractListingOne(); return; }
       if(a==="go"){ if(p[1]==="ungate") ungExtractListing(); else _ungExtractRows(p[1]); return; }
+      if(a==="work"){
+        /* Everyone who still has something outstanding, nobody who does not. */
+        ungPick=new Set(ungColsFor(true).filter(function(c){ return ungWork(c)>0; }));
+        ungDrawPicker(box); return;
+      }
       ungPick = a==="all" ? null : new Set();
-      box.querySelectorAll("input[data-ungcol]").forEach(function(x){ x.checked = a==="all"; });
-      ungPickNote(box);
+      ungDrawPicker(box);
     });
     box.addEventListener("change", function(ev){
       var x=ev.target.closest("input[data-ungcol]"); if(!x) return;
@@ -4527,7 +4643,14 @@ function init(){
       if(ungPick===null) ungPick=new Set(cols);
       if(x.checked) ungPick.add(x.dataset.ungcol); else ungPick.delete(x.dataset.ungcol);
       if(cols.every(ungIn)) ungPick=null;
-      ungPickNote(box);
+      ungDrawPicker(box);
+    });
+    box.addEventListener("input", function(ev){
+      var f=ev.target.closest("input[data-ungfind]"); if(!f) return;
+      box.dataset.q=f.value;
+      ungDrawPicker(box);
+      var again=box.querySelector("input[data-ungfind]");
+      if(again){ again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
     });
   });
 
