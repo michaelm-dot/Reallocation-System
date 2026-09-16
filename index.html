@@ -348,6 +348,7 @@
     <button data-mv="goods" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Good to Order ASINs</button>
     <button data-mv="ungate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Ungate Checking</button>
     <button data-mv="db"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>ASIN database</button>
+    <button data-mv="sheets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>Offer sheets</button>
     <button data-mv="sheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Manual offer sheet</button>
   </nav>
 </aside>
@@ -431,6 +432,30 @@ body{padding-left:214px}
   white-space:nowrap;border-right:1px solid #f0f3f1;color:var(--ink);cursor:pointer;
   background:#fff}
 .ungwrap .worklist td.wcell:hover{background:#eaf3ee;color:#12513a}
+.sh-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 16px}
+.sh-head h3{margin:0;font:600 17px var(--disp);letter-spacing:-.01em}
+.sh-sub{font:500 12px var(--mono);color:var(--ink3)}
+.sh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px}
+.sh-card{background:var(--panel);border:1px solid var(--rule);border-radius:12px;overflow:hidden;
+  box-shadow:0 1px 2px rgba(18,26,23,.05);transition:box-shadow .15s,transform .15s}
+.sh-card.open{cursor:pointer}
+.sh-card.open:hover{box-shadow:0 6px 18px rgba(18,26,23,.10);transform:translateY(-1px)}
+.sh-bar{height:4px;background:linear-gradient(90deg,#f0a12e,#e8642a)}
+.sh-in{padding:16px 18px}
+.sh-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px}
+.sh-top b{display:block;font:600 16px var(--disp);letter-spacing:-.01em;color:var(--ink)}
+.sh-top span{display:block;margin-top:2px;font:500 11.5px var(--mono);color:var(--ink3)}
+.sh-tag{background:#f6862a;color:#fff;border-radius:20px;padding:3px 11px;
+  font:600 10.5px var(--sans);letter-spacing:.02em;white-space:nowrap}
+.sh-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.sh-stats div{background:var(--wash-dom);border-radius:8px;padding:10px 8px;text-align:center}
+.sh-stats i{display:block;font:600 9px var(--sans);letter-spacing:.09em;color:var(--ink3);font-style:normal}
+.sh-stats b{display:block;margin-top:4px;font:600 16px var(--mono);letter-spacing:-.02em;color:var(--ink)}
+.sh-stats .roi{background:#eaf3ee}
+.sh-stats .roi b{color:#12513a}
+.sh-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:13px;
+  font:500 11px var(--mono);color:var(--ink3)}
+.sh-go{color:var(--amazon);font-weight:700}
 .ung-menu{position:fixed;z-index:120;background:var(--panel);border:1px solid var(--rule);
   border-radius:8px;box-shadow:0 8px 24px rgba(18,26,23,.16);padding:4px;min-width:152px}
 .ung-menu button{display:block;width:100%;text-align:left;border:0;background:none;cursor:pointer;
@@ -704,6 +729,11 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
     
     <div id="db-picker" class="ung-picker" hidden></div>
     <div id="db-grid" class="ung-grid"></div>
+  </section>
+
+  <section id="mos-sheets" class="ungwrap" hidden>
+    <div id="sheets-head"></div>
+    <div id="sheets-body"></div>
   </section>
 
   <section id="mos-sheet" hidden>
@@ -3167,7 +3197,7 @@ const M = {
   counts:{}, spent:{},
   cfg:{method:"spread", minOrder:500, maxClients:3, pendingOn:false,
        year:2026, quarter:"Q3", channel:"amazon"},
-  result:null, staged:null,
+  result:null, staged:null, openRun:null,
   picked:null,                // null means every client; a Set is an explicit choice
   sort:{by:"pct", dir:-1},
 };
@@ -3658,10 +3688,15 @@ function allocate(excluded){
     countsAfter[r.asin]=holders.size;
   }
   for(const c of M.stores) after[c]=remaining[c];
+  /* Tracking codes run once through the batch rather than restarting per
+     client, so the first sheet might be M2026-09-16_1 to _12 and the next
+     one picks up at _13. Client order decides who gets which stretch. */
+  const offset={}; let run=0;
+  for(const c of M.stores){ offset[c]=run; run+=assigned[c].length; }
   const lines=Object.values(assigned).reduce((s,v)=>s+v.length,0);
   const value=Object.values(assigned).reduce((s,v)=>s+v.reduce((t,r)=>t+r.total,0),0);
   return {date, cap, assigned, skips, before, after, countsAfter, exhausted, lines, value,
-          served:Object.values(assigned).filter(v=>v.length).length};
+          offset, served:Object.values(assigned).filter(v=>v.length).length};
 }
 /* Dropping a client frees what it held for the clients after it, which can
    only raise the others' totals, so a growing exclusion list settles fast. */
@@ -3691,7 +3726,12 @@ const SHEET_HEADERS=["Store Code","Tracking Code","ASIN","ASIN Eligible","ASIN D
 const SHEET_WIDTHS=[11,16,14,12,12,13,16,11,22,14,14,15,12,9,15,12,24,16];
 const MONEY_FMT='$#,##0.00;($#,##0.00);-';
 
-function fillSheet(ws, code, items, date){
+/* M2026-09-16_13 — the M marks it as a manual offer sheet, and the number
+   carries on from wherever the previous client's sheet finished. */
+function trackCode(date, n){ return "M"+date+"_"+n; }
+
+function fillSheet(ws, code, items, date, offset){
+  offset = offset || 0;
   const last=2+items.length;
   ws.getCell("A1").value=code;
   ws.getCell("A1").font={name:"Arial",size:11,bold:true};
@@ -3710,7 +3750,7 @@ function fillSheet(ws, code, items, date){
   });
   items.forEach((r,i)=>{
     const row=3+i;
-    const vals=[code,`${date}_${i+1}`,r.asin,true,true,+r.total.toFixed(2),r.upc,
+    const vals=[code,trackCode(date, offset+i+1),r.asin,true,true,+r.total.toFixed(2),r.upc,
       +r.unitCost.toFixed(2),r.qty,+r.avg90.toFixed(2),r.status,r.notes,r.bundle,
       +r.roi.toFixed(4),+r.ppu.toFixed(2),+r.p30.toFixed(2),r.brand,r.dist];
     vals.forEach((v,j)=>{ const c=ws.getCell(row,j+1); c.value=v; c.font={name:"Arial",size:10}; });
@@ -3753,7 +3793,7 @@ async function saveBook(wb, name){
 async function downloadOne(code){
   const R=M.result; if(!R) return;
   const wb=new ExcelJS.Workbook();
-  fillSheet(wb.addWorksheet(code.slice(0,31)), code, R.assigned[code], R.date);
+  fillSheet(wb.addWorksheet(code.slice(0,31)), code, R.assigned[code], R.date, R.offset[code]);
   await saveBook(wb, `${code}_Offer_Sheet_${R.date}.xlsx`);
 }
 async function downloadListing(code){
@@ -3788,7 +3828,7 @@ async function downloadAll(){
   [12,11,15,15,15,10].forEach((w,i)=>sum.getColumn(i+1).width=w);
   for(const code of M.stores){
     const items=R.assigned[code];
-    if(items.length) fillSheet(wb.addWorksheet(code.slice(0,31)), code, items, R.date);
+    if(items.length) fillSheet(wb.addWorksheet(code.slice(0,31)), code, items, R.date, R.offset[code]);
   }
   await saveBook(wb, `Offer_Sheets_${R.date}.xlsx`);
 }
@@ -3819,7 +3859,8 @@ async function commit(){
     const rows=[];
     for(const code of M.stores){
       R.assigned[code].forEach((r,i)=>rows.push({
-        batch_id:batch, asin:r.asin, store_code:code, tracking_code:`${R.date}_${i+1}`,
+        batch_id:batch, asin:r.asin, store_code:code,
+        tracking_code:trackCode(R.date, R.offset[code]+i+1),
         sheet_date:R.date, year:M.cfg.year, quarter:M.cfg.quarter, channel:M.cfg.channel,
         total_price:+r.total.toFixed(2), unit_cost:+r.unitCost.toFixed(2),
         qty:r.qty, distributor:r.dist, brand:r.brand,
@@ -4398,11 +4439,8 @@ function ungDrawPicker(box){
           : picked.length+' of '+cols.length+' client'+(cols.length===1?'':'s')+' in the sheet')+
       '</span>'+
       '<span>'+
-        (listing
-          ? '<button class="ung-tool" data-ungpick="one" type="button"'+(files.length?'':' disabled')+'>One file for all</button>'+
-            '<button class="ung-tool go" data-ungpick="go" type="button"'+(files.length?'':' disabled')+'>A file each</button>'+
-            '<button class="ung-tool" data-ungpick="grid" type="button">Grid sheet</button>'
-          : '<button class="ung-tool go" data-ungpick="go" type="button">Extract</button>')+
+        '<button class="ung-tool go" data-ungpick="go" type="button"'+
+          (listing && !files.length ? ' disabled' : '')+'>Extract</button>'+
         '<button class="ung-tool" data-ungpick="close" type="button">Cancel</button>'+
       '</span>'+
     '</div>';
@@ -4417,35 +4455,6 @@ function _ungExtract(which){ _ungExtractRows(which==="db" ? "db" : "ungate"); }
 /* Ungate Checking hands you the file you upload to the listing tool: one row
    per ASIN still to check for that client, in the Test_Listing layout. What
    comes back is the Batch Details export, which Import reads straight in. */
-async function ungExtractListingOne(){
-  if(typeof ExcelJS==="undefined"){ note("Hindi na-load ang writer — i-reload ang page.", true); return; }
-  var codes=ungColsFor(true).filter(ungIn);
-  var rows=[];
-  codes.forEach(function(c){
-    (M.pool||[]).forEach(function(r){ if(ungCellOpen(key(r.asin,c))) rows.push({code:c, r:r}); });
-  });
-  if(!rows.length){ note("Nothing to extract.", true); return; }
-  el("ung-picker").hidden=true;
-  var wb=new ExcelJS.Workbook();
-  var ws=wb.addWorksheet("Sheet1");
-  LIST_HEADERS.forEach(function(t,i){
-    var cc=ws.getCell(1,i+1); cc.value=t; cc.font={name:"Arial",size:10,bold:true};
-  });
-  rows.forEach(function(x,i){
-    var row=2+i;
-    ws.getCell(row,2).value=x.code+"-"+x.r.asin+"-1PACK";
-    ws.getCell(row,4).value=x.r.asin;
-    ws.getCell(row,8).value="NEW";
-    ws.getCell(row,11).value=1;
-    [2,4,8,11].forEach(function(cl){ ws.getCell(row,cl).font={name:"Arial",size:10}; });
-  });
-  LIST_WIDTHS.forEach(function(w,i){ ws.getColumn(i+1).width=w; });
-  ws.views=[{state:"frozen",ySplit:1}];
-  await saveBook(wb, "To_Check_"+new Date().toISOString().slice(0,10)+".xlsx");
-  note(rows.length.toLocaleString()+" rows across "+
-    [...new Set(rows.map(function(x){return x.code;}))].length+" clients, in one file.");
-}
-
 async function ungExtractListing(){
   if(typeof ExcelJS==="undefined"){ note("Hindi na-load ang writer — i-reload ang page.", true); return; }
   var codes=ungColsFor(true).filter(ungIn);
@@ -4512,10 +4521,12 @@ function renderMos(){
   el("mos-ungate").hidden = M.view!=="ungate";
   el("mos-db").hidden     = M.view!=="db";
   el("mos-goods").hidden  = M.view!=="goods";
+  el("mos-sheets").hidden = M.view!=="sheets";
   if(M.view==="ungate")     renderUngate();
   else if(M.view==="db")    renderDb();
-  else if(M.view==="goods") renderGoods();
-  else                      renderSheet();
+  else if(M.view==="goods")  renderGoods();
+  else if(M.view==="sheets") renderSheets();
+  else                       renderSheet();
 }
 
 function renderGoods(){
@@ -4584,6 +4595,131 @@ function renderAsins(){
         <td class="dim">${d.rejected.map(esc).join(" &middot; ")}</td></tr>`).join("")+
       `</tbody></table>`
     : "";
+}
+
+/* Every generation that has been recorded, newest first. A run opens into
+   the sheets it produced, one card per client, each of which can be
+   downloaded again from the ledger. */
+function sheetRuns(){
+  const by={};
+  for(const r of M.ledger){
+    const g=(by[r.batch_id] ||= {id:r.batch_id, date:r.sheet_date, rows:[], clients:new Set(), value:0});
+    g.rows.push(r); g.clients.add(r.store_code); g.value += Number(r.total_price)||0;
+  }
+  return Object.values(by).sort((a,b)=>
+    (b.date||"").localeCompare(a.date||"") || (b.id||"").localeCompare(a.id||""));
+}
+function roiOf(rows){
+  const meta=new Map((M.all||[]).map(r=>[r.asin,r]));
+  let w=0, s=0;
+  for(const r of rows){
+    const m=meta.get(r.asin); if(!m) continue;
+    const v=Number(r.total_price)||0;
+    w+=v; s+=v*(m.roi||0);
+  }
+  return w ? s/w : 0;
+}
+const longDate=(d)=>{
+  if(!d) return "";
+  const x=new Date(d+"T00:00:00");
+  return isNaN(x) ? d : x.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+};
+
+function renderSheets(){
+  const head=el("sheets-head"), body=el("sheets-body");
+  const runs=sheetRuns();
+
+  if(M.openRun){
+    const run=runs.find(r=>r.id===M.openRun);
+    if(!run){ M.openRun=null; return renderSheets(); }
+    const byClient={};
+    for(const r of run.rows) (byClient[r.store_code] ||= []).push(r);
+    const codes=Object.keys(byClient).sort((a,b)=>
+      byClient[b].reduce((s,x)=>s+(+x.total_price||0),0) -
+      byClient[a].reduce((s,x)=>s+(+x.total_price||0),0));
+
+    head.innerHTML=
+      '<div class="sh-head"><button class="ung-tool" id="sh-back" type="button">&larr; All runs</button>'+
+      '<h3>'+longDate(run.date)+'</h3>'+
+      '<span class="sh-sub">'+codes.length+' client'+(codes.length===1?'':'s')+' \u00b7 '+
+        run.rows.length.toLocaleString()+' items \u00b7 '+cash0(run.value)+
+        ' \u00b7 run '+esc(run.id)+'</span></div>';
+    el("sh-back").onclick=()=>{ M.openRun=null; renderSheets(); };
+
+    body.className="sh-grid";
+    body.innerHTML=codes.map(c=>{
+      const rows=byClient[c];
+      const val=rows.reduce((s,x)=>s+(+x.total_price||0),0);
+      const roi=roiOf(rows);
+      const left=remainingFor(c);
+      return '<article class="sh-card"><div class="sh-bar"></div><div class="sh-in">'+
+        '<div class="sh-top"><div><b>'+esc(c)+'</b><span>'+longDate(run.date)+'</span></div>'+
+        '<span class="sh-tag">Amazon</span></div>'+
+        '<div class="sh-stats">'+
+          '<div><i>ITEMS</i><b>'+rows.length.toLocaleString()+'</b></div>'+
+          '<div><i>VALUE</i><b>'+cash0(val)+'</b></div>'+
+          '<div class="roi"><i>ROI</i><b>'+(roi*100).toFixed(1)+'%</b></div>'+
+        '</div>'+
+        '<div class="sh-foot"><span>'+(left===null?'no budget on record':cash0(left)+' left this quarter')+'</span>'+
+        '<button class="ung-tool" data-sh-dl="'+esc(c)+'">Download</button></div>'+
+      '</div></article>';
+    }).join("");
+
+    body.onclick=async (ev)=>{
+      const b=ev.target.closest("button[data-sh-dl]"); if(!b) return;
+      const code=b.dataset.shDl;
+      b.disabled=true; const was=b.textContent; b.textContent="Building\u2026";
+      try{ await rebuildSheet(run, code); }
+      catch(e){ note("Could not rebuild that sheet: "+(e.message||e), true); }
+      finally{ b.disabled=false; b.textContent=was; }
+    };
+    return;
+  }
+
+  head.innerHTML='<div class="sh-head"><h3>Previous offer sheets</h3>'+
+    '<span class="sh-sub">'+runs.length+' run'+(runs.length===1?'':'s')+' recorded</span></div>';
+  body.className="sh-grid";
+  body.innerHTML = runs.length
+    ? runs.map(run=>{
+        const roi=roiOf(run.rows);
+        return '<article class="sh-card open" data-sh-run="'+esc(run.id)+'"><div class="sh-bar"></div><div class="sh-in">'+
+          '<div class="sh-top"><div><b>'+longDate(run.date)+'</b><span>'+
+            run.clients.size+' client'+(run.clients.size===1?'':'s')+'</span></div>'+
+          '<span class="sh-tag">Amazon</span></div>'+
+          '<div class="sh-stats">'+
+            '<div><i>ITEMS</i><b>'+run.rows.length.toLocaleString()+'</b></div>'+
+            '<div><i>VALUE</i><b>'+cash0(run.value)+'</b></div>'+
+            '<div class="roi"><i>ROI</i><b>'+(roi*100).toFixed(1)+'%</b></div>'+
+          '</div>'+
+          '<div class="sh-foot"><span>run '+esc(run.id)+'</span><span class="sh-go">Open &rarr;</span></div>'+
+        '</div></article>';
+      }).join("")
+    : '<div class="mos-empty" style="padding:26px">No offer sheets yet. Generate one on the Manual offer sheet tab and it will appear here.</div>';
+
+  body.onclick=(ev)=>{
+    const c=ev.target.closest("article[data-sh-run]"); if(!c) return;
+    M.openRun=c.dataset.shRun; renderSheets();
+  };
+}
+
+/* Rebuilt from the ledger, with the product detail read back out of the ASIN
+   list, so a sheet can be handed over again months later. */
+async function rebuildSheet(run, code){
+  const meta=new Map((M.all||[]).map(r=>[r.asin,r]));
+  const rows=run.rows.filter(r=>r.store_code===code)
+    .sort((a,b)=>String(a.tracking_code).localeCompare(String(b.tracking_code),undefined,{numeric:true}));
+  const items=rows.map(r=>{
+    const m=meta.get(r.asin)||{};
+    return {asin:r.asin, total:Number(r.total_price)||0, unitCost:Number(r.unit_cost)||0,
+            qty:r.qty||0, upc:m.upc||"", status:m.status||"", notes:m.notes||"",
+            avg90:m.avg90||0, bundle:m.bundle||1, ppu:m.ppu||0, roi:m.roi||0,
+            p30:m.p30||0, brand:r.brand||m.brand||"", dist:r.distributor||m.dist||""};
+  });
+  const first=rows.length ? String(rows[0].tracking_code||"") : "";
+  const n=parseInt((first.split("_")[1]||"1"),10);
+  const wb=new ExcelJS.Workbook();
+  fillSheet(wb.addWorksheet(code.slice(0,31)), code, items, run.date, (isFinite(n)?n:1)-1);
+  await saveBook(wb, code+"_Offer_Sheet_"+run.date+".xlsx");
 }
 
 function renderSheet(){
@@ -4847,8 +4983,6 @@ function init(){
       var b=ev.target.closest("button[data-ungpick]"); if(!b) return;
       var a=b.dataset.ungpick;
       if(a==="close"){ box.hidden=true; return; }
-      if(a==="grid"){ _ungExtractRows(p[1]); return; }
-      if(a==="one"){ ungExtractListingOne(); return; }
       if(a==="go"){ if(p[1]==="ungate") ungExtractListing(); else _ungExtractRows(p[1]); return; }
       if(a==="work"){
         /* Everyone who still has something outstanding, nobody who does not. */
