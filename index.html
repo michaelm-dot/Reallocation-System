@@ -3889,6 +3889,7 @@ function _ungEdit(td){
    column per client: the ASINs that client still has to check, busiest client
    on the left. Clients with nothing left drop out. */
 function _ungPaintList(){
+  ungWire();
   var q=((el('ung-search')&&el('ung-search').value)||'').trim().toUpperCase();
   var cols=[];
   ungCols().forEach(function(c){
@@ -3945,6 +3946,24 @@ function renderDb(){
   _ungSeed().then(function(){ if(M.view==='db') _ungPaint2("db"); });
   _ungPaint2("db");
 }
+/* Wired once, for both tabs and both layouts. Clicks are caught on the
+   container so redrawn cells keep working. */
+function ungWire(){
+  if(window._ungWired) return;
+  window._ungWired=1;
+  var s1=el('ung-search'), s2=el('db-search'), only=el('ung-onlyres');
+  if(s1) s1.addEventListener('input', function(){ clearTimeout(window._ungT); window._ungT=setTimeout(renderUngate,180); });
+  if(s2) s2.addEventListener('input', function(){ clearTimeout(window._dbT); window._dbT=setTimeout(renderDb,180); });
+  if(only) only.addEventListener('change', renderUngate);
+  ['ung-grid','db-grid'].forEach(function(id){
+    var g=el(id); if(!g) return;
+    g.addEventListener('click', function(ev){
+      var td=ev.target.closest && ev.target.closest('td.ucell,td.wcell');
+      if(td && !td.classList.contains('empty') && td.hasAttribute('data-a')) _ungEdit(td);
+    });
+  });
+}
+
 function _ungPaintGrid(){ _ungPaint2("ungate"); }
 function ungTally(open){
   var clients=ungCols(), rows=ungRowsFor(open);
@@ -3991,20 +4010,7 @@ function _ungPaint2(which){
   ungRowsFor(open).forEach(function(r){ if(r.asin&&!seen[r.asin]){seen[r.asin]=1;rows.push(r.asin);} });
   var rowNum=Object.create(null); for(var r=0;r<rows.length;r++) rowNum[rows[r]]=r+1;
   var sInp=el(open?'ung-search':'db-search'), onlyInp=open?el('ung-onlyres'):null;
-  if(!window._ungWired){ window._ungWired=1;
-    var s1=el('ung-search'), s2=el('db-search');
-    if(s1) s1.addEventListener('input', function(){ clearTimeout(window._ungT); window._ungT=setTimeout(renderUngate,180); });
-    if(s2) s2.addEventListener('input', function(){ clearTimeout(window._dbT); window._dbT=setTimeout(renderDb,180); });
-    if(onlyInp) onlyInp.addEventListener('change', renderUngate);
-    ['ung-grid','db-grid'].forEach(function(id){
-      var g=el(id);
-      if(!g) return;
-      g.addEventListener('click', function(ev){
-        var td=ev.target.closest && ev.target.closest('td.ucell,td.wcell');
-        if(td && !td.classList.contains('empty')) _ungEdit(td);
-      });
-    });
-  }
+  ungWire();
   var q=((sInp&&sInp.value)||'').trim().toUpperCase();
   var onlyRes=onlyInp&&onlyInp.checked, resSet=onlyRes?_ungResSet():null;
   var shown=rows.filter(function(a){
