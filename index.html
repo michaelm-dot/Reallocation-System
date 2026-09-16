@@ -657,7 +657,8 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
   <!-- ===== MANUAL OFFER SHEET ===== -->
   <section id="mos-goods" class="ungwrap">
     <div class="ung-bar">
-      <button class="ung-tool" id="goods-upload" type="button">Upload the Asins tab</button>
+      <button class="ung-tool go" id="goods-sync" type="button">Refresh from Ungate List 3.0</button>
+      <button class="ung-tool" id="goods-upload" type="button">Upload a CSV instead</button>
       <label class="ung-only"><input type="checkbox" id="goods-retired"> Show retired too</label>
       <input type="file" id="mos-asin-drop-input" accept=".csv,.tsv,.xlsx,.xls,text/csv" hidden>
       <span id="goods-count" class="ung-count"></span>
@@ -4693,6 +4694,31 @@ function init(){
       catch(e){ note(e.message, true); }
     });
   });
+  /* Reads the sheet straight from Google through the Edge Function. The key
+     lives in Supabase, never here, so nothing sensitive is in this page. */
+  if(el("goods-sync")) el("goods-sync").onclick=async function(){
+    var b=el("goods-sync"), was=b.textContent;
+    b.disabled=true; b.textContent="Reading the sheet\u2026";
+    try{
+      var {data,error}=await sb.functions.invoke("sync-asins",{body:{}});
+      if(error){
+        var detail="";
+        try{ detail=(await error.context.json()).error; }catch(e){}
+        throw new Error(detail||error.message);
+      }
+      if(!data||!data.ok) throw new Error((data&&data.error)||"The sync did not finish.");
+      await loadAll();
+      renderMos();
+      note(data.on_the_list.toLocaleString()+" ASINs on the list"+
+        (data.added   ? " \u00b7 "+data.added+" new" : "")+
+        (data.retired ? " \u00b7 "+data.retired+" retired, their answers kept" : "")+
+        (data.revived ? " \u00b7 "+data.revived+" back" : "")+
+        (data.duplicates_collapsed ? " \u00b7 "+data.duplicates_collapsed+" duplicate rows collapsed" : ""));
+    }catch(e){
+      note("Could not read the sheet: "+(e.message||e), true);
+    }finally{ b.disabled=false; b.textContent=was; }
+  };
+
   var _gi=el("mos-asin-drop-input");
   if(_gi) _gi.onchange=function(e){
     var f=e.target.files[0]; if(!f) return;
