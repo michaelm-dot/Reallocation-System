@@ -428,7 +428,8 @@ body{padding-left:214px}
 .ungwrap .worklist thead th .wc{display:block;font:700 11px var(--mono);letter-spacing:.04em}
 .ungwrap .worklist thead th .wn{display:block;font:500 9.5px var(--sans);color:#8fa79d;margin-top:1px}
 .ungwrap .worklist td.wcell{font:500 11px var(--mono);padding:3px 12px;text-align:left;
-  white-space:nowrap;border-right:1px solid #f0f3f1;color:var(--ink);cursor:pointer}
+  white-space:nowrap;border-right:1px solid #f0f3f1;color:var(--ink);cursor:pointer;
+  background:#fff}
 .ungwrap .worklist td.wcell:hover{background:#eaf3ee;color:#12513a}
 .ung-menu{position:fixed;z-index:120;background:var(--panel);border:1px solid var(--rule);
   border-radius:8px;box-shadow:0 8px 24px rgba(18,26,23,.16);padding:4px;min-width:152px}
@@ -440,23 +441,29 @@ body{padding-left:214px}
 .ung-menu button.mungated:hover{background:#d7efe2;color:#12513a}
 .ungwrap .worklist td.wcell.picking{outline:2px solid var(--amazon);outline-offset:-2px;
   background:#eaf3ee;color:#12513a}
-.ungwrap .worklist td.wcell.wg{background:#fbecea;color:#9b2c20;font-weight:600}
-.ungwrap .worklist td.wcell.wu{background:#d7efe2;color:#12513a;font-weight:600}
-.ungwrap .worklist td.wcell.wp{background:#f8e9c6;color:#7a5c08}
-.ungwrap .worklist td.wcell.wb{background:transparent;color:var(--ink)}
+.ungwrap .worklist td.wcell.wp,
+.ungwrap .worklist td.wcell.wb{background:#fff;color:var(--ink)}
+.ungwrap .worklist td.wcell.wp:hover,
+.ungwrap .worklist td.wcell.wb:hover{background:#eaf3ee;color:#12513a}
 .ungwrap .worklist thead th.done .wc{color:#6f867c}
 .ungwrap .worklist thead th.done .wn{color:#5d7268;font-style:italic}
-.ungwrap .worklist td.wcell.empty{cursor:default;background:#fcfdfc}
-.ungwrap .worklist td.wcell.empty:hover{background:#fcfdfc}
-.ungwrap .worklist tbody tr:nth-child(even) td.wcell{background:#fbfcfb}
-.ungwrap .worklist tbody tr:nth-child(even) td.wcell:hover{background:#eaf3ee}
+.ungwrap .worklist td.wcell.empty{cursor:default;background:#fff}
+.ungwrap .worklist td.wcell.empty:hover{background:#fff}
+
 .ungwrap table.ungtbl.goods{font:500 11px var(--sans);width:100%}
-.ungwrap .goods td{text-align:left;padding:5px 10px;min-width:0}
-.ungwrap .goods td.gn{text-align:right;font-family:var(--mono);font-size:10.5px;white-space:nowrap}
+.ungwrap .goods td{text-align:left;padding:5px 10px;white-space:nowrap}
+.ungwrap .goods td.gn,.ungwrap .goods td.gm,.ungwrap .goods td.gp{
+  text-align:right;font-family:var(--mono);font-size:10.5px}
+.ungwrap .goods td.gk{font-family:var(--mono);font-size:10.5px}
 .ungwrap .goods td.gs{color:var(--ink2);font-size:10.5px}
-.ungwrap .goods td.gb{color:var(--ink2)}
-.ungwrap .goods thead th{text-align:left;padding:6px 10px}
-.ungwrap .goods thead th.gn{text-align:right}
+.ungwrap .goods td.gl a{color:var(--amazon);font-size:10.5px}
+.ungwrap .goods td.gasin{position:sticky;left:40px;background:#fff;z-index:1;
+  font-weight:600;border-right:1px solid var(--rule)}
+.ungwrap .goods tbody tr:nth-child(even) td.gasin{background:#fbfcfb}
+.ungwrap .goods thead th{text-align:left;padding:6px 10px;white-space:nowrap}
+.ungwrap .goods thead th.gn,.ungwrap .goods thead th.gm,.ungwrap .goods thead th.gp{text-align:right}
+.ungwrap .goods tr.retired td.gasin .gone{display:block;font:500 8.5px var(--sans);
+  color:#a08a5c;text-transform:uppercase;letter-spacing:.08em}
 .ungwrap .goods tbody tr:nth-child(even) td{background:#fbfcfb}
 .ungwrap .ungtbl tr.retired th.cor{color:var(--ink3)}
 .ungwrap .ungtbl tr.retired th.cor .gone{display:block;font:500 8.5px var(--sans);
@@ -649,26 +656,15 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
 
   <!-- ===== MANUAL OFFER SHEET ===== -->
   <section id="mos-goods" class="ungwrap">
-    <h2>Good to Order ASINs</h2>
-    <p class="lede">The Asins tab of Ungate List 3.0, dropped in here. Ungate Checking follows this list: an ASIN you add turns up there to be checked, and one you drop leaves it. Nothing is thrown away, so an ASIN taken off the list keeps its answers in the ASIN database and comes straight back if you add it again.</p>
-
-    <div id="goods-tally" class="ung-tally"></div>
-
     <div class="ung-bar">
-      <input id="goods-search" placeholder="Filter ASIN or brand&hellip;" autocomplete="off">
-      <label class="ung-only"><input type="checkbox" id="goods-retired"> Show retired too</label>
       <button class="ung-tool" id="goods-upload" type="button">Upload the Asins tab</button>
+      <label class="ung-only"><input type="checkbox" id="goods-retired"> Show retired too</label>
       <input type="file" id="mos-asin-drop-input" accept=".csv,.tsv,.xlsx,.xls,text/csv" hidden>
       <span id="goods-count" class="ung-count"></span>
     </div>
 
-    <div class="mos-drop" id="mos-asin-drop" style="margin-bottom:14px">
-      <div><b>Drop the Asins CSV here</b>, or click to choose a file</div>
-      <small>In Ungate List 3.0: File &rarr; Download &rarr; Comma-separated values, with the Asins tab open. Duplicate ASINs collapse to the row with the lowest unit cost; on a tie the order is KEHE DC27, DC15, DC18, DC19, DC01, then any other distributor consistently.</small>
-    </div>
-
     <div class="ung-grid" id="goods-grid"></div>
-    <div class="mos-scroll" style="max-height:240px;margin-top:16px" id="mos-dupes"></div>
+    <div class="mos-scroll" style="max-height:240px;margin-top:16px" id="mos-dupes" hidden></div>
     <div class="mos-stats" id="mos-asin-stats" hidden></div>
   </section>
 
@@ -3221,6 +3217,19 @@ function parsePct(v){
   return t.includes("%") ? n/100 : n;
 }
 /* Reproducible stand-in for random, so a re-run on unchanged data agrees. */
+/* The spreadsheet reader turns 08/27/2026 into the serial number 46261, so
+   put dates back into something a person can read. */
+function asDate(v){
+  if(v===null||v===undefined||v==="") return "";
+  var s=String(v).trim();
+  var n=Number(s);
+  if(!/^\d+(\.\d+)?$/.test(s) || n<20000 || n>80000) return s;   // already a date string
+  var d=new Date(Date.UTC(1899,11,30) + n*86400000);
+  if(isNaN(d)) return s;
+  var p=function(x){ return (x<10?"0":"")+x; };
+  return d.getUTCFullYear()+"-"+p(d.getUTCMonth()+1)+"-"+p(d.getUTCDate());
+}
+
 function hash01(str){
   let h=2166136261>>>0;
   for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619)>>>0; }
@@ -3266,8 +3275,10 @@ async function loadAll(){
     asin:r.asin, n:r.pos, upc:r.upc||"", status:r.status||"", notes:r.notes||"",
     qty:r.qty||0, unitCost:Number(r.unit_cost)||0, avg90:Number(r.avg90)||0,
     bundle:r.bundle||1, ppu:Number(r.ppu)||0, roi:Number(r.roi)||0,
-    total:Number(r.total)||0, p30:Number(r.p30)||0, brand:r.brand||"", dist:r.dist||"",
-    active:r.active!==false,
+    be:Number(r.break_even)||0, total:Number(r.total)||0, p30:Number(r.p30)||0,
+    link:r.amazon_link||"", brand:r.brand||"", dist:r.dist||"",
+    reviewed:r.date_last_reviewed||"", prBy:r.pr_by||"", prDate:r.pr_date||"",
+    sales30:r.sales_30d||0, active:r.active!==false,
   }));
   M.pool=M.all.filter(r=>r.active);
   M.stores=clients.map(c=>c.store_code);
@@ -3323,8 +3334,10 @@ async function saveClients(){
 const COLS={
   "asin":"asin","upc":"upc","status":"status","notes":"notes",
   "recommended sellable qty":"qty","unit cost":"unitCost","90days average":"avg90",
-  "bundle size":"bundle","profit per unit":"ppu","roi %":"roi",
-  "total price":"total","30d profit":"p30","brand":"brand","distributor":"dist"
+  "bundle size":"bundle","profit per unit":"ppu","roi %":"roi","break even":"be",
+  "total price":"total","30d profit":"p30","amazon link":"link","brand":"brand",
+  "distributor":"dist","date last reviewed":"reviewed","pr by:":"prBy","pr by":"prBy",
+  "pr date":"prDate","30d sales":"sales30"
 };
 function dedupe(raw){
   const groups=new Map(), order=[];
@@ -3367,8 +3380,12 @@ function parseAsinCsv(text){
       status:String(o.status??"").trim(), notes:String(o.notes??"").trim(),
       qty:Math.round(parseMoney(o.qty)), unitCost:parseMoney(o.unitCost),
       avg90:parseMoney(o.avg90), bundle:Math.max(1,Math.round(parseMoney(o.bundle))||1),
-      ppu:parseMoney(o.ppu), roi:parsePct(o.roi), total:parseMoney(o.total),
-      p30:parseMoney(o.p30), brand:String(o.brand??"").trim(), dist:String(o.dist??"").trim(),
+      ppu:parseMoney(o.ppu), roi:parsePct(o.roi), be:parseMoney(o.be),
+      total:parseMoney(o.total), p30:parseMoney(o.p30),
+      link:String(o.link??"").trim(), brand:String(o.brand??"").trim(),
+      dist:String(o.dist??"").trim(), reviewed:asDate(o.reviewed),
+      prBy:String(o.prBy??"").trim(), prDate:asDate(o.prDate),
+      sales30:Math.round(parseMoney(o.sales30)),
     };
   }).filter(r=>r.asin);
 }
@@ -3389,7 +3406,9 @@ async function replaceAsins(raw){
     await writeChunks("mos_asins", pool.map(r=>({
       asin:r.asin, pos:r.n, upc:r.upc, status:r.status, notes:r.notes, qty:r.qty,
       unit_cost:r.unitCost, avg90:r.avg90, bundle:r.bundle, ppu:r.ppu, roi:r.roi,
-      total:r.total, p30:r.p30, brand:r.brand, dist:r.dist, active:true,
+      break_even:r.be, total:r.total, p30:r.p30, amazon_link:r.link,
+      brand:r.brand, dist:r.dist, date_last_reviewed:r.reviewed,
+      pr_by:r.prBy, pr_date:r.prDate, sales_30d:r.sales30, active:true,
     })), "asin");
     for(let i=0;i<retired.length;i+=200){
       const {error}=await sb.from("mos_asins").update({active:false})
@@ -3972,8 +3991,8 @@ function _ungPaintList(){
       var a=cols[j].list[i];
       if(a){
         var st=M.pending.has(key(a,cols[j].code))?'pending':'blank';
-        tds += '<td class="wcell'+(st==='pending'?' wp':'')+'" data-a="'+a+
-               '" data-c="'+cols[j].code+'" data-s="'+st+'">'+a+'</td>';
+        tds += '<td class="wcell" data-a="'+a+'" data-c="'+cols[j].code+
+               '" data-s="'+st+'">'+a+'</td>';
       } else tds += '<td class="wcell empty"></td>';
     }
     rows.push('<tr>'+tds+'</tr>');
@@ -4406,53 +4425,52 @@ function renderMos(){
 
 function renderGoods(){
   var showGone = el("goods-retired") && el("goods-retired").checked;
-  var q=((el("goods-search")&&el("goods-search").value)||"").trim().toUpperCase();
-  var rows=(M.all||[]).filter(function(r){
-    if(!showGone && !r.active) return false;
-    if(q && r.asin.toUpperCase().indexOf(q)<0 && (r.brand||"").toUpperCase().indexOf(q)<0) return false;
-    return true;
-  });
+  var rows=(M.all||[]).filter(function(r){ return showGone || r.active; });
 
-  var live=(M.all||[]).filter(function(r){return r.active;});
-  var gone=(M.all||[]).length - live.length;
-  var value=live.reduce(function(s,r){return s+(r.total||0);},0);
-  var profitable=live.filter(function(r){
-    return /profitable/i.test(r.status||"") && !/not\s*profitable/i.test(r.status||"");}).length;
-  var tally=el("goods-tally");
-  if(tally) tally.innerHTML=
-    '<div class="cell"><b>'+live.length.toLocaleString()+'</b><span>on the list</span></div>'+
-    '<div class="cell u"><b>'+profitable.toLocaleString()+'</b><span>marked profitable</span></div>'+
-    '<div class="cell"><b>'+cash0(value)+'</b><span>catalogue value</span></div>'+
-    '<div class="cell b"><b>'+gone.toLocaleString()+'</b><span>retired</span></div>';
-
+  /* The Asins tab, column for column and in its own order. */
+  var C=[
+    ['asin','ASIN','k'], ['upc','UPC','k'], ['status','Status','s'], ['notes','Notes','s'],
+    ['qty','Recommended Sellable Qty','n'], ['unitCost','Unit Cost','m'],
+    ['avg90','90Days Average','m'], ['bundle','Bundle Size','n'],
+    ['ppu','Profit Per Unit','m'], ['roi','ROI %','p'], ['be','Break Even','m'],
+    ['total','Total Price','m'], ['p30','30D Profit','m'], ['link','Amazon Link','l'],
+    ['brand','Brand','s'], ['dist','Distributor','s'],
+    ['reviewed','Date Last Reviewed','s'], ['prBy','PR BY:','s'],
+    ['prDate','PR DATE','s'], ['sales30','30d Sales','n']
+  ];
   var MAXR=2000, lim=Math.min(rows.length,MAXR);
-  var head='<tr><th class="num">#</th><th class="cor">ASIN</th><th class="gb">Brand</th>'+
-    '<th class="gs">Status</th><th class="gs">Notes</th><th class="gn">Qty</th>'+
-    '<th class="gn">Unit cost</th><th class="gn">Line total</th><th class="gn">ROI</th>'+
-    '<th class="gb">Distributor</th></tr>';
+  var head='<tr><th class="num">#</th>'+C.map(function(c){
+    return '<th class="g'+c[2]+'">'+esc(c[1])+'</th>'; }).join('')+'</tr>';
+
   var parts=[];
   for(var i=0;i<lim;i++){
-    var r=rows[i];
-    parts.push('<tr'+(r.active?'':' class="retired"')+'>'+
-      '<th class="num">'+r.n+'</th>'+
-      '<th class="cor">'+r.asin+(r.active?'':'<span class="gone">retired</span>')+'</th>'+
-      '<td class="gb">'+esc(r.brand||'')+'</td>'+
-      '<td class="gs">'+esc(r.status||'')+'</td>'+
-      '<td class="gs">'+esc(r.notes||'')+'</td>'+
-      '<td class="gn">'+(r.qty||0).toLocaleString()+'</td>'+
-      '<td class="gn">'+cash(r.unitCost)+'</td>'+
-      '<td class="gn">'+cash(r.total)+'</td>'+
-      '<td class="gn">'+((r.roi||0)*100).toFixed(1)+'%</td>'+
-      '<td class="gb">'+esc(r.dist||'')+'</td></tr>');
+    var r=rows[i], tds='';
+    for(var j=0;j<C.length;j++){
+      var f=C[j][0], kind=C[j][2], v=r[f];
+      var out;
+      if(kind==='m')      out=cash(v);
+      else if(kind==='p') out=((v||0)*100).toFixed(2)+'%';
+      else if(kind==='n') out=(v||0).toLocaleString();
+      else if(kind==='l') out=v ? '<a href="'+esc(v)+'" target="_blank" rel="noopener">open</a>' : '';
+      else                out=esc(v||'');
+      tds += '<td class="g'+kind+(f==='asin'?' gasin':'')+'">'+out+
+             (f==='asin'&&!r.active?'<span class="gone">retired</span>':'')+'</td>';
+    }
+    parts.push('<tr'+(r.active?'':' class="retired"')+'><th class="num">'+r.n+'</th>'+tds+'</tr>');
   }
+
   var g=el("goods-grid");
   if(g) g.innerHTML = rows.length
     ? '<table class="ungtbl goods"><thead>'+head+'</thead><tbody>'+parts.join('')+'</tbody></table>'
-    : '<div class="mos-empty" style="padding:22px">'+
-      ((M.all&&M.all.length) ? 'Nothing matches that filter.'
-       : 'No ASINs yet. Drop the Asins CSV below and everyone on the team gets it.')+'</div>';
+    : '<div class="mos-empty" style="padding:22px">No ASINs yet. Press Upload the Asins tab.</div>';
+
+  var live=(M.all||[]).filter(function(r){ return r.active; }).length;
   var c=el("goods-count");
-  if(c) c.textContent = rows.length ? 'showing '+lim.toLocaleString()+' of '+rows.length.toLocaleString() : '';
+  if(c) c.textContent = rows.length
+    ? 'showing '+lim.toLocaleString()+' of '+rows.length.toLocaleString()+
+      ' \u00b7 '+live.toLocaleString()+' on the list'+
+      ((M.all||[]).length-live ? ' \u00b7 '+((M.all||[]).length-live)+' retired' : '')
+    : '';
   renderAsins();
 }
 
@@ -4623,6 +4641,7 @@ function readFiles(files, fn){
 }
 function dropZone(id, onFiles){
   const z=el(id), input=el(id+"-input");
+  if(!z || !input) return;                 /* the zone may not be on the page */
   z.onclick=()=>input.click();
   input.onchange=e=>onFiles([...e.target.files]);
   ["dragenter","dragover"].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.add("over");}));
@@ -4674,9 +4693,16 @@ function init(){
       catch(e){ note(e.message, true); }
     });
   });
-  if(el("goods-upload")) el("goods-upload").onclick=function(){ el("mos-asin-drop-input").click(); };
-  if(el("goods-search")) el("goods-search").addEventListener("input", function(){
-    clearTimeout(window._goodsT); window._goodsT=setTimeout(renderGoods,180); });
+  var _gi=el("mos-asin-drop-input");
+  if(_gi) _gi.onchange=function(e){
+    var f=e.target.files[0]; if(!f) return;
+    f.text().then(function(txt){
+      try{ replaceAsins(parseAsinCsv(txt)); }
+      catch(err){ note(err.message, true); }
+    });
+    e.target.value="";
+  };
+  if(el("goods-upload")) el("goods-upload").onclick=function(){ _gi && _gi.click(); };
   if(el("goods-retired")) el("goods-retired").addEventListener("change", renderGoods);
 
   if(el("mos-batch-drop")) dropZone("mos-batch-drop", files=>{   /* only if the tab still has one */
