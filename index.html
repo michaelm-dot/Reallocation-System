@@ -701,8 +701,6 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
     </div>
 
     <div class="ung-grid" id="goods-grid"></div>
-    <div class="mos-scroll" style="max-height:240px;margin-top:16px" id="mos-dupes" hidden></div>
-    <div class="mos-stats" id="mos-asin-stats" hidden></div>
   </section>
 
   <section id="mos-ungate" class="ungwrap" hidden>
@@ -4577,29 +4575,8 @@ function renderGoods(){
       ' \u00b7 '+live.toLocaleString()+' on the list'+
       ((M.all||[]).length-live ? ' \u00b7 '+((M.all||[]).length-live)+' retired' : '')
     : '';
-  renderAsins();
 }
 
-function renderAsins(){
-  if(!el("mos-asin-stats")) return;
-  el("mos-asin-stats").innerHTML = M.pool.length
-    ? `<div class="mos-stat"><b>${M.pool.length.toLocaleString()}</b><span>unique ASINs</span></div>
-       <div class="mos-stat"><b>${M.dupes.length.toLocaleString()}</b><span>ASINs with duplicates</span></div>
-       <div class="mos-stat"><b>${cash0(M.pool.reduce((s,r)=>s+r.total,0))}</b><span>catalogue value</span></div>`
-    : `<div class="mos-empty">No ASINs yet. Drop the Asins CSV below and everyone on the team gets it.</div>`;
-  el("mos-dupes").innerHTML = M.dupes.length
-    ? `<table class="mos-table"><thead><tr><th>ASIN</th><th>Kept</th>
-       <th class="r">Unit cost</th><th class="r">Line total</th><th>Rejected</th></tr></thead><tbody>`+
-      M.dupes.slice(0,300).map(d=>`<tr><td class="mono">${esc(d.asin)}</td><td>${esc(d.dist)}</td>
-        <td class="r">${cash(d.cost)}</td><td class="r">${cash(d.total)}</td>
-        <td class="dim">${d.rejected.map(esc).join(" &middot; ")}</td></tr>`).join("")+
-      `</tbody></table>`
-    : "";
-}
-
-/* Every generation that has been recorded, newest first. A run opens into
-   the sheets it produced, one card per client, each of which can be
-   downloaded again from the ledger. */
 function sheetRuns(){
   const by={};
   for(const r of M.ledger){
