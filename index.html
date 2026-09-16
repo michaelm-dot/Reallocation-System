@@ -430,6 +430,16 @@ body{padding-left:214px}
 .ungwrap .worklist td.wcell{font:500 11px var(--mono);padding:3px 12px;text-align:left;
   white-space:nowrap;border-right:1px solid #f0f3f1;color:var(--ink);cursor:pointer}
 .ungwrap .worklist td.wcell:hover{background:#eaf3ee;color:#12513a}
+.ung-menu{position:fixed;z-index:120;background:var(--panel);border:1px solid var(--rule);
+  border-radius:8px;box-shadow:0 8px 24px rgba(18,26,23,.16);padding:4px;min-width:152px}
+.ung-menu button{display:block;width:100%;text-align:left;border:0;background:none;cursor:pointer;
+  padding:7px 10px;border-radius:5px;font:500 12.5px var(--sans);color:var(--ink2)}
+.ung-menu button:hover{background:var(--wash-dom);color:var(--ink)}
+.ung-menu button.on{font-weight:700;color:var(--ink)}
+.ung-menu button.mgated:hover{background:#fbecea;color:#9b2c20}
+.ung-menu button.mungated:hover{background:#d7efe2;color:#12513a}
+.ungwrap .worklist td.wcell.picking{outline:2px solid var(--amazon);outline-offset:-2px;
+  background:#eaf3ee;color:#12513a}
 .ungwrap .worklist td.wcell.wg{background:#fbecea;color:#9b2c20;font-weight:600}
 .ungwrap .worklist td.wcell.wu{background:#d7efe2;color:#12513a;font-weight:600}
 .ungwrap .worklist td.wcell.wp{background:#f8e9c6;color:#7a5c08}
@@ -663,18 +673,13 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
   </section>
 
   <section id="mos-ungate" class="ungwrap" hidden>
-    <h2>Ungate Checking</h2>
-    <p class="lede">ASINs down the side, the manual-offer-sheet clients across the top, and each client's ungating result in the cell &mdash; same shape as the Ungate Checking sheet. Rows are the unique ASINs plus any extra ASINs from the sheet.</p>
     <div class="ung-bar">
-      <input id="ung-search" placeholder="Filter ASIN&hellip;" autocomplete="off">
-      <label class="ung-only"><input type="checkbox" id="ung-onlyres"> With Ungated/Pending only</label>
       <button class="ung-tool" id="ung-import" type="button">Import</button>
       <button class="ung-tool" id="ung-add" type="button">Add client</button>
       <button class="ung-tool" id="ung-extract" type="button">Extract&hellip;</button>
       <input type="file" id="ung-import-input" accept=".csv,.tsv,.xlsx,.xls,text/csv" hidden>
       <span id="ung-count" class="ung-count"></span>
     </div>
-    <div id="ung-tally" class="ung-tally"></div>
     <div id="ung-picker" class="ung-picker" hidden></div>
     <div id="ung-grid" class="ung-grid"></div>
   </section>
@@ -3858,7 +3863,49 @@ function _ungPaint(td,state){
   else if(state==='pending'){ td.classList.add('p'); td.textContent='Pending'; }
   else { td.classList.add('g'); td.textContent='Gated'; }
 }
+/* On the worklist the cell is the ASIN, so replacing it with a dropdown made
+   it vanish the moment you clicked. The menu opens beside it instead, and
+   closing without choosing leaves everything exactly as it was. */
+function _ungMenu(td){
+  var open=document.querySelector('.ung-menu');
+  if(open){ open.remove(); document.querySelectorAll('td.wcell.picking').forEach(function(x){ x.classList.remove('picking'); }); }
+  td.classList.add('picking');
+
+  var cur=td.getAttribute('data-s')||'blank';
+  var m=document.createElement('div');
+  m.className='ung-menu';
+  m.innerHTML=[['gated','Gated'],['ungated','Ungated'],['pending','Pending'],['blank','\u2014 not checked']]
+    .map(function(o){ return '<button type="button" data-v="'+o[0]+'" class="'+
+      (o[0]===cur?'on ':'')+'m'+o[0]+'">'+o[1]+'</button>'; }).join('');
+  document.body.appendChild(m);
+  var r=td.getBoundingClientRect();
+  m.style.left=Math.max(8, Math.min(r.left, window.innerWidth-m.offsetWidth-12))+'px';
+  m.style.top =(r.bottom+4+m.offsetHeight > window.innerHeight ? r.top-m.offsetHeight-4 : r.bottom+4)+'px';
+
+  function shut(){
+    m.remove(); td.classList.remove('picking');
+    document.removeEventListener('mousedown',away,true);
+    document.removeEventListener('keydown',esc,true);
+  }
+  function away(ev){ if(!m.contains(ev.target)) shut(); }
+  function esc(ev){ if(ev.key==='Escape') shut(); }
+  setTimeout(function(){
+    document.addEventListener('mousedown',away,true);
+    document.addEventListener('keydown',esc,true);
+  },0);
+  m.addEventListener('click', function(ev){
+    var b=ev.target.closest('button[data-v]'); if(!b) return;
+    var ns=b.dataset.v;
+    shut();
+    if(ns===cur) return;
+    var a=td.getAttribute('data-a'), c=td.getAttribute('data-c');
+    _ungApply(a,c,ns,td);
+    _ungPaint(td,ns);
+  });
+}
+
 function _ungEdit(td){
+  if(td.classList.contains('wcell')) return _ungMenu(td);
   if(td._editing) return; td._editing=1;
   var a=td.getAttribute('data-a'), c=td.getAttribute('data-c'), cur=td.getAttribute('data-s')||'gated';
   var sel=document.createElement('select'); sel.className='ung-pick';
