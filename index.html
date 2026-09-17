@@ -348,6 +348,7 @@
     <button data-mv="goods" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Good to Order ASINs</button>
     <button data-mv="ungate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Ungate Checking</button>
     <button data-mv="db"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>ASIN database</button>
+    <button data-mv="clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clients</button>
     <button data-mv="sheets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>Offer sheets</button>
     <button data-mv="sheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Manual offer sheet</button>
   </nav>
@@ -432,6 +433,17 @@ body{padding-left:214px}
   white-space:nowrap;border-right:1px solid #f0f3f1;color:var(--ink);cursor:pointer;
   background:#fff}
 .ungwrap .worklist td.wcell:hover{background:#eaf3ee;color:#12513a}
+.ungwrap table.ungtbl.clients{width:100%;font:500 11.5px var(--mono)}
+.ungwrap .clients thead th{text-align:right;padding:7px 10px;white-space:nowrap;cursor:pointer;
+  font:600 10px var(--sans);letter-spacing:.04em}
+.ungwrap .clients thead th:hover{color:#fff}
+.ungwrap .clients thead th:nth-child(2){text-align:left}
+.ungwrap .clients td{text-align:right;padding:5px 10px;white-space:nowrap;
+  border-bottom:1px solid var(--rule);color:var(--ink2)}
+.ungwrap .clients td.c{text-align:left;font-weight:700;color:var(--ink)}
+.ungwrap .clients td.dim{color:var(--ink3)}
+.ungwrap .clients tbody tr{cursor:pointer}
+.ungwrap .clients tbody tr:hover td{background:var(--wash-dom)}
 .sh-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 16px}
 .sh-head h3{margin:0;font:600 17px var(--disp);letter-spacing:-.01em}
 .sh-sub{font:500 12px var(--mono);color:var(--ink3)}
@@ -727,6 +739,17 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
     
     <div id="db-picker" class="ung-picker" hidden></div>
     <div id="db-grid" class="ung-grid"></div>
+  </section>
+
+  <section id="mos-clients-rpt" class="ungwrap" hidden>
+    <div id="cl-tally" class="ung-tally"></div>
+    <div class="ung-bar">
+      <input id="cl-search" placeholder="Find a client&hellip;" autocomplete="false">
+      <label class="ung-only"><input type="checkbox" id="cl-served"> Only those already served</label>
+      <span id="cl-count" class="ung-count"></span>
+    </div>
+    <div id="cl-open"></div>
+    <div class="ung-grid" id="cl-grid"></div>
   </section>
 
   <section id="mos-sheets" class="ungwrap" hidden>
@@ -4520,10 +4543,12 @@ function renderMos(){
   el("mos-db").hidden     = M.view!=="db";
   el("mos-goods").hidden  = M.view!=="goods";
   el("mos-sheets").hidden = M.view!=="sheets";
+  el("mos-clients-rpt").hidden = M.view!=="clients";
   if(M.view==="ungate")     renderUngate();
   else if(M.view==="db")    renderDb();
   else if(M.view==="goods")  renderGoods();
   else if(M.view==="sheets") renderSheets();
+  else if(M.view==="clients") renderClientReport();
   else                       renderSheet();
 }
 
@@ -4575,6 +4600,132 @@ function renderGoods(){
       ' \u00b7 '+live.toLocaleString()+' on the list'+
       ((M.all||[]).length-live ? ' \u00b7 '+((M.all||[]).length-live)+' retired' : '')
     : '';
+}
+
+/* One row per client: what they have had, what they still have room for, and
+   how much of their gating is still unanswered. */
+function clientReport(){
+  const cap=(M.cfg&&M.cfg.maxClients)||3;
+  const rows=M.stores.map((code,i)=>{
+    const mine=M.ledger.filter(r=>r.store_code===code);
+    const runs=new Set(mine.map(r=>r.batch_id));
+    const value=mine.reduce((s,r)=>s+(Number(r.total_price)||0),0);
+    const live=mine.filter(slotLive);
+    const dates=mine.map(r=>r.sheet_date).filter(Boolean).sort();
+    let ung=0, todo=0;
+    for(const r of (M.pool||[])){
+      const k=key(r.asin,code);
+      if(M.ungated.has(k)) ung++;
+      if(ungCellOpen(k)) todo++;
+    }
+    const budget=(code in M.budgets) ? M.budgets[code] : null;
+    const left=remainingFor(code);
+    return {pos:i+1, code, budget, spent:M.spent[code]||0, left,
+            used: budget ? (M.spent[code]||0)/budget : 0,
+            runs:runs.size, items:mine.length, value,
+            holding:live.length, last:dates.length?dates[dates.length-1]:"",
+            first:dates.length?dates[0]:"", ung, todo, roi:roiOf(mine)};
+  });
+  return rows;
+}
+
+function renderClientReport(){
+  const q=((el("cl-search")&&el("cl-search").value)||"").trim().toUpperCase();
+  const onlyServed=el("cl-served")&&el("cl-served").checked;
+  let rows=clientReport();
+
+  const served=rows.filter(r=>r.items>0).length;
+  const totVal=rows.reduce((s,r)=>s+r.value,0);
+  const totBud=rows.reduce((s,r)=>s+(r.budget||0),0);
+  const tally=el("cl-tally");
+  if(tally) tally.innerHTML=
+    '<div class="cell"><b>'+rows.length+'</b><span>clients</span></div>'+
+    '<div class="cell u"><b>'+served+'</b><span>have had a sheet</span></div>'+
+    '<div class="cell"><b>'+cash0(totVal)+'</b><span>allocated in all</span></div>'+
+    '<div class="cell b"><b>'+(totBud?((totVal/totBud)*100).toFixed(1)+'%':'0%')+'</b><span>of their budgets</span></div>';
+
+  if(q) rows=rows.filter(r=>r.code.indexOf(q)>=0);
+  if(onlyServed) rows=rows.filter(r=>r.items>0);
+
+  const S=M.clSort||{by:"value", dir:-1};
+  rows.sort((a,b)=>{
+    const x=a[S.by], y=b[S.by];
+    const c = typeof x==="string" ? String(x).localeCompare(String(y)) : (x||0)-(y||0);
+    return c!==0 ? c*S.dir : a.pos-b.pos;
+  });
+  const arrow=c=>S.by===c ? (S.dir<0?" \u2193":" \u2191") : "";
+  const C=[["pos","#"],["code","Client"],["budget","Budget"],["spent","Spent"],["left","Left"],
+           ["used","Used"],["runs","Sheets"],["items","Items"],["value","Value"],["roi","ROI"],
+           ["holding","Holding"],["ung","Ungated"],["todo","To check"],["last","Last sheet"]];
+  const head='<tr>'+C.map(c=>'<th class="cs" data-cs="'+c[0]+'">'+c[1]+arrow(c[0])+'</th>').join('')+'</tr>';
+
+  const body=rows.map(r=>'<tr data-cl="'+r.code+'">'+
+    '<td class="n dim">'+r.pos+'</td>'+
+    '<td class="c">'+r.code+'</td>'+
+    '<td class="n">'+(r.budget===null?'<span class="mos-pill warn">none</span>':cash(r.budget))+'</td>'+
+    '<td class="n">'+cash(r.spent)+'</td>'+
+    '<td class="n">'+(r.left===null?'\u2014':cash(r.left))+'</td>'+
+    '<td class="n">'+(r.budget?(r.used*100).toFixed(1)+'%':'\u2014')+'</td>'+
+    '<td class="n">'+r.runs+'</td>'+
+    '<td class="n">'+r.items.toLocaleString()+'</td>'+
+    '<td class="n">'+cash(r.value)+'</td>'+
+    '<td class="n">'+(r.items?(r.roi*100).toFixed(1)+'%':'\u2014')+'</td>'+
+    '<td class="n">'+r.holding.toLocaleString()+'</td>'+
+    '<td class="n">'+r.ung.toLocaleString()+'</td>'+
+    '<td class="n'+(r.todo?'':' dim')+'">'+r.todo.toLocaleString()+'</td>'+
+    '<td class="n dim">'+(r.last||'\u2014')+'</td></tr>').join('');
+
+  const g=el("cl-grid");
+  g.innerHTML = rows.length
+    ? '<table class="ungtbl clients"><thead>'+head+'</thead><tbody>'+body+'</tbody></table>'
+    : '<div class="mos-empty" style="padding:22px">No client matches that.</div>';
+  const c=el("cl-count");
+  if(c) c.textContent=rows.length+' of '+M.stores.length+' shown';
+
+  g.onclick=(ev)=>{
+    const th=ev.target.closest("th.cs");
+    if(th){
+      const by=th.dataset.cs;
+      M.clSort = (M.clSort&&M.clSort.by===by) ? {by, dir:-M.clSort.dir}
+                                              : {by, dir: by==="code"?1:-1};
+      return renderClientReport();
+    }
+    const tr=ev.target.closest("tr[data-cl]");
+    if(tr) showClientRuns(tr.dataset.cl);
+  };
+}
+
+/* Every sheet a client has had, so you can hand one over again. */
+function showClientRuns(code){
+  const box=el("cl-open");
+  const mine=M.ledger.filter(r=>r.store_code===code);
+  if(!mine.length){
+    box.innerHTML='<div class="ung-ok">'+code+' has never had an offer sheet.</div>';
+    return;
+  }
+  const by={};
+  for(const r of mine) (by[r.batch_id] ||= {id:r.batch_id, date:r.sheet_date, rows:[]}).rows.push(r);
+  const runs=Object.values(by).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  box.innerHTML=
+    '<div class="ung-pick-head"><b>'+code+' \u00b7 '+runs.length+' sheet'+(runs.length>1?'s':'')+'</b>'+
+    '<span><button class="ung-tool" data-cl-close="1" type="button">Close</button></span></div>'+
+    '<table class="ungtbl imp"><thead><tr><th>Date</th><th>Items</th><th>Value</th><th>ROI</th><th></th></tr></thead><tbody>'+
+    runs.map(r=>{
+      const v=r.rows.reduce((s,x)=>s+(Number(x.total_price)||0),0);
+      return '<tr><td class="c">'+longDate(r.date)+'</td><td>'+r.rows.length+'</td>'+
+        '<td>'+cash(v)+'</td><td>'+(roiOf(r.rows)*100).toFixed(1)+'%</td>'+
+        '<td><button class="ung-tool" data-cl-dl="'+r.id+'">Download</button></td></tr>';
+    }).join('')+'</tbody></table>';
+  box.className="ung-picker";
+  box.onclick=async(ev)=>{
+    if(ev.target.closest("button[data-cl-close]")){ box.innerHTML=""; box.className=""; return; }
+    const b=ev.target.closest("button[data-cl-dl]"); if(!b) return;
+    const run=runs.find(r=>r.id===b.dataset.clDl);
+    b.disabled=true; const was=b.textContent; b.textContent="Building\u2026";
+    try{ await rebuildSheet({id:run.id, date:run.date, rows:run.rows}, code); }
+    catch(e){ note("Could not rebuild that sheet: "+(e.message||e), true); }
+    finally{ b.disabled=false; b.textContent=was; }
+  };
 }
 
 function sheetRuns(){
@@ -4937,6 +5088,9 @@ function init(){
   };
   if(el("goods-upload")) el("goods-upload").onclick=function(){ _gi && _gi.click(); };
   if(el("goods-retired")) el("goods-retired").addEventListener("change", renderGoods);
+  if(el("cl-search")) el("cl-search").addEventListener("input", function(){
+    clearTimeout(window._clT); window._clT=setTimeout(renderClientReport,180); });
+  if(el("cl-served")) el("cl-served").addEventListener("change", renderClientReport);
 
   if(el("mos-batch-drop")) dropZone("mos-batch-drop", files=>{   /* only if the tab still has one */
     if(!M.pool.length){ note("Load the ASIN list on the ASINs tab first.", true); return; }
