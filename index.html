@@ -344,13 +344,12 @@
     <button data-view="sheets" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>Offer sheets</button>
   </nav>
   <nav class="tabs" id="mos-tabs">
-    
-    <button data-mv="goods" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Good to Order ASINs</button>
+    <button data-mv="clients" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clients</button>
     <button data-mv="ungate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Ungate Checking</button>
-    <button data-mv="db"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>ASIN database</button>
-    <button data-mv="clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clients</button>
-    <button data-mv="sheets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>Offer sheets</button>
     <button data-mv="sheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Manual offer sheet</button>
+    <button data-mv="sheets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>Offer sheets</button>
+    <button data-mv="goods"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Good to Order ASINs</button>
+    <button data-mv="db"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>ASIN database</button>
   </nav>
 </aside>
 <header class="masthead">
@@ -468,6 +467,9 @@ body{padding-left:214px}
 .sh-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:13px;
   font:500 11px var(--mono);color:var(--ink3)}
 .sh-go{color:var(--amazon);font-weight:700}
+.sh-foot span:last-child{display:flex;gap:6px}
+.ung-tool.warn{color:#9b2c20;border-color:#e0bcb7}
+.ung-tool.warn:hover{background:#fbecea}
 .ung-menu{position:fixed;z-index:120;background:var(--panel);border:1px solid var(--rule);
   border-radius:8px;box-shadow:0 8px 24px rgba(18,26,23,.16);padding:4px;min-width:152px}
 .ung-menu button{display:block;width:100%;text-align:left;border:0;background:none;cursor:pointer;
@@ -744,6 +746,7 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
   <section id="mos-clients-rpt" class="ungwrap" hidden>
     <div id="cl-tally" class="ung-tally"></div>
     <div class="ung-bar">
+      <select id="cl-month"></select>
       <input id="cl-search" placeholder="Find a client&hellip;" autocomplete="false">
       <label class="ung-only"><input type="checkbox" id="cl-served"> Only those already served</label>
       <span id="cl-count" class="ung-count"></span>
@@ -3205,8 +3208,9 @@ document.addEventListener("change", e=>{
 "use strict";
 
 const M = {
-  on:false, ready:false, view:"goods", busy:false, ungMode:"list",
-  budgets:{},                 // code -> budget
+  on:false, ready:false, view:"clients", busy:false, ungMode:"list",
+  budgets:{},                 // code -> budget, starting again each month
+  byMonth:{},                 // code -> { "2026-09": spent }
   all:[],                     // every ASIN ever loaded, retired ones included
   pool:[],                    // the ones still in Ungate List 3.0
   dupes:[],
@@ -3216,7 +3220,7 @@ const M = {
   blank:new Set(),            // nobody has checked this pair yet
   ledger:[],
   counts:{}, spent:{},
-  cfg:{method:"spread", minOrder:500, maxClients:3, pendingOn:false,
+  cfg:{method:"spread", minOrder:500, minRoi:0.10, maxClients:3, pendingOn:false,
        year:2026, quarter:"Q3", channel:"amazon"},
   result:null, staged:null, openRun:null,
   picked:null,                // null means every client; a Set is an explicit choice
@@ -3355,31 +3359,46 @@ async function loadAll(){
   M.ledger=ledger;
   if(settings && settings.data){
     const s=settings.data;
-    M.cfg={method:s.method, minOrder:Number(s.min_order), maxClients:s.max_clients,
-           pendingOn:s.pending_on, year:s.year, quarter:s.quarter, channel:s.channel};
+    M.cfg={method:s.method, minOrder:Number(s.min_order),
+           minRoi:(s.min_roi===null||s.min_roi===undefined) ? 0.10 : Number(s.min_roi),
+           maxClients:s.max_clients, pendingOn:s.pending_on,
+           year:s.year, quarter:s.quarter, channel:s.channel,
+           sheetDate:M.cfg.sheetDate};
   }
   recompute();
   M.ready=true;
 }
 
 function recompute(){
-  M.counts={}; M.spent={};
+  M.counts={}; M.spent={}; M.byMonth={};
   for(const r of M.ledger){
-    /* Only a slot still inside its thirty days blocks the ASIN. Spend is a
-       different matter: the quarter's budget stays spent either way. */
+    /* Only a slot still inside its thirty days blocks the ASIN. Money is a
+       separate matter, and it is counted against the month the sheet was
+       dated, because the budget starts again each month. */
     if(slotLive(r)) (M.counts[r.asin] ||= new Set()).add(r.store_code);
-    if(r.year===M.cfg.year && r.quarter===M.cfg.quarter)
-      M.spent[r.store_code]=(M.spent[r.store_code]||0)+(Number(r.total_price)||0);
+    const m=monthOf(r);
+    const v=Number(r.total_price)||0;
+    ((M.byMonth[r.store_code] ||= {})[m] = (M.byMonth[r.store_code][m]||0) + v);
   }
+  const now=curMonth();
+  for(const c in M.byMonth) M.spent[c]=M.byMonth[c][now]||0;
 }
-function remainingFor(code){
+/* The month a sheet belongs to, and the month the run being built is dated
+   for. A client's budget starts again on the first of each month, so a sheet
+   dated October is charged against October however much September used. */
+function monthOf(r){ return String(r.sheet_date || (r.allocated_at||"")).slice(0,7); }
+function curMonth(){ return String(M.cfg.sheetDate || new Date().toISOString().slice(0,10)).slice(0,7); }
+function spentIn(code, month){ return (M.byMonth[code] && M.byMonth[code][month]) || 0; }
+
+function remainingFor(code, month){
   if(!(code in M.budgets)) return null;
-  return Math.max(0, M.budgets[code]-(M.spent[code]||0));
+  return Math.max(0, M.budgets[code] - spentIn(code, month || curMonth()));
 }
 
 async function saveSettings(){
   const {error}=await sb.from("mos_settings").upsert({
-    id:true, method:M.cfg.method, min_order:M.cfg.minOrder, max_clients:M.cfg.maxClients,
+    id:true, method:M.cfg.method, min_order:M.cfg.minOrder, min_roi:M.cfg.minRoi,
+    max_clients:M.cfg.maxClients,
     pending_on:M.cfg.pendingOn, year:M.cfg.year, quarter:M.cfg.quarter,
     channel:M.cfg.channel, updated_at:new Date().toISOString(),
   });
@@ -3669,8 +3688,9 @@ const REASONS={
   overbudget:"Line costs more than the client has left",
   zero:"ASIN has no line price",
 };
-function allocate(excluded){
+function allocate(excluded, banned){
   excluded = excluded || new Set();
+  banned = banned || new Set();
   const cap=M.cfg.maxClients, spread=M.cfg.method==="spread";
   const date=M.cfg.sheetDate || new Date().toISOString().slice(0,10);
   const remaining={}, assigned={}, skips={}, before={}, after={};
@@ -3689,6 +3709,7 @@ function allocate(excluded){
     const able=[];
     for(const c of live){
       if(!offerable(key(r.asin,c))) continue;
+      if(banned.has(key(r.asin,c))) continue;   /* moved off this client for ROI */
       if(holders.has(c)){ skips.already=(skips.already||0)+1; continue; }   /* still inside its 30 days */
       if(!(c in M.budgets)){ skips.nobudget=(skips.nobudget||0)+1; continue; }
       if(r.total<=0){ skips.zero=(skips.zero||0)+1; continue; }
@@ -3719,22 +3740,58 @@ function allocate(excluded){
   return {date, cap, assigned, skips, before, after, countsAfter, exhausted, lines, value,
           offset, served:Object.values(assigned).filter(v=>v.length).length};
 }
-/* Dropping a client frees what it held for the clients after it, which can
-   only raise the others' totals, so a growing exclusion list settles fast. */
+/* A sheet is worth sending only if it clears both bars: the minimum value,
+   and a blended ROI at least as good as the target. The two pull against each
+   other, since trimming weak lines to lift the ROI also lowers the total, so
+   they are settled together.
+
+   A client short on ROI does not lose the whole sheet. Its worst-earning
+   lines are moved off it, worst first, until what is left averages out, and
+   those ASINs go back to the pool for the clients after it. */
+function sheetRoi(items){
+  let w=0, s=0;
+  for(const r of items){ w+=r.total; s+=r.total*(r.roi||0); }
+  return w ? s/w : 0;
+}
 function allocateWithMinimum(){
-  const min=M.cfg.minOrder;
-  const excluded=new Set();
-  let result=allocate(excluded), passes=1;
-  if(min>0){
-    for(; passes<=25; passes++){
+  const min=M.cfg.minOrder, target=M.cfg.minRoi||0;
+  const excluded=new Set();      // clients dropped for being too small
+  const banned=new Set();        // "ASIN|client" moved off for dragging the ROI down
+  let result=allocate(excluded, banned), passes=1, moved=0;
+
+  for(; passes<=40; passes++){
+    let changed=false;
+
+    if(target>0){
+      for(const c of M.stores){
+        const items=result.assigned[c];
+        if(!items.length || sheetRoi(items)>=target-1e-12) continue;
+        /* Worst first: the lowest earner drags the average down hardest and
+           is the line least worth sending. */
+        const left=items.slice().sort((a,b)=>(a.roi||0)-(b.roi||0));
+        while(left.length && sheetRoi(left)<target-1e-12){
+          banned.add(key(left.shift().asin, c));
+          moved++; changed=true;
+        }
+      }
+    }
+    if(changed){ result=allocate(excluded, banned); continue; }
+
+    if(min>0){
       const under=M.stores.filter(c=>!excluded.has(c) && result.assigned[c].length>0
         && (result.before[c]-result.after[c]) < min-1e-9);
-      if(!under.length) break;
-      under.forEach(c=>excluded.add(c));
-      result=allocate(excluded);
+      if(under.length){
+        under.forEach(c=>excluded.add(c));
+        result=allocate(excluded, banned);
+        continue;
+      }
     }
+    break;
   }
-  result.passes=passes; result.minOrder=min; result.dropped=[...excluded];
+
+  result.passes=passes; result.minOrder=min; result.minRoi=target;
+  result.dropped=[...excluded]; result.moved=moved;
+  result.roiOf=c=>sheetRoi(result.assigned[c]||[]);
   return result;
 }
 
@@ -4604,14 +4661,27 @@ function renderGoods(){
 
 /* One row per client: what they have had, what they still have room for, and
    how much of their gating is still unanswered. */
-function clientReport(){
-  const cap=(M.cfg&&M.cfg.maxClients)||3;
+/* Every month anything was booked, newest first, with the month the run is
+   being dated for always present even if nothing has gone out yet. */
+function monthsSeen(){
+  const set=new Set([curMonth()]);
+  for(const r of M.ledger){ const m=monthOf(r); if(m) set.add(m); }
+  return [...set].sort().reverse();
+}
+const monthName=(m)=>{
+  const d=new Date(m+"-01T00:00:00");
+  return isNaN(d) ? m : d.toLocaleDateString("en-US",{month:"long",year:"numeric"});
+};
+
+function clientReport(month){
+  month = month || curMonth();
   const rows=M.stores.map((code,i)=>{
-    const mine=M.ledger.filter(r=>r.store_code===code);
+    const all=M.ledger.filter(r=>r.store_code===code);
+    const mine=all.filter(r=>monthOf(r)===month);
     const runs=new Set(mine.map(r=>r.batch_id));
     const value=mine.reduce((s,r)=>s+(Number(r.total_price)||0),0);
-    const live=mine.filter(slotLive);
-    const dates=mine.map(r=>r.sheet_date).filter(Boolean).sort();
+    const live=all.filter(slotLive);
+    const dates=all.map(r=>r.sheet_date).filter(Boolean).sort();
     let ung=0, todo=0;
     for(const r of (M.pool||[])){
       const k=key(r.asin,code);
@@ -4619,30 +4689,41 @@ function clientReport(){
       if(ungCellOpen(k)) todo++;
     }
     const budget=(code in M.budgets) ? M.budgets[code] : null;
-    const left=remainingFor(code);
-    return {pos:i+1, code, budget, spent:M.spent[code]||0, left,
-            used: budget ? (M.spent[code]||0)/budget : 0,
+    const spent=spentIn(code, month);
+    const left=remainingFor(code, month);
+    return {pos:i+1, code, budget, spent, left,
+            used: budget ? spent/budget : 0,
             runs:runs.size, items:mine.length, value,
             holding:live.length, last:dates.length?dates[dates.length-1]:"",
-            first:dates.length?dates[0]:"", ung, todo, roi:roiOf(mine)};
+            everItems:all.length, everValue:all.reduce((s,r)=>s+(Number(r.total_price)||0),0),
+            ung, todo, roi:roiOf(mine)};
   });
   return rows;
 }
 
 function renderClientReport(){
+  const months=monthsSeen();
+  const sel=el("cl-month");
+  if(sel && sel.options.length!==months.length){
+    sel.innerHTML=months.map(m=>'<option value="'+m+'">'+monthName(m)+'</option>').join("");
+  }
+  if(sel && !months.includes(sel.value)) sel.value=months[0];
+  const month=(sel && sel.value) || curMonth();
+  M.clMonth=month;
+
   const q=((el("cl-search")&&el("cl-search").value)||"").trim().toUpperCase();
   const onlyServed=el("cl-served")&&el("cl-served").checked;
-  let rows=clientReport();
+  let rows=clientReport(month);
 
   const served=rows.filter(r=>r.items>0).length;
   const totVal=rows.reduce((s,r)=>s+r.value,0);
   const totBud=rows.reduce((s,r)=>s+(r.budget||0),0);
   const tally=el("cl-tally");
   if(tally) tally.innerHTML=
-    '<div class="cell"><b>'+rows.length+'</b><span>clients</span></div>'+
-    '<div class="cell u"><b>'+served+'</b><span>have had a sheet</span></div>'+
-    '<div class="cell"><b>'+cash0(totVal)+'</b><span>allocated in all</span></div>'+
-    '<div class="cell b"><b>'+(totBud?((totVal/totBud)*100).toFixed(1)+'%':'0%')+'</b><span>of their budgets</span></div>';
+    '<div class="cell"><b>'+served+' of '+rows.length+'</b><span>served in '+monthName(month)+'</span></div>'+
+    '<div class="cell u"><b>'+cash0(totVal)+'</b><span>allocated this month</span></div>'+
+    '<div class="cell"><b>'+cash0(Math.max(0,totBud-totVal))+'</b><span>still to spend</span></div>'+
+    '<div class="cell b"><b>'+(totBud?((totVal/totBud)*100).toFixed(1)+'%':'0%')+'</b><span>of the month\u2019s budgets</span></div>';
 
   if(q) rows=rows.filter(r=>r.code.indexOf(q)>=0);
   if(onlyServed) rows=rows.filter(r=>r.items>0);
@@ -4656,7 +4737,8 @@ function renderClientReport(){
   const arrow=c=>S.by===c ? (S.dir<0?" \u2193":" \u2191") : "";
   const C=[["pos","#"],["code","Client"],["budget","Budget"],["spent","Spent"],["left","Left"],
            ["used","Used"],["runs","Sheets"],["items","Items"],["value","Value"],["roi","ROI"],
-           ["holding","Holding"],["ung","Ungated"],["todo","To check"],["last","Last sheet"]];
+           ["everValue","All time"],["holding","Holding"],["ung","Ungated"],["todo","To check"],
+           ["last","Last sheet"]];
   const head='<tr>'+C.map(c=>'<th class="cs" data-cs="'+c[0]+'">'+c[1]+arrow(c[0])+'</th>').join('')+'</tr>';
 
   const body=rows.map(r=>'<tr data-cl="'+r.code+'">'+
@@ -4670,6 +4752,7 @@ function renderClientReport(){
     '<td class="n">'+r.items.toLocaleString()+'</td>'+
     '<td class="n">'+cash(r.value)+'</td>'+
     '<td class="n">'+(r.items?(r.roi*100).toFixed(1)+'%':'\u2014')+'</td>'+
+    '<td class="n dim">'+cash(r.everValue)+'</td>'+
     '<td class="n">'+r.holding.toLocaleString()+'</td>'+
     '<td class="n">'+r.ung.toLocaleString()+'</td>'+
     '<td class="n'+(r.todo?'':' dim')+'">'+r.todo.toLocaleString()+'</td>'+
@@ -4706,9 +4789,26 @@ function showClientRuns(code){
   const by={};
   for(const r of mine) (by[r.batch_id] ||= {id:r.batch_id, date:r.sheet_date, rows:[]}).rows.push(r);
   const runs=Object.values(by).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const budget=(code in M.budgets) ? M.budgets[code] : null;
+  const byM={};
+  for(const r of mine){ const m=monthOf(r);
+    (byM[m] ||= {items:0, value:0, runs:new Set()});
+    byM[m].items++; byM[m].value+=Number(r.total_price)||0; byM[m].runs.add(r.batch_id); }
+  const mkeys=Object.keys(byM).sort().reverse();
+
   box.innerHTML=
     '<div class="ung-pick-head"><b>'+code+' \u00b7 '+runs.length+' sheet'+(runs.length>1?'s':'')+'</b>'+
     '<span><button class="ung-tool" data-cl-close="1" type="button">Close</button></span></div>'+
+    '<table class="ungtbl imp" style="margin-bottom:12px"><thead><tr><th>Month</th><th>Sheets</th>'+
+    '<th>Items</th><th>Spent</th><th>Budget</th><th>Left</th><th>Used</th></tr></thead><tbody>'+
+    mkeys.map(m=>{
+      const g=byM[m], left=budget===null?null:Math.max(0,budget-g.value);
+      return '<tr><td class="c">'+monthName(m)+'</td><td>'+g.runs.size+'</td>'+
+        '<td>'+g.items.toLocaleString()+'</td><td>'+cash(g.value)+'</td>'+
+        '<td>'+(budget===null?'\u2014':cash(budget))+'</td>'+
+        '<td>'+(left===null?'\u2014':cash(left))+'</td>'+
+        '<td>'+(budget?((g.value/budget)*100).toFixed(1)+'%':'\u2014')+'</td></tr>';
+    }).join('')+'</tbody></table>'+
     '<table class="ungtbl imp"><thead><tr><th>Date</th><th>Items</th><th>Value</th><th>ROI</th><th></th></tr></thead><tbody>'+
     runs.map(r=>{
       const v=r.rows.reduce((s,x)=>s+(Number(x.total_price)||0),0);
@@ -4771,8 +4871,13 @@ function renderSheets(){
       '<h3>'+longDate(run.date)+'</h3>'+
       '<span class="sh-sub">'+codes.length+' client'+(codes.length===1?'':'s')+' \u00b7 '+
         run.rows.length.toLocaleString()+' items \u00b7 '+cash0(run.value)+
-        ' \u00b7 run '+esc(run.id)+'</span></div>';
+        ' \u00b7 run '+esc(run.id)+'</span>'+
+      '<button class="ung-tool warn" id="sh-cancel-run" type="button">Cancel the whole run</button></div>';
     el("sh-back").onclick=()=>{ M.openRun=null; renderSheets(); };
+    el("sh-cancel-run").onclick=async ()=>{
+      await cancelSheets(run.rows, "the whole run of "+longDate(run.date));
+      M.openRun=null; renderSheets();
+    };
 
     body.className="sh-grid";
     body.innerHTML=codes.map(c=>{
@@ -4789,11 +4894,19 @@ function renderSheets(){
           '<div class="roi"><i>ROI</i><b>'+(roi*100).toFixed(1)+'%</b></div>'+
         '</div>'+
         '<div class="sh-foot"><span>'+(left===null?'no budget on record':cash0(left)+' left this quarter')+'</span>'+
-        '<button class="ung-tool" data-sh-dl="'+esc(c)+'">Download</button></div>'+
+        '<span><button class="ung-tool" data-sh-dl="'+esc(c)+'">Download</button>'+
+        '<button class="ung-tool warn" data-sh-cancel="'+esc(c)+'">Cancel</button></span></div>'+
       '</div></article>';
     }).join("");
 
     body.onclick=async (ev)=>{
+      const x=ev.target.closest("button[data-sh-cancel]");
+      if(x){
+        const code=x.dataset.shCancel;
+        await cancelSheets(run.rows.filter(r=>r.store_code===code),
+          code+"'s sheet of "+longDate(run.date));
+        return;
+      }
       const b=ev.target.closest("button[data-sh-dl]"); if(!b) return;
       const code=b.dataset.shDl;
       b.disabled=true; const was=b.textContent; b.textContent="Building\u2026";
@@ -4828,6 +4941,51 @@ function renderSheets(){
     const c=ev.target.closest("article[data-sh-run]"); if(!c) return;
     M.openRun=c.dataset.shRun; renderSheets();
   };
+}
+
+/* Cancelling puts a sheet back the way it was before it was generated: the
+   lines leave the record, the ASINs' client slots open again, and the money
+   goes back on the client's quarter. The workbook already downloaded is not
+   recalled, so cancel only what has not gone out. */
+async function cancelSheets(rows, what){
+  if(!rows.length) return;
+  const value=rows.reduce((s,r)=>s+(Number(r.total_price)||0),0);
+  const asins=new Set(rows.map(r=>r.asin));
+  if(!confirm(
+      "Cancel "+what+"?\n\n"+
+      rows.length.toLocaleString()+" line"+(rows.length===1?"":"s")+" worth "+cash(value)+
+      " leave the record.\n"+
+      asins.size.toLocaleString()+" ASIN"+(asins.size===1?"":"s")+" get their client slot back.\n"+
+      "The budget goes back on the quarter.\n\n"+
+      "Any workbook already sent out is not recalled.")) return;
+
+  const ids=rows.map(r=>r.id).filter(x=>x!==undefined && x!==null);
+  try{
+    if(ids.length===rows.length){
+      for(let i=0;i<ids.length;i+=200){
+        const {error}=await sb.from("mos_allocations").delete().in("id", ids.slice(i,i+200));
+        if(error) throw error;
+      }
+    } else {
+      /* Older rows may predate the id being carried in memory. */
+      const batches=[...new Set(rows.map(r=>r.batch_id))];
+      const codes=[...new Set(rows.map(r=>r.store_code))];
+      for(const b of batches){
+        let q=sb.from("mos_allocations").delete().eq("batch_id", b);
+        if(codes.length===1) q=q.eq("store_code", codes[0]);
+        const {error}=await q;
+        if(error) throw error;
+      }
+    }
+    const gone=new Set(rows.map(r=>r.batch_id+"|"+r.store_code+"|"+r.asin));
+    M.ledger=M.ledger.filter(r=>!gone.has(r.batch_id+"|"+r.store_code+"|"+r.asin));
+    recompute();
+    M.result=null;
+    renderMos();
+    note(rows.length.toLocaleString()+" line"+(rows.length===1?"":"s")+" cancelled \u00b7 "+
+      asins.size.toLocaleString()+" ASIN"+(asins.size===1?"":"s")+" back in the pool \u00b7 "+
+      cash(value)+" back on budget");
+  }catch(e){ note("Could not cancel: "+(e.message||e), true); }
 }
 
 /* Rebuilt from the ledger, with the product detail read back out of the ASIN
@@ -4942,16 +5100,22 @@ function renderResult(){
      <div class="mos-stat"><b>${cash0(R.value)}</b><span>allocated</span></div>
      <div class="mos-stat"><b>${Object.values(R.skips).reduce((a,b)=>a+b,0).toLocaleString()}</b><span>pass-overs</span></div>`;
 
-  el("mos-dropped").innerHTML = (R.dropped && R.dropped.length)
+  const roiLine = R.minRoi>0
+    ? (R.moved
+        ? `<p class="mos-warn"><b>${R.moved.toLocaleString()}</b> line${R.moved===1?"":"s"} moved off the client they first landed on, because that sheet averaged under ${(R.minRoi*100).toFixed(0)}% ROI. They went back to the pool for the clients after them.</p>`
+        : `<p class="mos-ok">Every sheet cleared ${(R.minRoi*100).toFixed(0)}% ROI without anything being moved.</p>`)
+    : "";
+  el("mos-dropped").innerHTML = roiLine + ((R.dropped && R.dropped.length)
     ? `<p class="mos-warn">Dropped for falling under ${cash0(R.minOrder)}: <b>${R.dropped.map(esc).join(", ")}</b>.
        Their ASINs went back to the pool${R.passes>1?` over ${R.passes} passes`:""}, so no client slots were used on them.</p>`
-    : (R.minOrder>0 ? `<p class="mos-ok">Every client served reached the ${cash0(R.minOrder)} minimum.</p>` : "");
+    : (R.minOrder>0 ? `<p class="mos-ok">Every client served reached the ${cash0(R.minOrder)} minimum.</p>` : ""));
 
   const rows=M.stores.map((c,i)=>{
     const spend=R.before[c]-R.after[c];
     return {pos:i+1, code:c, lines:R.assigned[c].length, spend,
             budget:R.before[c], left:R.after[c],
-            pct:R.before[c]>0 ? spend/R.before[c] : 0};
+            pct:R.before[c]>0 ? spend/R.before[c] : 0,
+            roi:R.roiOf ? R.roiOf(c) : 0};
   });
   const {by,dir}=M.sort;
   rows.sort((a,b)=>{
@@ -4968,11 +5132,13 @@ function renderResult(){
       <th class="r s" data-s="spend">Allocated${arrow("spend")}</th>
       <th class="r s" data-s="budget">Budget${arrow("budget")}</th>
       <th class="r s" data-s="left">Left${arrow("left")}</th>
-      <th class="r s" data-s="pct">Used${arrow("pct")}</th><th></th></tr></thead><tbody>`+
+      <th class="r s" data-s="pct">Used${arrow("pct")}</th>
+      <th class="r s" data-s="roi">ROI${arrow("roi")}</th><th></th></tr></thead><tbody>`+
     rows.map(r=>`<tr><td class="r dim">${r.pos}</td><td class="mono"><b>${esc(r.code)}</b></td>
       <td class="r">${r.lines}</td><td class="r">${cash(r.spend)}</td>
       <td class="r">${cash(r.budget)}</td><td class="r">${cash(r.left)}</td>
       <td class="r">${(r.pct*100).toFixed(1)}%</td>
+      <td class="r"${r.lines&&r.roi<(R.minRoi||0)?' style="color:#9b2c20;font-weight:600"':''}>${r.lines?(r.roi*100).toFixed(1)+"%":"\u2014"}</td>
       <td class="nowrap">${r.lines?`<button class="mos-mini" data-dl="${esc(r.code)}">Offer sheet</button>
         <button class="mos-mini" data-dlist="${esc(r.code)}">Listing</button>`:""}</td></tr>`).join("")+
     `</tbody></table>`;
@@ -5091,6 +5257,7 @@ function init(){
   if(el("cl-search")) el("cl-search").addEventListener("input", function(){
     clearTimeout(window._clT); window._clT=setTimeout(renderClientReport,180); });
   if(el("cl-served")) el("cl-served").addEventListener("change", renderClientReport);
+  if(el("cl-month")) el("cl-month").addEventListener("change", renderClientReport);
 
   if(el("mos-batch-drop")) dropZone("mos-batch-drop", files=>{   /* only if the tab still has one */
     if(!M.pool.length){ note("Load the ASIN list on the ASINs tab first.", true); return; }
