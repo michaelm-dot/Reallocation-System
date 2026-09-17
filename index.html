@@ -3222,7 +3222,7 @@ const M = {
   counts:{}, spent:{},
   cfg:{method:"spread", minOrder:500, minRoi:0.10, maxClients:3, pendingOn:false,
        year:2026, quarter:"Q3", channel:"amazon"},
-  result:null, staged:null, openRun:null,
+  result:null, staged:null, openRun:null, openClient:null,
   picked:null,                // null means every client; a Set is an explicit choice
   sort:{by:"pct", dir:-1},
 };
@@ -3933,7 +3933,9 @@ async function commit(){
   const b=el("mos-commit"); b.disabled=true; b.textContent="Working";
   const batch=`${R.date}_${Math.random().toString(36).slice(2,10)}`;
   try{
-    await downloadAll();
+    /* Recording and handing the file over are separate jobs. Sheets are
+       downloaded from the Offer sheets tab when they are actually needed, so
+       nothing lands in Downloads unasked. */
     const rows=[];
     for(const code of M.stores){
       R.assigned[code].forEach((r,i)=>rows.push({
@@ -3947,11 +3949,13 @@ async function commit(){
     }
     await writeChunks("mos_allocations", rows);
     M.ledger.push(...rows); recompute();
-    note(`Recorded ${rows.length.toLocaleString()} allocations. Run id ${batch}`);
+    note(`Recorded ${rows.length.toLocaleString()} line${rows.length===1?"":"s"} across `+
+      `${R.served} client${R.served===1?"":"s"}. They are on the Offer sheets tab now, `+
+      `ready to download or cancel.`);
     M.lastBatch=batch;
     M.result=null;
   }catch(e){
-    note("The workbook downloaded but the database refused the write, so no slots were used: "+e.message, true);
+    note("Nothing was recorded: "+e.message, true);
   }finally{
     b.disabled=false; b.textContent="Generate and record"; renderMos();
   }
@@ -4857,6 +4861,48 @@ function renderSheets(){
   const head=el("sheets-head"), body=el("sheets-body");
   const runs=sheetRuns();
 
+  if(M.openRun && M.openClient){
+    const run=runs.find(r=>r.id===M.openRun);
+    if(!run){ M.openRun=null; M.openClient=null; return renderSheets(); }
+    const code=M.openClient;
+    const meta=new Map((M.all||[]).map(r=>[r.asin,r]));
+    const lines=run.rows.filter(r=>r.store_code===code)
+      .sort((a,b)=>String(a.tracking_code).localeCompare(String(b.tracking_code),undefined,{numeric:true}));
+    const value=lines.reduce((s,r)=>s+(Number(r.total_price)||0),0);
+
+    head.innerHTML=
+      '<div class="sh-head"><button class="ung-tool" id="sh-back" type="button">&larr; '+longDate(run.date)+'</button>'+
+      '<h3>'+esc(code)+'</h3>'+
+      '<span class="sh-sub">'+lines.length.toLocaleString()+' items \u00b7 '+cash0(value)+
+        ' \u00b7 ROI '+(roiOf(lines)*100).toFixed(1)+'%</span>'+
+      '<button class="ung-tool" id="sh-dl-one" type="button">Download</button></div>';
+    el("sh-back").onclick=()=>{ M.openClient=null; renderSheets(); };
+    el("sh-dl-one").onclick=async function(){
+      this.disabled=true; const was=this.textContent; this.textContent="Building\u2026";
+      try{ await rebuildSheet(run, code); }
+      catch(e){ note("Could not rebuild that sheet: "+(e.message||e), true); }
+      finally{ this.disabled=false; this.textContent=was; }
+    };
+
+    body.className="";
+    body.innerHTML='<div class="ung-grid"><table class="ungtbl clients"><thead><tr>'+
+      '<th>Tracking</th><th>ASIN</th><th>Brand</th><th>Qty</th><th>Unit cost</th>'+
+      '<th>Total</th><th>ROI</th><th>Distributor</th></tr></thead><tbody>'+
+      lines.map(r=>{
+        const m=meta.get(r.asin)||{};
+        return '<tr><td class="c">'+esc(r.tracking_code||'')+'</td>'+
+          '<td class="c">'+esc(r.asin)+'</td>'+
+          '<td class="n dim" style="text-align:left">'+esc(r.brand||m.brand||'')+'</td>'+
+          '<td class="n">'+(r.qty||0).toLocaleString()+'</td>'+
+          '<td class="n">'+cash(r.unit_cost)+'</td>'+
+          '<td class="n">'+cash(r.total_price)+'</td>'+
+          '<td class="n">'+((m.roi||0)*100).toFixed(1)+'%</td>'+
+          '<td class="n dim" style="text-align:left">'+esc(r.distributor||m.dist||'')+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
+    body.onclick=null;
+    return;
+  }
+
   if(M.openRun){
     const run=runs.find(r=>r.id===M.openRun);
     if(!run){ M.openRun=null; return renderSheets(); }
@@ -4873,7 +4919,7 @@ function renderSheets(){
         run.rows.length.toLocaleString()+' items \u00b7 '+cash0(run.value)+
         ' \u00b7 run '+esc(run.id)+'</span>'+
       '<button class="ung-tool warn" id="sh-cancel-run" type="button">Cancel the whole run</button></div>';
-    el("sh-back").onclick=()=>{ M.openRun=null; renderSheets(); };
+    el("sh-back").onclick=()=>{ M.openRun=null; M.openClient=null; renderSheets(); };
     el("sh-cancel-run").onclick=async ()=>{
       await cancelSheets(run.rows, "the whole run of "+longDate(run.date));
       M.openRun=null; renderSheets();
@@ -4884,8 +4930,9 @@ function renderSheets(){
       const rows=byClient[c];
       const val=rows.reduce((s,x)=>s+(+x.total_price||0),0);
       const roi=roiOf(rows);
-      const left=remainingFor(c);
-      return '<article class="sh-card"><div class="sh-bar"></div><div class="sh-in">'+
+      const month=String(run.date).slice(0,7);
+      const left=remainingFor(c, month);
+      return '<article class="sh-card open" data-sh-open="'+esc(c)+'"><div class="sh-bar"></div><div class="sh-in">'+
         '<div class="sh-top"><div><b>'+esc(c)+'</b><span>'+longDate(run.date)+'</span></div>'+
         '<span class="sh-tag">Amazon</span></div>'+
         '<div class="sh-stats">'+
@@ -4893,13 +4940,18 @@ function renderSheets(){
           '<div><i>VALUE</i><b>'+cash0(val)+'</b></div>'+
           '<div class="roi"><i>ROI</i><b>'+(roi*100).toFixed(1)+'%</b></div>'+
         '</div>'+
-        '<div class="sh-foot"><span>'+(left===null?'no budget on record':cash0(left)+' left this quarter')+'</span>'+
+        '<div class="sh-foot"><span>'+(left===null?'no budget on record'
+            :cash0(left)+' left in '+monthName(month))+'</span>'+
         '<span><button class="ung-tool" data-sh-dl="'+esc(c)+'">Download</button>'+
         '<button class="ung-tool warn" data-sh-cancel="'+esc(c)+'">Cancel</button></span></div>'+
       '</div></article>';
     }).join("");
 
     body.onclick=async (ev)=>{
+      const card=ev.target.closest("article[data-sh-open]");
+      if(card && !ev.target.closest("button")){
+        M.openClient=card.dataset.shOpen; renderSheets(); return;
+      }
       const x=ev.target.closest("button[data-sh-cancel]");
       if(x){
         const code=x.dataset.shCancel;
@@ -4939,7 +4991,7 @@ function renderSheets(){
 
   body.onclick=(ev)=>{
     const c=ev.target.closest("article[data-sh-run]"); if(!c) return;
-    M.openRun=c.dataset.shRun; renderSheets();
+    M.openRun=c.dataset.shRun; M.openClient=null; renderSheets();
   };
 }
 
