@@ -365,11 +365,31 @@
 #sidenav .tabs{flex-direction:column;gap:1px;flex-wrap:nowrap}
 #sidenav button{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:transparent;border:0;border-radius:8px;padding:9px 10px;cursor:pointer;font:500 13px var(--sans);color:#bcc6c0;white-space:nowrap}
 #sidenav button svg{flex:0 0 17px;width:17px;height:17px;opacity:.9}
+#sidenav button{transition:background .12s ease,color .12s ease}
 #sidenav button:hover{background:#1c2823;color:#fff}
-#sidenav #mos-switch button[aria-current="true"],#sidenav .tabs button[aria-current="true"]{background:#1f6b4a;color:#fff;box-shadow:none}
+#sidenav button:hover svg{opacity:1}
+#sidenav button:active{transform:translateY(.5px)}
+#sidenav button:focus-visible{outline:2px solid #3f9d73;outline-offset:1px}
+
+/* The green block on its own left the eye hunting for which row was live, so
+   the marker sits on the edge where the list begins. */
+#sidenav #mos-switch button[aria-current="true"],
+#sidenav .tabs button[aria-current="true"]{
+  position:relative;background:#18342a;color:#fff;box-shadow:none;font-weight:600}
+#sidenav #mos-switch button[aria-current="true"]::before,
+#sidenav .tabs button[aria-current="true"]::before{
+  content:"";position:absolute;left:0;top:7px;bottom:7px;width:3px;
+  border-radius:0 3px 3px 0;background:#3f9d73}
+#sidenav #mos-switch button[aria-current="true"] svg,
+#sidenav .tabs button[aria-current="true"] svg{opacity:1;color:#6fd3a3}
 #sidenav button:disabled{opacity:.38;cursor:not-allowed;background:transparent}
 body{padding-left:214px}
 .masthead{justify-content:flex-end;gap:12px}
+
+/* A view that appears instantly reads as a redraw; a very short fade reads
+   as a move between two places. */
+#mos-goods,#mos-ungate,#mos-db,#mos-clients-rpt,#mos-sheets{animation:viewin .13s ease-out}
+@keyframes viewin{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 
 .ungwrap .ung-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 14px;
   padding:10px 12px;background:var(--panel);border:1px solid var(--rule);border-radius:10px}
@@ -4249,13 +4269,27 @@ function ungWire(){
   window._ungWired=1;
   var s1=el('ung-search'), s2=el('db-search'), only=el('ung-onlyres');
   if(s1) s1.addEventListener('input', function(){ clearTimeout(window._ungT); window._ungT=setTimeout(renderUngate,180); });
-  if(s2) s2.addEventListener('input', function(){ clearTimeout(window._dbT); window._dbT=setTimeout(renderDb,180); });
+  if(s2) s2.addEventListener('input', function(){
+    /* A search narrows the list, so the pages already expanded no longer mean
+       anything; start again from the first. */
+    clearTimeout(window._dbT);
+    window._dbT=setTimeout(function(){ M.dbPage=300; renderDb(); },180);
+  });
   if(only) only.addEventListener('change', renderUngate);
   ['ung-grid','db-grid'].forEach(function(id){
     var g=el(id); if(!g) return;
     g.addEventListener('click', function(ev){
       var td=ev.target.closest && ev.target.closest('td.ucell,td.wcell');
-      if(td && !td.classList.contains('empty') && td.hasAttribute('data-a')) _ungEdit(td);
+      if(!td || td.classList.contains('empty')) return;
+      if(!td.hasAttribute('data-a')){
+        /* A grid cell: the row knows the ASIN, the column knows the client. */
+        var tr=td.parentNode, cols=g._cols||[], lead=g._lead||2;
+        var ci=Array.prototype.indexOf.call(tr.children, td)-lead;
+        if(!tr.dataset.row || ci<0 || ci>=cols.length) return;
+        td.setAttribute('data-a', tr.dataset.row);
+        td.setAttribute('data-c', cols[ci]);
+      }
+      _ungEdit(td);
     });
   });
 }
@@ -4335,26 +4369,24 @@ function _ungPaint2(which){
         (open?' ASINs still to check':' ASINs answered')+'">'+n.toLocaleString()+'</th>';
     }).join('')+'</tr>';
 
-  var parts=[], lim=Math.min(shown.length,MAXR);
+  /* Ninety-eight columns make every row costly, so the database comes in
+     pages instead of two thousand rows at once. */
+  if(M.dbPage===undefined) M.dbPage=300;
+  var cap = open ? MAXR : Math.min(M.dbPage, MAXR);
+  var parts=[], lim=Math.min(shown.length,cap);
   for(var i=0;i<lim;i++){
     var a=shown[i], added=!fileSet[a], gone=!live[a], tds='';
     for(var j=0;j<clients.length;j++){
       var c=clients[j], k=key(a,c), s=ungCellState(k);
+      /* Repeating the ASIN and the client on nearly two hundred thousand
+         cells came to fifteen megabytes of markup. The row carries the ASIN,
+         the column index carries the client, and a click works both out. */
       if(ungCellOpen(k)!==open){
-        if(open){
-          /* Already answered and living in the ASIN database. Shown faintly
-             with a tick, so you can see what is done and which way it went
-             without it competing with the work still to do. */
-          tds+='<td class="ucell done d'+s[0]+'" data-a="'+a+'" data-c="'+c+'" data-s="'+s[2]+
-               '" title="'+s[1]+' — already in the ASIN database">\u2713 '+s[1]+'</td>';
-        } else {
-          /* Still being checked, so there is nothing in the database yet. */
-          tds+='<td class="ucell o" data-a="'+a+'" data-c="'+c+'" data-s="'+s[2]+
-               '" title="'+(s[2]==='pending'?'Pending':'Not checked yet')+
-               ' — still on Ungate Checking">&middot;</td>';
-        }
+        tds+= open
+          ? '<td class="ucell done d'+s[0]+'" data-s="'+s[2]+'">\u2713 '+s[1]+'</td>'
+          : '<td class="ucell o" data-s="'+s[2]+'">&middot;</td>';
       } else {
-        tds+='<td class="ucell '+s[0]+'" data-a="'+a+'" data-c="'+c+'" data-s="'+s[2]+'">'+s[1]+'</td>';
+        tds+='<td class="ucell '+s[0]+'" data-s="'+s[2]+'">'+s[1]+'</td>';
       }
     }
     var slotTd='';
@@ -4367,13 +4399,16 @@ function _ungPaint2(which){
               : 'Nobody holds this ASIN')+
         '">'+used+'/'+cap+'</th>';
     }
-    parts.push('<tr'+(gone?' class="retired"':'')+'><th class="num'+(added?' added':'')+'"'+
+    parts.push('<tr data-row="'+a+'"'+(gone?' class="retired"':'')+'><th class="num'+(added?' added':'')+'"'+
       (added?' title="Idinagdag — wala sa na-upload na sheet"':'')+'>'+rowNum[a]+'</th>'+
       '<th class="cor"'+(gone?' title="No longer in Ungate List 3.0, kept here for its answers"':'')+'>'+
       a+(gone?'<span class="gone">'+(orphan[a]?'not in list':'retired')+'</span>':'')+
       '</th>'+slotTd+tds+'</tr>');
   }
-  el(open?'ung-grid':'db-grid').innerHTML='<table class="ungtbl"><thead>'+head+'</thead><tbody>'+parts.join('')+'</tbody></table>';
+  var box=el(open?'ung-grid':'db-grid');
+  box._cols=clients;
+  box._lead=open?2:3;                 /* sticky columns before the first client */
+  box.innerHTML='<table class="ungtbl"><thead>'+head+'</thead><tbody>'+parts.join('')+'</tbody></table>';
   ungTally(open);
   if(!open){
     var dc=el('db-count');
@@ -4388,12 +4423,11 @@ function _ungPaint2(which){
       if(g && !g.previousElementSibling.classList.contains('ung-warn'))
         g.parentNode.insertBefore(w, g);
     }
-    var settledCells=0;
-    for(var z=0;z<shown.length;z++) for(var y=0;y<clients.length;y++)
-      if(!ungCellOpen(key(shown[z],clients[y]))) settledCells++;
-    if(dc) dc.textContent='showing '+Math.min(shown.length,MAXR).toLocaleString()+
+    if(dc) dc.innerHTML='showing '+lim.toLocaleString()+
       ' of '+shown.length.toLocaleString()+' ASINs \u00b7 '+clients.length+' of '+
-      ungCols().length+' clients \u00b7 '+settledCells.toLocaleString()+' settled cells';
+      ungCols().length+' clients'+
+      (lim<shown.length ? ' <button class="ung-tool" id="db-more" type="button">Show 300 more</button>' : '');
+    if(el('db-more')) el('db-more').onclick=function(){ M.dbPage=(M.dbPage||300)+300; renderDb(); };
     return;
   }
   var cnt=el('ung-count');
@@ -4849,9 +4883,14 @@ function renderClientReport(){
     '<td class="n"'+(r.runs?'':' style="color:var(--ink3)"')+'>'+r.runs+'</td></tr>').join('');
 
   const g=el("cl-grid");
+  /* Ticking a box redraws the table; without this the list jumps back to the
+     top and you lose the row you were working on. */
+  const keepTop=g.scrollTop, keepLeft=g.scrollLeft;
   g.innerHTML = rows.length
     ? '<table class="ungtbl clients"><thead>'+head+'</thead><tbody>'+body+'</tbody></table>'
     : '<div class="mos-empty" style="padding:22px">No client matches that.</div>';
+  g.scrollTop=keepTop; g.scrollLeft=keepLeft;
+
   const c=el("cl-count");
   if(c) c.textContent=rows.length+' of '+M.stores.length+' shown';
 
@@ -4880,6 +4919,9 @@ function renderClientReport(){
   el("mos-busy").hidden = !M.busy;
 
   g.onclick=(ev)=>{
+    /* The tick boxes and the month filter live inside the table, so a click on
+       either must not also sort the column or open the client. */
+    if(ev.target.closest("input,select,label")) return;
     const th=ev.target.closest("th.cs");
     if(th){
       const by=th.dataset.cs;
@@ -5486,7 +5528,7 @@ function init(){
 
   el("mos-clients-rpt").addEventListener("change", e=>{
     const box=e.target.closest("input[type=checkbox]"); if(!box) return;
-    if(box.id==="mos-all"){
+    if(box.id==="cl-all"){
       M.picked = box.checked ? null : new Set();
       M.result=null; renderMos(); return;
     }
