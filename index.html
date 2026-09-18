@@ -5249,7 +5249,7 @@ function renderSheet(){
         <th class="r">Ungated ASIN</th><th class="r">Pending to Check ASIN</th>
         <th class="r">Holding ASIN</th>
         <th class="r">${monthName(month).split(" ")[0]}<br><small>sheets</small></th>
-        <th></th></tr></thead><tbody>`+
+        </tr></thead><tbody>`+
       M.stores.map((c,i)=>({c,i})).filter(x=>shows(x.c)).map(({c,i})=>{
         const rem=remainingFor(c);
         let u=0,p=0; for(const k of M.ungated) if(k.endsWith("|"+c)) u++;
@@ -5262,9 +5262,7 @@ function renderSheet(){
           <td class="r">${u.toLocaleString()}</td><td class="r dim">${p.toLocaleString()}</td>
           <td class="r dim">${held.toLocaleString()}</td>
           <td class="r"${runsFor(c)?"":' style="color:var(--ink3)"'}>${runsFor(c)}</td>
-          <td class="nowrap"><button class="mos-mini" data-mv-up="${i}">&#8593;</button>
-          <button class="mos-mini" data-mv-dn="${i}">&#8595;</button>
-          <button class="mos-mini" data-mv-rm="${i}">&times;</button></td></tr>`;
+          </tr>`;
       }).join("")+`</tbody></table>`
     : `<div class="mos-empty">No clients yet. Import a gating file on Ungate Checking and they appear here.</div>`;
   if(M.stores.length && !shown.length)
@@ -5563,24 +5561,6 @@ function init(){
     const t=e.target.closest("button"); if(!t) return;
     if(t.dataset.dl)    return downloadOne(t.dataset.dl);
     if(t.dataset.dlist) return downloadListing(t.dataset.dlist);
-    if(t.dataset.mvUp!==undefined || t.dataset.mvDn!==undefined){
-      const i=Number(t.dataset.mvUp ?? t.dataset.mvDn);
-      const j=i+(t.dataset.mvUp!==undefined?-1:1);
-      if(j<0||j>=M.stores.length) return;
-      [M.stores[i],M.stores[j]]=[M.stores[j],M.stores[i]];
-      M.result=null; renderMos(); await saveClients(); return;
-    }
-    if(t.dataset.mvRm!==undefined){
-      const i=Number(t.dataset.mvRm), code=M.stores[i];
-      if(!confirm(`Remove ${code}? Its gating is forgotten for everyone. Allocations already recorded stay.`)) return;
-      M.stores.splice(i,1); if(M.picked) M.picked.delete(code);
-      for(const k of [...M.ungated]) if(k.endsWith("|"+code)) M.ungated.delete(k);
-      for(const k of [...M.pending]) if(k.endsWith("|"+code)) M.pending.delete(k);
-      M.result=null; renderMos();
-      await sb.from("mos_gating").delete().eq("store_code",code);
-      await saveClients();
-      return;
-    }
   });
   el("mos-per-client").addEventListener("click", e=>{
     const th=e.target.closest("th.s"); if(!th || !M.result) return;
