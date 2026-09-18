@@ -5014,9 +5014,11 @@ async function omsFetch(codes){
    can never disagree about what a line means. */
 function omsBand(code){
   const s=M.oms[code];
-  if(!s) return {band:"none", text:"not in OMS"};
+  /* Not in OMS and in OMS but blank both mean the same thing to the person
+     reading the sheet: the answer has not come back yet. */
+  if(!s) return {band:"wait", text:"Waiting for result"};
   const f=s.final_result || s.order_status;
-  if(!f) return {band:"wait", text:"no result yet"};
+  if(!f) return {band:"wait", text:"Waiting for result"};
   if(/^good to order$|^allocated to amazon$|^ungate list$/i.test(f)) return {band:"good", text:f};
   /* Still moving: not a rejection, just not settled. */
   if(/^waiting|^on hold|^t-?code$/i.test(f)) return {band:"wait", text:f};
@@ -5029,7 +5031,8 @@ function omsBadge(code){
 function omsSummary(codes){
   const n={none:0, wait:0, good:0, bad:0};
   for(const c of codes) n[omsBand(c).band]++;
-  return {none:n.none, waiting:n.wait, good:n.good, bad:n.bad, seen:codes.length-n.none};
+  /* A line counts as settled once OMS has said something either way. */
+  return {waiting:n.wait, good:n.good, bad:n.bad, settled:n.good+n.bad};
 }
 
 function sheetRuns(){
@@ -5131,11 +5134,11 @@ function renderSheets(){
     const paint=()=>{
       const box=el("sh-oms"); if(!box) return;
       const s=omsSummary(codes);
-      box.innerHTML='<i>IN OMS</i><b>'+s.seen.toLocaleString()+' of '+codes.length.toLocaleString()+'</b>'+
-        '<small>'+(s.good?s.good+' good':'')+
-        (s.bad?(s.good?' \u00b7 ':'')+s.bad+' rejected':'')+
-        (s.waiting?' \u00b7 '+s.waiting+' waiting':'')+
-        (!s.seen?'none ordered yet':'')+'</small>';
+      box.innerHTML='<i>IN OMS</i><b>'+s.settled.toLocaleString()+' of '+codes.length.toLocaleString()+'</b>'+
+        '<small>'+(s.settled
+          ? (s.good?s.good+' good':'')+(s.bad?(s.good?' \u00b7 ':'')+s.bad+' rejected':'')+
+            (s.waiting?' \u00b7 '+s.waiting+' waiting':'')
+          : 'all waiting for result')+'</small>';
       lines.forEach((r,i)=>{
         const td=body.querySelectorAll("tbody tr")[i];
         if(td) td.lastElementChild.innerHTML=omsBadge(r.tracking_code);
@@ -5179,8 +5182,9 @@ function renderSheets(){
       const b=this, was=b.textContent;
       b.disabled=true;
       try{
-        const n=await rebuildRun(run, (i,total)=>{ b.textContent="Building "+i+" of "+total+"\u2026"; });
-        note(n+" sheet"+(n===1?"":"s")+" in one workbook, a tab each.");
+        const n=await rebuildRun(run, (i,total,code)=>{
+          b.textContent=code+" \u00b7 "+i+" of "+total+"\u2026"; });
+        note(n+" file"+(n===1?"":"s")+" saved, one per client.");
       }catch(e){ note("Could not build the workbook: "+(e.message||e), true); }
       finally{ b.disabled=false; b.textContent=was; }
     };
@@ -5262,7 +5266,7 @@ function renderSheets(){
       const was=b.textContent; b.disabled=true;
       try{
         const n=await rebuildRun(run, (i,total)=>{ b.textContent=i+"/"+total; });
-        note(n+" sheet"+(n===1?"":"s")+" in one workbook, a tab each.");
+        note(n+" file"+(n===1?"":"s")+" saved, one per client.");
       }catch(e){ note("Could not build the workbook: "+(e.message||e), true); }
       finally{ b.disabled=false; b.textContent=was; }
       return;
@@ -5317,9 +5321,9 @@ async function cancelSheets(rows, what){
   }catch(e){ note("Could not cancel: "+(e.message||e), true); }
 }
 
-/* The whole run in one workbook, a tab per client. Eighty-six separate
-   downloads would be eighty-six prompts, and they would have to be zipped up
-   again at the other end anyway. */
+/* One file per client, in the same order the run lists them. The browser
+   asks once whether it may save several files and then they arrive one after
+   another, so they can be forwarded without anyone splitting a workbook up. */
 async function rebuildRun(run, onProgress){
   const meta=new Map((M.all||[]).map(r=>[r.asin,r]));
   const byClient={};
@@ -5329,10 +5333,9 @@ async function rebuildRun(run, onProgress){
     byClient[a].reduce((s,x)=>s+(+x.total_price||0),0));
   if(!codes.length) throw new Error("this run has no lines");
 
-  const wb=new ExcelJS.Workbook();
-  const used=new Set();
-  codes.forEach((code,i)=>{
-    if(onProgress) onProgress(i+1, codes.length);
+  for(let i=0;i<codes.length;i++){
+    const code=codes[i];
+    if(onProgress) onProgress(i+1, codes.length, code);
     const rows=byClient[code].slice().sort((a,b)=>
       String(a.tracking_code).localeCompare(String(b.tracking_code),undefined,{numeric:true}));
     const items=rows.map(r=>{
@@ -5342,14 +5345,14 @@ async function rebuildRun(run, onProgress){
               avg90:m.avg90||0, bundle:m.bundle||1, ppu:m.ppu||0, roi:m.roi||0,
               p30:m.p30||0, brand:r.brand||m.brand||"", dist:r.distributor||m.dist||""};
     });
-    let name=code.slice(0,31), n=2;
-    while(used.has(name)) name=(code.slice(0,28)+"_"+n++).slice(0,31);
-    used.add(name);
     const first=String(rows[0] && rows[0].tracking_code || "");
     const num=parseInt((first.split("_")[1]||"1"),10);
-    fillSheet(wb.addWorksheet(name), code, items, run.date, (isFinite(num)?num:1)-1);
-  });
-  await saveBook(wb, "Offer_Sheets_"+run.date+".xlsx");
+    const wb=new ExcelJS.Workbook();
+    fillSheet(wb.addWorksheet(code.slice(0,31)), code, items, run.date, (isFinite(num)?num:1)-1);
+    await saveBook(wb, code+"_Offer_Sheet_"+run.date+".xlsx");
+    /* A pause between saves; without it the browser drops all but the first. */
+    await new Promise(r=>setTimeout(r, 400));
+  }
   return codes.length;
 }
 
