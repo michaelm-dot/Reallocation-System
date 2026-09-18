@@ -346,7 +346,7 @@
   <nav class="tabs" id="mos-tabs">
     <button data-mv="clients" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clients</button>
     <button data-mv="ungate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Ungate Checking</button>
-    <button data-mv="sheet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Manual offer sheet</button>
+    
     <button data-mv="sheets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>Offer sheets</button>
     <button data-mv="goods"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Good to Order ASINs</button>
     <button data-mv="db"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>ASIN database</button>
@@ -445,6 +445,13 @@ body{padding-left:214px}
 .ungwrap .ungtbl.clients th.rank,
 .ungwrap .ungtbl.clients td.rank{width:42px;text-align:right;font-size:11.5px;cursor:default}
 .ungwrap .ungtbl.clients thead th.rank:hover{background:#121a17}
+.ungwrap .ungtbl.clients thead th.mfil{padding-bottom:6px}
+.ungwrap .ungtbl.clients thead th.mfil select{display:block;margin-top:4px;width:100%;
+  background:#243330;color:#cfe0d8;border:1px solid #33443e;border-radius:5px;
+  font:500 10px var(--sans);padding:2px 4px;cursor:pointer}
+.ungwrap .ungtbl.clients thead th.mfil select:hover{background:#2c3d38;color:#fff}
+.ungwrap .ungtbl.clients tr.mos-off td{opacity:.45}
+.ungwrap .ungtbl.clients tr.mos-off td.rank{opacity:1}
 .ungwrap .ungtbl.clients td.dim,
 .ungwrap .ungtbl.clients td.n.dim{color:var(--ink3);font-weight:400}
 .ungwrap .ungtbl.clients tbody tr{cursor:pointer}
@@ -775,8 +782,6 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
     <div id="ung-grid" class="ung-grid"></div>
   </section>
   <section id="mos-db" class="ungwrap" hidden>
-    <h2>ASIN database</h2>
-    <p class="lede">Every ASIN whose clients all have a real answer, Gated or Ungated. Anything still blank or Pending stays on Ungate Checking until it is settled, then it lands here. Cells are editable, and sending one back to blank moves the row back.</p>
     <div class="ung-bar">
       <input id="db-search" placeholder="Filter ASIN&hellip;" autocomplete="off">
       <span class="ung-legend"><i class="g"></i>Gated<i class="u"></i>Ungated</span>
@@ -794,38 +799,14 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
     <div class="ung-bar">
       <select id="cl-month"></select>
       <input id="cl-search" placeholder="Find a client&hellip;" autocomplete="false">
-      <label class="ung-only"><input type="checkbox" id="cl-served"> Only those already served</label>
+      <button class="ung-tool" id="cl-pick-shown" type="button">Tick only these</button>
       <span id="cl-count" class="ung-count"></span>
     </div>
+    <p class="lede" style="margin:0 0 10px" id="mos-picked"></p>
     <div id="cl-open"></div>
     <div class="ung-grid" id="cl-grid"></div>
-  </section>
 
-  <section id="mos-sheets" class="ungwrap" hidden>
-    <div id="sheets-head"></div>
-    <div id="sheets-body"></div>
-  </section>
-
-  <section id="mos-sheet" hidden>
-    <h2>Manual offer sheet</h2>
-    <p class="lede">Tick the clients you are making sheets for. Each one is offered whatever the ASIN database says it is Ungated for, up to three clients per ASIN. A client holds an ASIN for thirty days from the sheet date; after that the slot frees itself and the ASIN can go out again.</p>
-
-    <div id="mos-picked-bar" class="ung-tally"></div>
-    <div class="ung-bar" style="margin-bottom:10px">
-      <select id="mos-filter">
-        <option value="all">Every client</option>
-        <option value="none">No sheet this month</option>
-        <option value="some">Has had a sheet this month</option>
-        <option value="nobudget">No budget on record</option>
-      </select>
-      <button class="ung-tool" id="mos-pick-shown" type="button">Tick only these</button>
-      <span id="mos-filter-note" class="ung-count"></span>
-    </div>
-    <p class="lede" style="margin-bottom:10px" id="mos-picked"></p>
-    <div class="mos-scroll" style="max-height:420px" id="mos-clients"></div>
-    <div id="mos-staged" hidden></div>
-
-    <div class="mos-card">
+    <div class="mos-card" style="margin-top:16px">
       <div class="mos-row" style="margin-top:0">
         <button class="mos-btn quiet" id="mos-preview">Preview</button>
         <button class="mos-btn" id="mos-commit" disabled>Generate and record</button>
@@ -843,8 +824,14 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
       <h3>Why clients were passed over</h3>
       <div class="mos-scroll" style="max-height:260px" id="mos-skips"></div>
     </div>
+  </section>
 
-    </section>
+  <section id="mos-sheets" class="ungwrap" hidden>
+    <div id="sheets-head"></div>
+    <div id="sheets-body"></div>
+  </section>
+
+  
 </div>
 
 <div class="mos-note" id="mos-note" hidden></div>
@@ -4683,7 +4670,6 @@ function renderMos(){
   if(!M.on) return;
   document.querySelectorAll("#mos-tabs button").forEach(b=>
     b.setAttribute("aria-current", String(b.dataset.mv===M.view)));
-  el("mos-sheet").hidden  = M.view!=="sheet";
   el("mos-ungate").hidden = M.view!=="ungate";
   el("mos-db").hidden     = M.view!=="db";
   el("mos-goods").hidden  = M.view!=="goods";
@@ -4693,8 +4679,7 @@ function renderMos(){
   else if(M.view==="db")    renderDb();
   else if(M.view==="goods")  renderGoods();
   else if(M.view==="sheets") renderSheets();
-  else if(M.view==="clients") renderClientReport();
-  else                       renderSheet();
+  else                       renderClientReport();
 }
 
 function renderGoods(){
@@ -4800,7 +4785,7 @@ function renderClientReport(){
   M.clMonth=month;
 
   const q=((el("cl-search")&&el("cl-search").value)||"").trim().toUpperCase();
-  const onlyServed=el("cl-served")&&el("cl-served").checked;
+  const sheetFilter=M.clSheetFilter||"all";
   let rows=clientReport(month);
 
   const served=rows.filter(r=>r.items>0).length;
@@ -4814,7 +4799,9 @@ function renderClientReport(){
     '<div class="cell b"><b>'+(totBud?((totVal/totBud)*100).toFixed(1)+'%':'0%')+'</b><span>of the month\u2019s budgets</span></div>';
 
   if(q) rows=rows.filter(r=>r.code.indexOf(q)>=0);
-  if(onlyServed) rows=rows.filter(r=>r.items>0);
+  if(sheetFilter==="none")     rows=rows.filter(r=>r.runs===0);
+  if(sheetFilter==="some")     rows=rows.filter(r=>r.runs>0);
+  if(sheetFilter==="nobudget") rows=rows.filter(r=>r.budget===null);
 
   const S=M.clSort||{by:"value", dir:-1};
   /* Ties fall back to the roster order, so the list never jitters between
@@ -4826,20 +4813,31 @@ function renderClientReport(){
   });
   const arrow=c=>S.by===c ? (S.dir<0?" \u2193":" \u2191") : "";
   const C=[["code","Client"],["budget","Budget"],["spent","Spent"],["left","Left"],
-           ["used","Used"],["runs","Sheets"],["items","Items"],["value","Value"],["roi","ROI"],
+           ["used","Used"],["items","Items"],["value","Value"],["roi","ROI"],
            ["everValue","All time"],["holding","Holding"],["ung","Ungated"],["todo","To check"],
            ["last","Last sheet"]];
-  const head='<tr><th class="rank">#</th>'+
-    C.map(c=>'<th class="cs" data-cs="'+c[0]+'">'+c[1]+arrow(c[0])+'</th>').join('')+'</tr>';
+  const mLabel=monthName(month).split(" ")[0];
+  /* The filter lives in the column it filters, so "who has no sheet in
+     September" is asked where September is shown. */
+  const head='<tr><th class="rank"><input type="checkbox" id="cl-all" '+
+      (M.picked===null?'checked':'')+' title="Tick to cover every client"></th>'+
+    '<th class="rank">#</th>'+
+    C.map(c=>'<th class="cs" data-cs="'+c[0]+'">'+c[1]+arrow(c[0])+'</th>').join('')+
+    '<th class="cs mfil" data-cs="runs">'+mLabel+arrow("runs")+
+      '<select id="cl-sheetfilter">'+
+        [["all","all"],["none","no sheet"],["some","has a sheet"],["nobudget","no budget"]]
+        .map(o=>'<option value="'+o[0]+'"'+(sheetFilter===o[0]?" selected":"")+'>'+o[1]+'</option>').join('')+
+      '</select></th></tr>';
 
-  const body=rows.map((r,n)=>'<tr data-cl="'+r.code+'">'+
+  const body=rows.map((r,n)=>'<tr data-cl="'+r.code+'"'+(inRun(r.code)?'':' class="mos-off"')+'>'+
+    '<td class="rank"><input type="checkbox" data-client="'+r.code+'" '+
+      (inRun(r.code)?'checked':'')+'></td>'+
     '<td class="n dim rank">'+(n+1)+'</td>'+
     '<td class="c">'+r.code+'</td>'+
     '<td class="n">'+(r.budget===null?'<span class="mos-pill warn">none</span>':cash(r.budget))+'</td>'+
     '<td class="n">'+cash(r.spent)+'</td>'+
     '<td class="n">'+(r.left===null?'\u2014':cash(r.left))+'</td>'+
     '<td class="n">'+(r.budget?(r.used*100).toFixed(1)+'%':'\u2014')+'</td>'+
-    '<td class="n">'+r.runs+'</td>'+
     '<td class="n">'+r.items.toLocaleString()+'</td>'+
     '<td class="n">'+cash(r.value)+'</td>'+
     '<td class="n">'+(r.items?(r.roi*100).toFixed(1)+'%':'\u2014')+'</td>'+
@@ -4847,7 +4845,8 @@ function renderClientReport(){
     '<td class="n">'+r.holding.toLocaleString()+'</td>'+
     '<td class="n">'+r.ung.toLocaleString()+'</td>'+
     '<td class="n'+(r.todo?'':' dim')+'">'+r.todo.toLocaleString()+'</td>'+
-    '<td class="n dim">'+(r.last||'\u2014')+'</td></tr>').join('');
+    '<td class="n dim">'+(r.last||'\u2014')+'</td>'+
+    '<td class="n"'+(r.runs?'':' style="color:var(--ink3)"')+'>'+r.runs+'</td></tr>').join('');
 
   const g=el("cl-grid");
   g.innerHTML = rows.length
@@ -4855,6 +4854,30 @@ function renderClientReport(){
     : '<div class="mos-empty" style="padding:22px">No client matches that.</div>';
   const c=el("cl-count");
   if(c) c.textContent=rows.length+' of '+M.stores.length+' shown';
+
+  const chosen=M.stores.filter(inRun);
+  el("mos-picked").innerHTML = M.stores.length
+    ? (M.picked===null
+       ? `This run covers all <b>${M.stores.length}</b> clients. Untick anyone you want to leave out.`
+       : chosen.length
+         ? `This run covers <b>${chosen.length}</b> of ${M.stores.length}: `+
+           `<span class="mono">${chosen.map(esc).join(", ")}</span>. `+
+           `Everyone else keeps their ASINs for a later run. `+
+           `<button class="mos-mini" id="mos-pick-all">Cover everyone</button>`
+         : `Nobody is ticked, so there is nothing to offer. `+
+           `<button class="mos-mini" id="mos-pick-all">Cover everyone</button>`)
+    : "";
+  if(el("mos-pick-all")) el("mos-pick-all").onclick=()=>{ M.picked=null; M.result=null; renderMos(); };
+  if(el("cl-sheetfilter")) el("cl-sheetfilter").onchange=e=>{
+    M.clSheetFilter=e.target.value; renderClientReport();
+  };
+  if(el("cl-pick-shown")) el("cl-pick-shown").onclick=()=>{
+    const codes=rows.map(r=>r.code);
+    M.picked = codes.length===M.stores.length ? null : new Set(codes);
+    M.result=null; renderMos();
+  };
+  renderResult();
+  el("mos-busy").hidden = !M.busy;
 
   g.onclick=(ev)=>{
     const th=ev.target.closest("th.cs");
@@ -5227,115 +5250,6 @@ async function rebuildSheet(run, code){
   await saveBook(wb, code+"_Offer_Sheet_"+run.date+".xlsx");
 }
 
-function renderSheet(){
-  /* staged import */
-  const s=M.staged ? summarise(M.staged) : null;
-  el("mos-staged").innerHTML = s
-    ? `<table class="mos-table"><thead><tr><th>Client</th><th class="r">Rows</th>
-        <th class="r">Ungated</th><th class="r">Pending</th><th class="r">Gated</th><th></th></tr></thead><tbody>`+
-      s.map(g=>`<tr><td class="mono"><b>${esc(g.code||"?")}</b></td><td class="r">${g.rows}</td>
-        <td class="r">${g.ungated}</td><td class="r dim">${g.pending||0}</td><td class="r">${g.gated}</td>
-        <td>${g.known?"":`<span class="mos-pill">new client</span>`}
-            ${g.unknown?`<span class="mos-pill warn">${g.unknown} not in the ASIN list</span>`:""}</td></tr>`).join("")+
-      `</tbody></table>
-       <div class="mos-row"><button class="mos-btn" id="mos-apply">Apply to the matrix</button>
-       <button class="mos-btn quiet" id="mos-cancel">Cancel</button></div>`
-    : "";
-  if(M.staged){
-    el("mos-apply").onclick=()=>applyBatch(M.staged);
-    el("mos-cancel").onclick=()=>{ M.staged=null; renderMos(); };
-  }
-
-  /* clients */
-  const month=curMonth();
-  /* Distinct runs this month, not lines: two sheets in one run is one sheet. */
-  const sheetsThisMonth={};
-  for(const r of M.ledger){
-    if(monthOf(r)!==month) continue;
-    (sheetsThisMonth[r.store_code] ||= new Set()).add(r.batch_id);
-  }
-  const runsFor=c=>(sheetsThisMonth[c] ? sheetsThisMonth[c].size : 0);
-
-  const mode=(el("mos-filter") && el("mos-filter").value) || "all";
-  const shows=c=>
-    mode==="none"     ? runsFor(c)===0 :
-    mode==="some"     ? runsFor(c)>0 :
-    mode==="nobudget" ? !(c in M.budgets) : true;
-  const shown=M.stores.filter(shows);
-
-  const fn=el("mos-filter-note");
-  if(fn) fn.textContent = mode==="all"
-    ? M.stores.length+" clients"
-    : shown.length+" of "+M.stores.length+" shown";
-
-  el("mos-clients").innerHTML = M.stores.length
-    ? `<table class="mos-table"><thead><tr>
-        <th style="width:30px"><input type="checkbox" id="mos-all"
-          ${M.picked===null?"checked":""} title="Tick to cover every client"></th>
-        <th class="r">#</th><th>Client</th>
-        <th class="r">Budget left</th>
-        <th class="r">Ungated ASIN</th><th class="r">Pending to Check ASIN</th>
-        <th class="r">Holding ASIN</th>
-        <th class="r">${monthName(month).split(" ")[0]}<br><small>sheets</small></th>
-        </tr></thead><tbody>`+
-      M.stores.map((c,i)=>({c,i})).filter(x=>shows(x.c)).map(({c,i})=>{
-        const rem=remainingFor(c);
-        let u=0,p=0; for(const k of M.ungated) if(k.endsWith("|"+c)) u++;
-        for(const k of M.pending) if(k.endsWith("|"+c)) p++;
-        const held=M.ledger.filter(r=>r.store_code===c && slotLive(r)).length;
-        return `<tr${inRun(c)?"":' class="mos-off"'}>
-          <td><input type="checkbox" data-client="${esc(c)}" ${inRun(c)?"checked":""}></td>
-          <td class="r dim">${i+1}</td><td class="mono"><b>${esc(c)}</b></td>
-          <td class="r">${rem===null?`<span class="mos-pill warn">no budget</span>`:cash(rem)}</td>
-          <td class="r">${u.toLocaleString()}</td><td class="r dim">${p.toLocaleString()}</td>
-          <td class="r dim">${held.toLocaleString()}</td>
-          <td class="r"${runsFor(c)?"":' style="color:var(--ink3)"'}>${runsFor(c)}</td>
-          </tr>`;
-      }).join("")+`</tbody></table>`
-    : `<div class="mos-empty">No clients yet. Import a gating file on Ungate Checking and they appear here.</div>`;
-  if(M.stores.length && !shown.length)
-    el("mos-clients").innerHTML=`<div class="mos-empty">No client matches that filter.</div>`;
-
-  var cap=(M.cfg&&M.cfg.maxClients)||3;
-  var free=0, part=0, full=0;
-  for(var z=0;z<(M.pool||[]).length;z++){
-    var used=slotsUsed(M.pool[z].asin);
-    if(used===0) free++; else if(used>=cap) full++; else part++;
-  }
-  var bar=el("mos-picked-bar");
-  if(bar) bar.innerHTML=
-    '<div class="cell"><b>'+M.stores.filter(inRun).length+'</b><span>clients in this run</span></div>'+
-    '<div class="cell u"><b>'+free.toLocaleString()+'</b><span>ASINs with all '+cap+' slots open</span></div>'+
-    '<div class="cell p"><b>'+part.toLocaleString()+'</b><span>partly taken</span></div>'+
-    '<div class="cell b"><b>'+full.toLocaleString()+'</b><span>full for now</span></div>';
-
-  const chosen=M.stores.filter(inRun);
-  el("mos-picked").innerHTML = M.stores.length
-    ? (M.picked===null
-       ? `This run covers all <b>${M.stores.length}</b> clients. Untick anyone you want to leave out.`
-       : chosen.length
-         ? `This run covers <b>${chosen.length}</b> of ${M.stores.length}: `+
-           `<span class="mono">${chosen.map(esc).join(", ")}</span>. `+
-           `Everyone else keeps their ASINs for a later run. `+
-           `<button class="mos-mini" id="mos-pick-all">Cover everyone</button>`
-         : `Nobody is ticked, so there is nothing to offer. `+
-           `<button class="mos-mini" id="mos-pick-all">Cover everyone</button>`)
-    : "";
-  if(el("mos-filter")) el("mos-filter").onchange=()=>{ M.result=null; renderMos(); };
-  if(el("mos-pick-shown")) el("mos-pick-shown").onclick=()=>{
-    /* Whatever the filter is showing becomes the run. */
-    M.picked = shown.length===M.stores.length ? null : new Set(shown);
-    M.result=null; renderMos();
-  };
-  if(el("mos-pick-all")) el("mos-pick-all").onclick=()=>{
-    M.picked=null; M.result=null; renderMos();
-  };
-
-  /* settings reflect shared state */
-  renderResult();
-  el("mos-busy").hidden = !M.busy;
-}
-
 function renderResult(){
   const R=M.result;
   el("mos-out").hidden = !R;
@@ -5506,7 +5420,6 @@ function init(){
   if(el("goods-retired")) el("goods-retired").addEventListener("change", renderGoods);
   if(el("cl-search")) el("cl-search").addEventListener("input", function(){
     clearTimeout(window._clT); window._clT=setTimeout(renderClientReport,180); });
-  if(el("cl-served")) el("cl-served").addEventListener("change", renderClientReport);
   if(el("cl-month")) el("cl-month").addEventListener("change", renderClientReport);
 
   if(el("mos-batch-drop")) dropZone("mos-batch-drop", files=>{   /* only if the tab still has one */
@@ -5571,7 +5484,7 @@ function init(){
   el("mos-separate").onclick = ()=>downloadEach("offer");
   el("mos-listings").onclick = ()=>downloadEach("listing");
 
-  el("mos-sheet").addEventListener("change", e=>{
+  el("mos-clients-rpt").addEventListener("change", e=>{
     const box=e.target.closest("input[type=checkbox]"); if(!box) return;
     if(box.id==="mos-all"){
       M.picked = box.checked ? null : new Set();
@@ -5585,7 +5498,7 @@ function init(){
     }
   });
 
-  el("mos-sheet").addEventListener("click", async e=>{
+  el("mos-clients-rpt").addEventListener("click", async e=>{
     const t=e.target.closest("button"); if(!t) return;
     if(t.dataset.dl)    return downloadOne(t.dataset.dl);
     if(t.dataset.dlist) return downloadListing(t.dataset.dlist);
