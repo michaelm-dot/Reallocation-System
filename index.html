@@ -3404,6 +3404,21 @@ async function loadAll(){
     sales30:r.sales_30d||0, active:r.active!==false,
   }));
   M.pool=M.all.filter(r=>r.active);
+
+  /* An answer must never become invisible just because its ASIN left the
+     list. Anything with gating on record but no row of its own is added back
+     as a retired, orphaned entry, so the ASIN database still shows it and
+     nobody has to check it a second time. */
+  const known=new Set(M.all.map(r=>r.asin));
+  const orphans=new Set();
+  for(const g of gating) if(!known.has(g.asin)) orphans.add(g.asin);
+  for(const r of ledger) if(!known.has(r.asin)) orphans.add(r.asin);
+  for(const a of orphans){
+    M.all.push({asin:a, n:0, upc:"", status:"", notes:"", qty:0, unitCost:0, avg90:0,
+      bundle:1, ppu:0, roi:0, be:0, total:0, p30:0, link:"", brand:"", dist:"",
+      reviewed:"", prBy:"", prDate:"", sales30:0, active:false, orphan:true});
+  }
+  M.orphans=orphans.size;
   M.stores=clients.map(c=>c.store_code);
   M.ungated=new Set(); M.pending=new Set(); M.blank=new Set();
   for(const g of gating){
@@ -4300,6 +4315,7 @@ function _ungPaint2(which){
   }
   var fileSet=window._ungFileSet;if(!fileSet){fileSet=window._ungFileSet=Object.create(null);(window.UNGATE_ASINS||[]).forEach(function(x){fileSet[x]=1;});}
   var live=Object.create(null); (M.pool||[]).forEach(function(r){ live[r.asin]=1; });
+  var orphan=Object.create(null); (M.all||[]).forEach(function(r){ if(r.orphan) orphan[r.asin]=1; });
   var seen=Object.create(null), rows=[];
   ungRowsFor(open).forEach(function(r){ if(r.asin&&!seen[r.asin]){seen[r.asin]=1;rows.push(r.asin);} });
   var rowNum=Object.create(null); for(var r=0;r<rows.length;r++) rowNum[rows[r]]=r+1;
@@ -4367,12 +4383,24 @@ function _ungPaint2(which){
     parts.push('<tr'+(gone?' class="retired"':'')+'><th class="num'+(added?' added':'')+'"'+
       (added?' title="Idinagdag — wala sa na-upload na sheet"':'')+'>'+rowNum[a]+'</th>'+
       '<th class="cor"'+(gone?' title="No longer in Ungate List 3.0, kept here for its answers"':'')+'>'+
-      a+(gone?'<span class="gone">retired</span>':'')+'</th>'+slotTd+tds+'</tr>');
+      a+(gone?'<span class="gone">'+(orphan[a]?'not in list':'retired')+'</span>':'')+
+      '</th>'+slotTd+tds+'</tr>');
   }
   el(open?'ung-grid':'db-grid').innerHTML='<table class="ungtbl"><thead>'+head+'</thead><tbody>'+parts.join('')+'</tbody></table>';
   ungTally(open);
   if(!open){
     var dc=el('db-count');
+    if(M.orphans){
+      var w=document.createElement("div");
+      w.className="ung-warn";
+      w.innerHTML='<b>'+M.orphans.toLocaleString()+'</b> ASIN'+(M.orphans===1?'':'s')+
+        ' here have answers on record but are no longer in the ASIN list. '+
+        'They are marked <b>retired</b> and their answers are safe. '+
+        'Re-run the sync on Good to Order ASINs to bring them back if they are still in Ungate List 3.0.';
+      var g=el('db-grid');
+      if(g && !g.previousElementSibling.classList.contains('ung-warn'))
+        g.parentNode.insertBefore(w, g);
+    }
     var settledCells=0;
     for(var z=0;z<shown.length;z++) for(var y=0;y<clients.length;y++)
       if(!ungCellOpen(key(shown[z],clients[y]))) settledCells++;
