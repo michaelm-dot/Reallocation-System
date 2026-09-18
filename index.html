@@ -511,6 +511,12 @@ body{padding-left:214px}
 .sh-tbl tbody tr:hover{background:var(--wash-dom)}
 .sh-tbl .pill{display:inline-block;padding:3px 9px;border-radius:20px;
   font:600 11px var(--mono)}
+.oms{display:inline-block;padding:3px 9px;border-radius:20px;font:600 10.5px var(--sans);
+  letter-spacing:.01em;white-space:nowrap}
+.oms.good{background:#d7efe2;color:#12513a}
+.oms.bad{background:#fbecea;color:#9b2c20}
+.oms.wait{background:#f8e9c6;color:#7a5c08}
+.oms.none{background:#f1f4f2;color:#8a9691}
 .sh-tbl .pill.good{background:#d7efe2;color:#12513a}
 .sh-tbl .pill.thin{background:#f8e9c6;color:#7a5c08}
 .sh-tbl .pill.bad{background:#fbecea;color:#9b2c20}
@@ -4984,6 +4990,48 @@ function showClientRuns(code){
   };
 }
 
+/* What OMS currently says about lines we have already sent out. Held per
+   tracking code, refreshed while a sheet is open, because the status there
+   moves after the order is placed. */
+M.oms = M.oms || {};
+M.omsAt = null;
+
+async function omsFetch(codes){
+  codes=[...new Set(codes.filter(Boolean))];
+  if(!codes.length) return {asked:0, found:0};
+  const {data,error}=await sb.functions.invoke("oms-status",{body:{codes}});
+  if(error){
+    let detail=""; try{ detail=(await error.context.json()).error; }catch(e){}
+    throw new Error(detail||error.message);
+  }
+  if(!data||!data.ok) throw new Error((data&&data.error)||"OMS did not answer.");
+  Object.assign(M.oms, data.states||{});
+  M.omsAt=new Date();
+  return data;
+}
+
+/* One reading of a status, used by both the badge and the count, so the two
+   can never disagree about what a line means. */
+function omsBand(code){
+  const s=M.oms[code];
+  if(!s) return {band:"none", text:"not in OMS"};
+  const f=s.final_result || s.order_status;
+  if(!f) return {band:"wait", text:"no result yet"};
+  if(/^good to order$|^allocated to amazon$|^ungate list$/i.test(f)) return {band:"good", text:f};
+  /* Still moving: not a rejection, just not settled. */
+  if(/^waiting|^on hold|^t-?code$/i.test(f)) return {band:"wait", text:f};
+  return {band:"bad", text:f};
+}
+function omsBadge(code){
+  const b=omsBand(code);
+  return '<span class="oms '+b.band+'">'+esc(b.text)+'</span>';
+}
+function omsSummary(codes){
+  const n={none:0, wait:0, good:0, bad:0};
+  for(const c of codes) n[omsBand(c).band]++;
+  return {none:n.none, waiting:n.wait, good:n.good, bad:n.bad, seen:codes.length-n.none};
+}
+
 function sheetRuns(){
   const by={};
   for(const r of M.ledger){
@@ -5041,6 +5089,7 @@ function renderSheets(){
           '<div><i>TOTAL COST</i><b>'+cash0(value)+'</b></div>'+
           '<div><i>ROI</i><b>'+(floor?(floor*100).toFixed(0)+'% ROI guaranteed':(roi*100).toFixed(1)+'%')+'</b>'+
             (floor?'<small>Up to '+(roi*100).toFixed(1)+'% potential</small>':'')+'</div>'+
+          '<div id="sh-oms"><i>IN OMS</i><b>\u2014</b><small>checking\u2026</small></div>'+
         '</div>'+
       '</div>'+
       '<div class="sh-lines">'+
@@ -5049,7 +5098,8 @@ function renderSheets(){
           '<button class="ung-tool" id="sh-dl-one" type="button">Download</button></div>'+
         '<table class="sh-tbl"><thead><tr><th>ASIN</th><th>BRAND</th><th class="r">QTY</th>'+
         '<th class="r">BUNDLE</th><th class="r">UNIT COST</th><th class="r">TOTAL COST</th>'+
-        '<th class="r">ROI</th><th class="r">PROFIT/UNIT</th></tr></thead><tbody>'+
+        '<th class="r">ROI</th><th class="r">PROFIT/UNIT</th>'+
+        '<th>FINAL RESULT</th></tr></thead><tbody>'+
         lines.map(r=>{
           const m=meta.get(r.asin)||{};
           const rr=Number(m.roi)||0, pu=Number(m.ppu)||0;
@@ -5062,7 +5112,8 @@ function renderSheets(){
             '<td class="r">'+cash(r.unit_cost)+'</td>'+
             '<td class="r b">'+cash(r.total_price)+'</td>'+
             '<td class="r"><span class="pill '+band+'">'+(rr*100).toFixed(1)+'%</span></td>'+
-            '<td class="r '+(pu<0?'neg':'pos')+'">'+cash(pu)+'</td></tr>';
+            '<td class="r '+(pu<0?'neg':'pos')+'">'+cash(pu)+'</td>'+
+            '<td>'+omsBadge(r.tracking_code)+'</td></tr>';
         }).join('')+
         '</tbody></table></div>';
 
@@ -5073,6 +5124,36 @@ function renderSheets(){
       finally{ this.disabled=false; this.textContent=was; }
     };
     body.onclick=null;
+
+    /* OMS keeps moving after the order goes in, so the open sheet asks again
+       every half minute rather than showing whatever it saw once. */
+    const codes=lines.map(r=>r.tracking_code).filter(Boolean);
+    const paint=()=>{
+      const box=el("sh-oms"); if(!box) return;
+      const s=omsSummary(codes);
+      box.innerHTML='<i>IN OMS</i><b>'+s.seen.toLocaleString()+' of '+codes.length.toLocaleString()+'</b>'+
+        '<small>'+(s.good?s.good+' good':'')+
+        (s.bad?(s.good?' \u00b7 ':'')+s.bad+' rejected':'')+
+        (s.waiting?' \u00b7 '+s.waiting+' waiting':'')+
+        (!s.seen?'none ordered yet':'')+'</small>';
+      lines.forEach((r,i)=>{
+        const td=body.querySelectorAll("tbody tr")[i];
+        if(td) td.lastElementChild.innerHTML=omsBadge(r.tracking_code);
+      });
+    };
+    const poll=async()=>{
+      if(M.view!=="sheets" || M.openClient!==code) return;   /* stop when you leave */
+      try{ await omsFetch(codes); paint(); }
+      catch(e){
+        const box=el("sh-oms");
+        if(box) box.innerHTML='<i>IN OMS</i><b>\u2014</b><small>'+esc(String(e.message||e).slice(0,60))+'</small>';
+        return;                                              /* do not hammer a failing call */
+      }
+      clearTimeout(M.omsTimer);
+      M.omsTimer=setTimeout(poll, 30000);
+    };
+    clearTimeout(M.omsTimer);
+    poll();
     return;
   }
 
