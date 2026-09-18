@@ -432,17 +432,21 @@ body{padding-left:214px}
   white-space:nowrap;border-right:1px solid #f0f3f1;color:var(--ink);cursor:pointer;
   background:#fff}
 .ungwrap .worklist td.wcell:hover{background:#eaf3ee;color:#12513a}
-.ungwrap table.ungtbl.clients{width:100%;font:500 11.5px var(--mono)}
-.ungwrap .clients thead th{text-align:right;padding:7px 10px;white-space:nowrap;cursor:pointer;
-  font:600 10px var(--sans);letter-spacing:.04em}
-.ungwrap .clients thead th:hover{color:#fff}
+.ungwrap table.ungtbl.clients{width:100%;font:500 13px var(--mono)}
+.ungwrap .clients thead th{text-align:right;padding:9px 12px;white-space:nowrap;cursor:pointer;
+  font:600 10.5px var(--sans);letter-spacing:.05em;color:#fff}
+.ungwrap .clients thead th:hover{background:#1f2d28}
 .ungwrap .clients thead th:nth-child(2){text-align:left}
-.ungwrap .clients td{text-align:right;padding:5px 10px;white-space:nowrap;
-  border-bottom:1px solid var(--rule);color:var(--ink2)}
-.ungwrap .clients td.c{text-align:left;font-weight:700;color:var(--ink)}
-.ungwrap .clients td.dim{color:var(--ink3)}
+.ungwrap .clients td{text-align:right;padding:8px 12px;white-space:nowrap;
+  border-bottom:1px solid var(--rule);color:var(--ink);font-variant-numeric:tabular-nums}
+.ungwrap .clients td.c{text-align:left;font-weight:700;color:var(--ink);font-size:13.5px}
+.ungwrap .clients th.rank,.ungwrap .clients td.rank{width:42px;text-align:right;
+  font-size:11.5px;cursor:default}
+.ungwrap .clients thead th.rank:hover{background:none}
+.ungwrap .clients td.dim{color:var(--ink3);font-weight:400}
 .ungwrap .clients tbody tr{cursor:pointer}
-.ungwrap .clients tbody tr:hover td{background:var(--wash-dom)}
+.ungwrap .clients tbody tr:nth-child(even) td{background:#fafbfa}
+.ungwrap .clients tbody tr:hover td{background:#eef3f0}
 .sh-hero{background:linear-gradient(135deg,#1b3a5c,#2d5a87);border-radius:14px;
   padding:26px 28px;color:#fff;margin-bottom:20px}
 .sh-hero-top{display:flex;align-items:center;gap:12px}
@@ -526,17 +530,18 @@ body{padding-left:214px}
 .ungwrap .worklist td.wcell.empty{cursor:default;background:#fff}
 .ungwrap .worklist td.wcell.empty:hover{background:#fff}
 
-.ungwrap table.ungtbl.goods{font:500 11px var(--sans);width:100%}
-.ungwrap .goods td{text-align:left;padding:5px 10px;white-space:nowrap}
+.ungwrap table.ungtbl.goods{font:500 12.5px var(--sans);width:100%}
+.ungwrap .goods td{text-align:left;padding:7px 12px;white-space:nowrap;color:var(--ink)}
 .ungwrap .goods td.gn,.ungwrap .goods td.gm,.ungwrap .goods td.gp{
-  text-align:right;font-family:var(--mono);font-size:10.5px}
-.ungwrap .goods td.gk{font-family:var(--mono);font-size:10.5px}
-.ungwrap .goods td.gs{color:var(--ink2);font-size:10.5px}
+  text-align:right;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+.ungwrap .goods td.gk{font-family:var(--mono);font-size:12px}
+.ungwrap .goods td.gs{color:var(--ink2);font-size:12px}
 .ungwrap .goods td.gl a{color:var(--amazon);font-size:10.5px}
 .ungwrap .goods td.gasin{position:sticky;left:40px;background:#fff;z-index:1;
   font-weight:600;border-right:1px solid var(--rule)}
 .ungwrap .goods tbody tr:nth-child(even) td.gasin{background:#fbfcfb}
-.ungwrap .goods thead th{text-align:left;padding:6px 10px;white-space:nowrap}
+.ungwrap .goods thead th{text-align:left;padding:8px 12px;white-space:nowrap;
+  font:600 10.5px var(--sans);letter-spacing:.05em}
 .ungwrap .goods thead th.gn,.ungwrap .goods thead th.gm,.ungwrap .goods thead th.gp{text-align:right}
 .ungwrap .goods tr.retired td.gasin .gone{display:block;font:500 8.5px var(--sans);
   color:#a08a5c;text-transform:uppercase;letter-spacing:.08em}
@@ -687,11 +692,12 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
   font:500 12.5px var(--sans);line-height:1.5;margin-bottom:10px}
 .ung-ok{background:#eaf3ee;color:#12513a;padding:9px 11px;border-radius:7px;
   font:500 12.5px var(--sans);margin-bottom:10px}
-.ungtbl.imp{width:100%;font:500 11.5px var(--mono)}
+.ungtbl.imp{width:100%;font:500 12.5px var(--mono)}
 .ungtbl.imp thead th{position:static;background:#121a17;color:#e6ede9;text-align:right;
   padding:5px 9px;font:600 10px var(--sans);letter-spacing:.04em}
 .ungtbl.imp thead th:first-child{text-align:left}
-.ungtbl.imp td{text-align:right;padding:4px 9px;border-bottom:1px solid var(--rule);color:var(--ink2)}
+.ungtbl.imp td{text-align:right;padding:6px 11px;border-bottom:1px solid var(--rule);
+  color:var(--ink);font-variant-numeric:tabular-nums}
 .ungtbl.imp td.c{text-align:left;font-weight:700;color:var(--ink)}
 .ungtbl.imp td.bad{color:#9b2c20;font-weight:700}
 .ung-pick-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;
@@ -4780,20 +4786,23 @@ function renderClientReport(){
   if(onlyServed) rows=rows.filter(r=>r.items>0);
 
   const S=M.clSort||{by:"value", dir:-1};
+  /* Ties fall back to the roster order, so the list never jitters between
+     redraws even when two clients have identical figures. */
   rows.sort((a,b)=>{
     const x=a[S.by], y=b[S.by];
     const c = typeof x==="string" ? String(x).localeCompare(String(y)) : (x||0)-(y||0);
     return c!==0 ? c*S.dir : a.pos-b.pos;
   });
   const arrow=c=>S.by===c ? (S.dir<0?" \u2193":" \u2191") : "";
-  const C=[["pos","#"],["code","Client"],["budget","Budget"],["spent","Spent"],["left","Left"],
+  const C=[["code","Client"],["budget","Budget"],["spent","Spent"],["left","Left"],
            ["used","Used"],["runs","Sheets"],["items","Items"],["value","Value"],["roi","ROI"],
            ["everValue","All time"],["holding","Holding"],["ung","Ungated"],["todo","To check"],
            ["last","Last sheet"]];
-  const head='<tr>'+C.map(c=>'<th class="cs" data-cs="'+c[0]+'">'+c[1]+arrow(c[0])+'</th>').join('')+'</tr>';
+  const head='<tr><th class="rank">#</th>'+
+    C.map(c=>'<th class="cs" data-cs="'+c[0]+'">'+c[1]+arrow(c[0])+'</th>').join('')+'</tr>';
 
-  const body=rows.map(r=>'<tr data-cl="'+r.code+'">'+
-    '<td class="n dim">'+r.pos+'</td>'+
+  const body=rows.map((r,n)=>'<tr data-cl="'+r.code+'">'+
+    '<td class="n dim rank">'+(n+1)+'</td>'+
     '<td class="c">'+r.code+'</td>'+
     '<td class="n">'+(r.budget===null?'<span class="mos-pill warn">none</span>':cash(r.budget))+'</td>'+
     '<td class="n">'+cash(r.spent)+'</td>'+
@@ -5233,9 +5242,11 @@ function renderSheet(){
         <th style="width:30px"><input type="checkbox" id="mos-all"
           ${M.picked===null?"checked":""} title="Tick to cover every client"></th>
         <th class="r">#</th><th>Client</th>
-        <th class="r">Budget left</th><th class="r">Sheets<br><small>this month</small></th>
-        <th class="r">Ungated</th><th class="r">Pending</th>
-        <th class="r">Holding</th><th></th></tr></thead><tbody>`+
+        <th class="r">Budget left</th>
+        <th class="r">Ungated ASIN</th><th class="r">Pending to Check ASIN</th>
+        <th class="r">Holding ASIN</th>
+        <th class="r">${monthName(month).split(" ")[0]}<br><small>sheets</small></th>
+        <th></th></tr></thead><tbody>`+
       M.stores.map((c,i)=>({c,i})).filter(x=>shows(x.c)).map(({c,i})=>{
         const rem=remainingFor(c);
         let u=0,p=0; for(const k of M.ungated) if(k.endsWith("|"+c)) u++;
@@ -5245,9 +5256,9 @@ function renderSheet(){
           <td><input type="checkbox" data-client="${esc(c)}" ${inRun(c)?"checked":""}></td>
           <td class="r dim">${i+1}</td><td class="mono"><b>${esc(c)}</b></td>
           <td class="r">${rem===null?`<span class="mos-pill warn">no budget</span>`:cash(rem)}</td>
-          <td class="r"${runsFor(c)?"":' style="color:var(--ink3)"'}>${runsFor(c)}</td>
           <td class="r">${u.toLocaleString()}</td><td class="r dim">${p.toLocaleString()}</td>
           <td class="r dim">${held.toLocaleString()}</td>
+          <td class="r"${runsFor(c)?"":' style="color:var(--ink3)"'}>${runsFor(c)}</td>
           <td class="nowrap"><button class="mos-mini" data-mv-up="${i}">&#8593;</button>
           <button class="mos-mini" data-mv-dn="${i}">&#8595;</button>
           <button class="mos-mini" data-mv-rm="${i}">&times;</button></td></tr>`;
