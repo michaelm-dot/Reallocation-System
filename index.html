@@ -504,7 +504,7 @@ body{padding-left:214px}
 .sh-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:13px;
   font:500 11px var(--mono);color:var(--ink3)}
 .sh-go{color:var(--amazon);font-weight:700}
-.sh-foot span:last-child{display:flex;gap:6px}
+.sh-foot span:last-child{display:flex;gap:8px;align-items:center}
 .ung-tool.warn{color:#9b2c20;border-color:#e0bcb7}
 .ung-tool.warn:hover{background:#fbecea}
 .ung-menu{position:fixed;z-index:120;background:var(--panel);border:1px solid var(--rule);
@@ -802,6 +802,16 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
     <p class="lede">Tick the clients you are making sheets for. Each one is offered whatever the ASIN database says it is Ungated for, up to three clients per ASIN. A client holds an ASIN for thirty days from the sheet date; after that the slot frees itself and the ASIN can go out again.</p>
 
     <div id="mos-picked-bar" class="ung-tally"></div>
+    <div class="ung-bar" style="margin-bottom:10px">
+      <select id="mos-filter">
+        <option value="all">Every client</option>
+        <option value="none">No sheet this month</option>
+        <option value="some">Has had a sheet this month</option>
+        <option value="nobudget">No budget on record</option>
+      </select>
+      <button class="ung-tool" id="mos-pick-shown" type="button">Tick only these</button>
+      <span id="mos-filter-note" class="ung-count"></span>
+    </div>
     <p class="lede" style="margin-bottom:10px" id="mos-picked"></p>
     <div class="mos-scroll" style="max-height:420px" id="mos-clients"></div>
     <div id="mos-staged" hidden></div>
@@ -813,7 +823,7 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
         <button class="mos-btn quiet" id="mos-separate" disabled>One sheet per client</button>
         <button class="mos-btn quiet" id="mos-listings" disabled>Listing extracts</button>
       </div>
-      <div class="hint" style="margin-top:9px;color:var(--ink3);font-size:12px">Preview changes nothing. Generate downloads the workbook and records the allocations for everyone, which is what uses up the client slots.</div>
+      <div class="hint" style="margin-top:9px;color:var(--ink3);font-size:12px">Preview changes nothing. Generate records the allocations for everyone, which is what uses up the client slots; the sheets themselves are downloaded from the Offer sheets tab.</div>
     </div>
 
     <div id="mos-out" hidden>
@@ -4976,8 +4986,18 @@ function renderSheets(){
       '<span class="sh-sub">'+codes.length+' client'+(codes.length===1?'':'s')+' \u00b7 '+
         run.rows.length.toLocaleString()+' items \u00b7 '+cash0(run.value)+
         ' \u00b7 run '+esc(run.id)+'</span>'+
+      '<button class="ung-tool go" id="sh-dl-run" type="button">Download all</button>'+
       '<button class="ung-tool warn" id="sh-cancel-run" type="button">Cancel the whole run</button></div>';
     el("sh-back").onclick=()=>{ M.openRun=null; M.openClient=null; renderSheets(); };
+    el("sh-dl-run").onclick=async function(){
+      const b=this, was=b.textContent;
+      b.disabled=true;
+      try{
+        const n=await rebuildRun(run, (i,total)=>{ b.textContent="Building "+i+" of "+total+"\u2026"; });
+        note(n+" sheet"+(n===1?"":"s")+" in one workbook, a tab each.");
+      }catch(e){ note("Could not build the workbook: "+(e.message||e), true); }
+      finally{ b.disabled=false; b.textContent=was; }
+    };
     el("sh-cancel-run").onclick=async ()=>{
       await cancelSheets(run.rows, "the whole run of "+longDate(run.date));
       M.openRun=null; renderSheets();
@@ -5042,12 +5062,25 @@ function renderSheets(){
             '<div><i>VALUE</i><b>'+cash0(run.value)+'</b></div>'+
             '<div class="roi"><i>ROI</i><b>'+(roi*100).toFixed(1)+'%</b></div>'+
           '</div>'+
-          '<div class="sh-foot"><span>run '+esc(run.id)+'</span><span class="sh-go">Open &rarr;</span></div>'+
+          '<div class="sh-foot"><span>run '+esc(run.id)+'</span>'+
+          '<span><button class="ung-tool" data-sh-all="'+esc(run.id)+'">Download all</button>'+
+          '<span class="sh-go">Open &rarr;</span></span></div>'+
         '</div></article>';
       }).join("")
     : '<div class="mos-empty" style="padding:26px">No offer sheets yet. Generate one on the Manual offer sheet tab and it will appear here.</div>';
 
-  body.onclick=(ev)=>{
+  body.onclick=async (ev)=>{
+    const b=ev.target.closest("button[data-sh-all]");
+    if(b){
+      const run=runs.find(r=>r.id===b.dataset.shAll); if(!run) return;
+      const was=b.textContent; b.disabled=true;
+      try{
+        const n=await rebuildRun(run, (i,total)=>{ b.textContent=i+"/"+total; });
+        note(n+" sheet"+(n===1?"":"s")+" in one workbook, a tab each.");
+      }catch(e){ note("Could not build the workbook: "+(e.message||e), true); }
+      finally{ b.disabled=false; b.textContent=was; }
+      return;
+    }
     const c=ev.target.closest("article[data-sh-run]"); if(!c) return;
     M.openRun=c.dataset.shRun; M.openClient=null; renderSheets();
   };
@@ -5098,6 +5131,42 @@ async function cancelSheets(rows, what){
   }catch(e){ note("Could not cancel: "+(e.message||e), true); }
 }
 
+/* The whole run in one workbook, a tab per client. Eighty-six separate
+   downloads would be eighty-six prompts, and they would have to be zipped up
+   again at the other end anyway. */
+async function rebuildRun(run, onProgress){
+  const meta=new Map((M.all||[]).map(r=>[r.asin,r]));
+  const byClient={};
+  for(const r of run.rows) (byClient[r.store_code] ||= []).push(r);
+  const codes=Object.keys(byClient).sort((a,b)=>
+    byClient[b].reduce((s,x)=>s+(+x.total_price||0),0) -
+    byClient[a].reduce((s,x)=>s+(+x.total_price||0),0));
+  if(!codes.length) throw new Error("this run has no lines");
+
+  const wb=new ExcelJS.Workbook();
+  const used=new Set();
+  codes.forEach((code,i)=>{
+    if(onProgress) onProgress(i+1, codes.length);
+    const rows=byClient[code].slice().sort((a,b)=>
+      String(a.tracking_code).localeCompare(String(b.tracking_code),undefined,{numeric:true}));
+    const items=rows.map(r=>{
+      const m=meta.get(r.asin)||{};
+      return {asin:r.asin, total:Number(r.total_price)||0, unitCost:Number(r.unit_cost)||0,
+              qty:r.qty||0, upc:m.upc||"", status:m.status||"", notes:m.notes||"",
+              avg90:m.avg90||0, bundle:m.bundle||1, ppu:m.ppu||0, roi:m.roi||0,
+              p30:m.p30||0, brand:r.brand||m.brand||"", dist:r.distributor||m.dist||""};
+    });
+    let name=code.slice(0,31), n=2;
+    while(used.has(name)) name=(code.slice(0,28)+"_"+n++).slice(0,31);
+    used.add(name);
+    const first=String(rows[0] && rows[0].tracking_code || "");
+    const num=parseInt((first.split("_")[1]||"1"),10);
+    fillSheet(wb.addWorksheet(name), code, items, run.date, (isFinite(num)?num:1)-1);
+  });
+  await saveBook(wb, "Offer_Sheets_"+run.date+".xlsx");
+  return codes.length;
+}
+
 /* Rebuilt from the ledger, with the product detail read back out of the ASIN
    list, so a sheet can be handed over again months later. */
 async function rebuildSheet(run, code){
@@ -5138,14 +5207,36 @@ function renderSheet(){
   }
 
   /* clients */
+  const month=curMonth();
+  /* Distinct runs this month, not lines: two sheets in one run is one sheet. */
+  const sheetsThisMonth={};
+  for(const r of M.ledger){
+    if(monthOf(r)!==month) continue;
+    (sheetsThisMonth[r.store_code] ||= new Set()).add(r.batch_id);
+  }
+  const runsFor=c=>(sheetsThisMonth[c] ? sheetsThisMonth[c].size : 0);
+
+  const mode=(el("mos-filter") && el("mos-filter").value) || "all";
+  const shows=c=>
+    mode==="none"     ? runsFor(c)===0 :
+    mode==="some"     ? runsFor(c)>0 :
+    mode==="nobudget" ? !(c in M.budgets) : true;
+  const shown=M.stores.filter(shows);
+
+  const fn=el("mos-filter-note");
+  if(fn) fn.textContent = mode==="all"
+    ? M.stores.length+" clients"
+    : shown.length+" of "+M.stores.length+" shown";
+
   el("mos-clients").innerHTML = M.stores.length
     ? `<table class="mos-table"><thead><tr>
         <th style="width:30px"><input type="checkbox" id="mos-all"
           ${M.picked===null?"checked":""} title="Tick to cover every client"></th>
         <th class="r">#</th><th>Client</th>
-        <th class="r">Budget left</th><th class="r">Ungated</th><th class="r">Pending</th>
+        <th class="r">Budget left</th><th class="r">Sheets<br><small>this month</small></th>
+        <th class="r">Ungated</th><th class="r">Pending</th>
         <th class="r">Holding</th><th></th></tr></thead><tbody>`+
-      M.stores.map((c,i)=>{
+      M.stores.map((c,i)=>({c,i})).filter(x=>shows(x.c)).map(({c,i})=>{
         const rem=remainingFor(c);
         let u=0,p=0; for(const k of M.ungated) if(k.endsWith("|"+c)) u++;
         for(const k of M.pending) if(k.endsWith("|"+c)) p++;
@@ -5154,13 +5245,16 @@ function renderSheet(){
           <td><input type="checkbox" data-client="${esc(c)}" ${inRun(c)?"checked":""}></td>
           <td class="r dim">${i+1}</td><td class="mono"><b>${esc(c)}</b></td>
           <td class="r">${rem===null?`<span class="mos-pill warn">no budget</span>`:cash(rem)}</td>
+          <td class="r"${runsFor(c)?"":' style="color:var(--ink3)"'}>${runsFor(c)}</td>
           <td class="r">${u.toLocaleString()}</td><td class="r dim">${p.toLocaleString()}</td>
           <td class="r dim">${held.toLocaleString()}</td>
           <td class="nowrap"><button class="mos-mini" data-mv-up="${i}">&#8593;</button>
           <button class="mos-mini" data-mv-dn="${i}">&#8595;</button>
           <button class="mos-mini" data-mv-rm="${i}">&times;</button></td></tr>`;
       }).join("")+`</tbody></table>`
-    : `<div class="mos-empty">No clients yet. Upload a Batch Details file above and they appear here.</div>`;
+    : `<div class="mos-empty">No clients yet. Import a gating file on Ungate Checking and they appear here.</div>`;
+  if(M.stores.length && !shown.length)
+    el("mos-clients").innerHTML=`<div class="mos-empty">No client matches that filter.</div>`;
 
   var cap=(M.cfg&&M.cfg.maxClients)||3;
   var free=0, part=0, full=0;
@@ -5187,6 +5281,12 @@ function renderSheet(){
          : `Nobody is ticked, so there is nothing to offer. `+
            `<button class="mos-mini" id="mos-pick-all">Cover everyone</button>`)
     : "";
+  if(el("mos-filter")) el("mos-filter").onchange=()=>{ M.result=null; renderMos(); };
+  if(el("mos-pick-shown")) el("mos-pick-shown").onclick=()=>{
+    /* Whatever the filter is showing becomes the run. */
+    M.picked = shown.length===M.stores.length ? null : new Set(shown);
+    M.result=null; renderMos();
+  };
   if(el("mos-pick-all")) el("mos-pick-all").onclick=()=>{
     M.picked=null; M.result=null; renderMos();
   };
