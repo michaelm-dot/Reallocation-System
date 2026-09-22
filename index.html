@@ -491,6 +491,11 @@ body{padding-left:214px}
 .sh-hero-stats small{display:block;margin-top:3px;font:500 10.5px var(--sans);color:#9fd8bb}
 .sh-hero-stats div:last-child b{font-size:16px;font-family:var(--sans);color:#8fe3b8}
 
+.sh-fix{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 16px;
+  background:#fdf4e7;border:1px solid #e8cda3;border-radius:10px;padding:13px 16px;
+  font:500 12.5px/1.5 var(--sans);color:#7a5308}
+.sh-fix b{font-weight:700}
+.sh-fix button{margin-left:auto;white-space:nowrap}
 .sh-lines{background:var(--panel);border:1px solid var(--rule);border-radius:14px;overflow:hidden}
 .sh-lines-top{display:flex;align-items:center;gap:12px;padding:15px 20px;
   border-bottom:1px solid var(--rule)}
@@ -1411,7 +1416,7 @@ function readWorkbook(file, done){
 function settledAsin(asin){
   const its = items.filter(i=>i.asin === asin);
   if(!its.length) return false;
-  return its.every(i=>i.stage === "walmart" || i.stage === "dom" || i.stage === "excluded");
+  return its.every(i=>i.stage === "walmart" || i.stage === "dom");
 }
 function gridRows(all){
   const seen = new Map();
@@ -1546,11 +1551,19 @@ function liveAmount(it){
 function recompute(){
   sheets = [];
   const spent = {};
-  items.forEach(it=>{ it.stage=""; it.reason=""; it.note=""; it.client=""; it.sweep=false; it.pending=0; });
+  items.forEach(it=>{ it.stage=""; it.reason=""; it.note=""; it.client=""; it.sweep=false; it.pending=0; it.offSheet=false; });
 
   items.forEach(it=>{
     const lk = wm[it.id];
-    if(lk && lk.excluded){ it.stage = "excluded"; it.reason = "Taken off the offer sheet"; return; }
+    if(lk && lk.excluded){
+      /* Taken off a sheet. It goes back where it came from rather than
+         disappearing: Walmart if it has no ASIN, Amazon ungating otherwise.
+         The flag stops it walking straight back onto a sheet. */
+      it.stage  = /^B0/i.test(it.asin) ? "unchecked" : "walmart";
+      it.reason = "Taken off the offer sheet — put back here";
+      it.offSheet = true;
+      return;
+    }
     if(lk && lk.locked && !canAllocate(lk.locked)){
       /* O2I outranks a finalised sheet - a client that cannot receive cannot hold either */
       it.stage = "unchecked";
@@ -2032,6 +2045,13 @@ function liveRow(it){
   };
 }
 function whereOf(it){
+  if(it.offSheet){
+    /* Held out of the running by hand. It sits in the view it belongs to, but
+       labelled, so it is obvious why no sheet is picking it up. */
+    const back = '<button class="mini" data-osreturn="'+it.id+'">Put back</button>';
+    return {k: /^B0/i.test(it.asin) ? "To check" : "Walmart", c:"off",
+            d:"Taken off the offer sheet " + back};
+  }
   if(it.stage === "walmart"){
     const r = wmResult(it);
     if(r.dom)   return {k:"Dom", c:"flag", d:r.dom};
@@ -3055,10 +3075,18 @@ document.addEventListener("click", e=>{
   const dr = t.closest("button[data-osdrop]");
   if(dr){
     const ids = dr.dataset.osdrop.split(",").filter(Boolean);
-    if(!confirm("Take this ASIN off the offer sheet? It stays in the queue and can be put back from All items.")) return;
+    if(!confirm("Take this ASIN off the offer sheet?\n\nIt goes back to Amazon ungating, or to Walmart if it has no ASIN, and will not be put on a sheet again until you return it.")) return;
     ids.forEach(id=>{ wmRec(id).excluded = true; wmRec(id).locked = ""; touch("ovr", id); });
     recompute(); saveMarks(); render();
-    toast("Removed from the sheet");
+    toast("Sent back to the queue");
+    return;
+  }
+  const rt = t.closest("button[data-osreturn]");
+  if(rt){
+    const ids = rt.dataset.osreturn.split(",").filter(Boolean);
+    ids.forEach(id=>{ wmRec(id).excluded = false; touch("ovr", id); });
+    recompute(); saveMarks(); render();
+    toast("Back in the running");
     return;
   }
   const oc = t.closest("button[data-oscopy]");
@@ -3292,6 +3320,7 @@ const M = {
   cfg:{method:"spread", minOrder:500, minRoi:0.10, maxClients:3, pendingOn:false,
        year:2026, quarter:"Q3", channel:"amazon"},
   result:null, staged:null, openRun:null, openClient:null,
+  gatedBusy:false, gatedLog:0,
   picked:null,                // null means every client; a Set is an explicit choice
   sort:{by:"pct", dir:-1},
 };
@@ -5012,18 +5041,91 @@ async function omsFetch(codes){
 
 /* One reading of a status, used by both the badge and the count, so the two
    can never disagree about what a line means. */
+/* A client keeps hold of an ASIN only while the order is still alive. Three
+   answers mean alive: no result yet, waiting for the invoice, and allocated
+   to Amazon. Every other answer ends it, and the ASIN goes back to the pool
+   for somebody else. Gated ends it too, and additionally records that this
+   client cannot sell it at all. */
 function omsBand(code){
   const s=M.oms[code];
-  /* Not in OMS and in OMS but blank both mean the same thing to the person
-     reading the sheet: the answer has not come back yet. */
-  if(!s) return {band:"wait", text:"Waiting for result"};
-  const f=s.final_result || s.order_status;
-  if(!f) return {band:"wait", text:"Waiting for result"};
-  if(/^good to order$|^allocated to amazon$|^ungate list$/i.test(f)) return {band:"good", text:f};
-  /* Still moving: not a rejection, just not settled. */
-  if(/^waiting|^on hold|^t-?code$/i.test(f)) return {band:"wait", text:f};
-  return {band:"bad", text:f};
+  const f=String((s && (s.final_result || s.order_status)) || "").trim();
+  if(!f) return {band:"wait", text:"Waiting for result", held:true};
+  if(/^waiting for invoice$/i.test(f)) return {band:"wait", text:f, held:true};
+  if(/^allocated to amazon$/i.test(f)) return {band:"good", text:f, held:true};
+  return {band:"bad", text:f, held:false, gate:/^gated$/i.test(f)};
 }
+/* Everything on an offer sheet went out as Ungated. When OMS comes back and
+   says Gated, the ASIN database is the thing that was wrong, and it will keep
+   being wrong on every future run until it is corrected. */
+/* The lines whose answer has ended the hold and which are still on the books. */
+function omsReleases(rows){
+  const out=[];
+  for(const r of rows){
+    if(!M.oms[r.tracking_code]) continue;            // nothing back yet
+    const b=omsBand(r.tracking_code);
+    if(b.held) continue;
+    const onBooks=M.ledger.some(x=>x.batch_id===r.batch_id
+      && x.store_code===r.store_code && x.asin===r.asin);
+    if(!onBooks) continue;                           // already released
+    out.push(Object.assign({}, r, {gate:!!b.gate, why:b.text}));
+  }
+  return out;
+}
+
+/* Two things are wrong when Amazon answers Gated, and both have to be put
+   right. The ASIN database still says the client is Ungated, so the ASIN
+   would be offered again. And the client is still counted as holding it, so
+   the slot stays used on a line nobody can sell. */
+async function applyGatedFixes(fixes){
+  if(!fixes.length || M.gatedBusy) return 0;
+  M.gatedBusy=true;
+  const value=fixes.reduce((s,f)=>s+(Number(f.total_price)||0),0);
+  const gated=fixes.filter(f=>f.gate);
+  try{
+    /* Only a Gated answer changes what the client may sell. Not Available,
+       Storage Limit and the rest are about this order, not about ungating, so
+       the ASIN can be offered to the same client again another time. */
+    for(const f of gated){
+      const {error}=await sb.from("mos_gating").delete()
+        .eq("asin", f.asin).eq("store_code", f.store_code);
+      if(error) throw error;
+    }
+
+    const ids=fixes.map(f=>f.id).filter(x=>x!==undefined && x!==null);
+    if(ids.length===fixes.length){
+      for(let i=0;i<ids.length;i+=200){
+        const {error}=await sb.from("mos_allocations").delete().in("id", ids.slice(i,i+200));
+        if(error) throw error;
+      }
+    } else {
+      for(const f of fixes){
+        const {error}=await sb.from("mos_allocations").delete()
+          .eq("batch_id", f.batch_id).eq("store_code", f.store_code).eq("asin", f.asin);
+        if(error) throw error;
+      }
+    }
+
+    const gone=new Set(fixes.map(f=>f.batch_id+"|"+f.store_code+"|"+f.asin));
+    M.ledger=M.ledger.filter(r=>!gone.has(r.batch_id+"|"+r.store_code+"|"+r.asin));
+    for(const f of gated){
+      const k=key(f.asin,f.store_code);
+      M.ungated.delete(k); M.pending.delete(k); M.blank.delete(k);
+    }
+    recompute();
+    M.result=null;
+    renderMos();
+    M.gatedLog = (M.gatedLog||0) + fixes.length;
+    M.gatedGateLog = (M.gatedGateLog||0) + gated.length;
+    note(fixes.length.toLocaleString()+" line"+(fixes.length===1?"":"s")+" released \u00b7 "+
+      (gated.length ? gated.length+" also marked Gated \u00b7 " : "")+
+      cash(value)+" back on budget.");
+    return fixes.length;
+  }catch(e){
+    note("Could not apply the Gated correction: "+(e.message||e), true);
+    return 0;
+  }finally{ M.gatedBusy=false; }
+}
+
 function omsBadge(code){
   const b=omsBand(code);
   return '<span class="oms '+b.band+'">'+esc(b.text)+'</span>';
@@ -5095,6 +5197,7 @@ function renderSheets(){
           '<div id="sh-oms"><i>IN OMS</i><b>\u2014</b><small>checking\u2026</small></div>'+
         '</div>'+
       '</div>'+
+      '<div id="sh-fix" class="sh-fix" hidden></div>'+
       '<div class="sh-lines">'+
         '<div class="sh-lines-top"><b>Line Items</b><span>'+lines.length.toLocaleString()+
           ' product'+(lines.length===1?'':'s')+'</span>'+
@@ -5130,6 +5233,7 @@ function renderSheets(){
 
     /* OMS keeps moving after the order goes in, so the open sheet asks again
        every half minute rather than showing whatever it saw once. */
+    if(M.gatedFor!==code){ M.gatedFor=code; M.gatedLog=0; }
     const codes=lines.map(r=>r.tracking_code).filter(Boolean);
     const paint=()=>{
       const box=el("sh-oms"); if(!box) return;
@@ -5143,10 +5247,37 @@ function renderSheets(){
         const td=body.querySelectorAll("tbody tr")[i];
         if(td) td.lastElementChild.innerHTML=omsBadge(r.tracking_code);
       });
+
+      const fix=el("sh-fix");
+      if(fix){
+        const n=M.gatedLog||0, g=M.gatedGateLog||0;
+        fix.hidden=!n;
+        if(n) fix.innerHTML='<span><b>'+n.toLocaleString()+'</b> line'+(n===1?'':'s')+
+          ' came back with an answer that ends the hold, so the ASIN'+(n===1?'':'s')+
+          ' went back to the pool and the budget was put back.'+
+          (g ? ' <b>'+g+'</b> of '+(n===1?'them':'those')+' answered Gated and '+
+               (g===1?'was':'were')+' marked Gated in the ASIN database as well, so '+
+               (g===1?'it':'they')+' will not be offered to '+esc(code)+' again.'
+             : ' They can be offered to '+esc(code)+' again on a later run.')+'</span>';
+      }
+    };
+
+    /* Anything Amazon refuses as Gated is corrected as soon as it is seen: the
+       ASIN database is put right and the slot released, so the next run cannot
+       offer the same ASIN to the same client again. */
+    const settleGated=async ()=>{
+      const fixes=omsReleases(run.rows.filter(r=>r.store_code===code));
+      if(!fixes.length) return false;
+      const n=await applyGatedFixes(fixes);
+      return n>0;
     };
     const poll=async()=>{
       if(M.view!=="sheets" || M.openClient!==code) return;   /* stop when you leave */
-      try{ await omsFetch(codes); paint(); }
+      try{
+        await omsFetch(codes);
+        if(await settleGated()){ renderSheets(); return; }   /* redraw with the line gone */
+        paint();
+      }
       catch(e){
         const box=el("sh-oms");
         if(box) box.innerHTML='<i>IN OMS</i><b>\u2014</b><small>'+esc(String(e.message||e).slice(0,60))+'</small>';
