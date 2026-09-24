@@ -494,6 +494,7 @@ body{padding-left:214px}
 .sh-fix{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 16px;
   background:#fdf4e7;border:1px solid #e8cda3;border-radius:10px;padding:13px 16px;
   font:500 12.5px/1.5 var(--sans);color:#7a5308}
+.sh-fix[hidden]{display:none}
 .sh-fix b{font-weight:700}
 .sh-fix button{margin-left:auto;white-space:nowrap}
 .sh-lines{background:var(--panel);border:1px solid var(--rule);border-radius:14px;overflow:hidden}
@@ -3485,6 +3486,9 @@ async function loadAll(){
 function recompute(){
   M.counts={}; M.spent={}; M.byMonth={};
   for(const r of M.ledger){
+    /* A released line stays on the sheet so its result can be read, but it
+       holds nothing and costs nothing: the order ended. */
+    if(r.released_at) continue;
     /* Only a slot still inside its thirty days blocks the ASIN. Money is a
        separate matter, and it is counted against the month the sheet was
        dated, because the budget starts again each month. */
@@ -4818,7 +4822,7 @@ const monthName=(m)=>{
 function clientReport(month){
   month = month || curMonth();
   const rows=M.stores.map((code,i)=>{
-    const all=M.ledger.filter(r=>r.store_code===code);
+    const all=M.ledger.filter(r=>r.store_code===code && !r.released_at);
     const mine=all.filter(r=>monthOf(r)===month);
     const runs=new Set(mine.map(r=>r.batch_id));
     const value=mine.reduce((s,r)=>s+(Number(r.total_price)||0),0);
@@ -5067,9 +5071,9 @@ function omsReleases(rows){
     if(!M.oms[r.tracking_code]) continue;            // nothing back yet
     const b=omsBand(r.tracking_code);
     if(b.held) continue;
-    const onBooks=M.ledger.some(x=>x.batch_id===r.batch_id
+    const live=M.ledger.find(x=>x.batch_id===r.batch_id
       && x.store_code===r.store_code && x.asin===r.asin);
-    if(!onBooks) continue;                           // already released
+    if(!live || live.released_at) continue;          // already released
     out.push(Object.assign({}, r, {gate:!!b.gate, why:b.text}));
   }
   return out;
@@ -5094,22 +5098,21 @@ async function applyGatedFixes(fixes){
       if(error) throw error;
     }
 
-    const ids=fixes.map(f=>f.id).filter(x=>x!==undefined && x!==null);
-    if(ids.length===fixes.length){
-      for(let i=0;i<ids.length;i+=200){
-        const {error}=await sb.from("mos_allocations").delete().in("id", ids.slice(i,i+200));
-        if(error) throw error;
-      }
-    } else {
-      for(const f of fixes){
-        const {error}=await sb.from("mos_allocations").delete()
-          .eq("batch_id", f.batch_id).eq("store_code", f.store_code).eq("asin", f.asin);
-        if(error) throw error;
-      }
+    /* Marked, not deleted. Deleting took the line off the sheet as well, so
+       the result that ended it could never be read back. */
+    const at=new Date().toISOString();
+    for(const f of fixes){
+      let q=sb.from("mos_allocations").update({released_at:at, release_reason:f.why||null});
+      q = (f.id!==undefined && f.id!==null) ? q.eq("id", f.id)
+          : q.eq("batch_id", f.batch_id).eq("store_code", f.store_code).eq("asin", f.asin);
+      const {error}=await q;
+      if(error) throw error;
     }
-
-    const gone=new Set(fixes.map(f=>f.batch_id+"|"+f.store_code+"|"+f.asin));
-    M.ledger=M.ledger.filter(r=>!gone.has(r.batch_id+"|"+r.store_code+"|"+r.asin));
+    const hit=new Map(fixes.map(f=>[f.batch_id+"|"+f.store_code+"|"+f.asin, f.why||null]));
+    for(const r of M.ledger){
+      const k=r.batch_id+"|"+r.store_code+"|"+r.asin;
+      if(hit.has(k)){ r.released_at=at; r.release_reason=hit.get(k); }
+    }
     for(const f of gated){
       const k=key(f.asin,f.store_code);
       M.ungated.delete(k); M.pending.delete(k); M.blank.delete(k);
@@ -5236,7 +5239,11 @@ function renderSheets(){
 
     /* OMS keeps moving after the order goes in, so the open sheet asks again
        every half minute rather than showing whatever it saw once. */
-    if(M.gatedFor!==code){ M.gatedFor=code; M.gatedLog=0; }
+    if(M.gatedFor!==code){ M.gatedFor=code; M.gatedLog=0; M.gatedGateLog=0; }
+    for(const r of lines){
+      if(r.released_at && r.release_reason && !M.oms[r.tracking_code])
+        M.oms[r.tracking_code]={final_result:r.release_reason};
+    }
     const codes=lines.map(r=>r.tracking_code).filter(Boolean);
     const paint=()=>{
       const box=el("sh-oms"); if(!box) return;
