@@ -5048,7 +5048,10 @@ async function omsFetch(codes){
    client cannot sell it at all. */
 function omsBand(code){
   const s=M.oms[code];
-  const f=String((s && (s.final_result || s.order_status)) || "").trim();
+  /* The final result only. The tracker's order status reads Not Yet Ordered
+     or Ungate Checking while an order is still being worked, and treating
+     that as a result would release lines nobody has finished with. */
+  const f=String((s && s.final_result) || "").trim();
   if(!f) return {band:"wait", text:"Waiting for result", held:true};
   if(/^waiting for invoice$/i.test(f)) return {band:"wait", text:f, held:true};
   if(/^allocated to amazon$/i.test(f)) return {band:"good", text:f, held:true};
