@@ -3321,7 +3321,7 @@ const M = {
   cfg:{method:"spread", minOrder:500, minRoi:0.10, maxClients:3, pendingOn:false,
        year:2026, quarter:"Q3", channel:"amazon"},
   result:null, staged:null, openRun:null, openClient:null,
-  gatedBusy:false, gatedLog:0,
+  gatedBusy:false, gatedLog:0, sweeping:false, sweptAt:null, sweepWarned:false,
   picked:null,                // null means every client; a Set is an explicit choice
   sort:{by:"pct", dir:-1},
 };
@@ -5029,6 +5029,27 @@ function showClientRuns(code){
 M.oms = M.oms || {};
 M.omsAt = null;
 
+/* The last answer seen for each code, kept in this browser so a sheet can
+   show it the moment it opens instead of "checking". For showing only:
+   releases still wait for an answer fetched in this visit (M.oms). */
+const OMS_SEEN_KEY = "mos.oms.v1";
+M.omsSeen = (()=>{
+  try{
+    const v=JSON.parse(localStorage.getItem(OMS_SEEN_KEY)||"{}");
+    return v && typeof v==="object" && !Array.isArray(v) ? v : {};
+  }catch(e){ return {}; }
+})();
+function omsRemember(states, asked){
+  /* A code OMS was asked about and does not have is remembered as "no result
+     yet", so it is not shown as checking on every visit. */
+  for(const c of asked||[]) M.omsSeen[c]=states[c] || {final_result:null};
+  Object.assign(M.omsSeen, states);
+  /* Codes that left the ledger (a cancelled sheet) are not kept forever. */
+  const keep=new Set((M.ledger||[]).map(r=>r.tracking_code));
+  if(keep.size) for(const c in M.omsSeen) if(!keep.has(c)) delete M.omsSeen[c];
+  try{ localStorage.setItem(OMS_SEEN_KEY, JSON.stringify(M.omsSeen)); }catch(e){}
+}
+
 async function omsFetch(codes){
   codes=[...new Set(codes.filter(Boolean))];
   if(!codes.length) return {asked:0, found:0};
@@ -5039,25 +5060,30 @@ async function omsFetch(codes){
   }
   if(!data||!data.ok) throw new Error((data&&data.error)||"OMS did not answer.");
   Object.assign(M.oms, data.states||{});
+  omsRemember(data.states||{}, codes);
   M.omsAt=new Date();
   return data;
 }
 
 /* One reading of a status, used by both the badge and the count, so the two
    can never disagree about what a line means. */
-/* A client keeps hold of an ASIN only while the order is still alive. Three
-   answers mean alive: no result yet, waiting for the invoice, and allocated
-   to Amazon. Every other answer ends it, and the ASIN goes back to the pool
+/* A client keeps hold of an ASIN only while the order is still alive. These
+   answers mean alive: no result yet, waiting for the invoice, allocated to
+   Amazon, and the not-yet-verdicts On Hold Shipment, Storage Error and Error.
+   Every other answer ends it, and the ASIN goes back to the pool
    for somebody else. Gated ends it too, and additionally records that this
    client cannot sell it at all. */
 function omsBand(code){
-  const s=M.oms[code];
+  const s=M.oms[code] || M.omsSeen[code];
   /* The final result only. The tracker's order status reads Not Yet Ordered
      or Ungate Checking while an order is still being worked, and treating
      that as a result would release lines nobody has finished with. */
   const f=String((s && s.final_result) || "").trim();
   if(!f) return {band:"wait", text:"Waiting for result", held:true};
   if(/^waiting for invoice$/i.test(f)) return {band:"wait", text:f, held:true};
+  /* Not a verdict yet: the shipment is on hold, or OMS hit an error. The line
+     keeps its slot and is asked about again until a real result comes back. */
+  if(/^(on hold shipment|storage error|error)$/i.test(f)) return {band:"wait", text:f, held:true};
   if(/^allocated to amazon$/i.test(f)) return {band:"good", text:f, held:true};
   return {band:"bad", text:f, held:false, gate:/^gated$/i.test(f)};
 }
@@ -5083,7 +5109,7 @@ function omsReleases(rows){
    right. The ASIN database still says the client is Ungated, so the ASIN
    would be offered again. And the client is still counted as holding it, so
    the slot stays used on a line nobody can sell. */
-async function applyGatedFixes(fixes){
+async function applyGatedFixes(fixes, quiet){
   if(!fixes.length || M.gatedBusy) return 0;
   M.gatedBusy=true;
   const value=fixes.reduce((s,f)=>s+(Number(f.total_price)||0),0);
@@ -5092,22 +5118,38 @@ async function applyGatedFixes(fixes){
     /* Only a Gated answer changes what the client may sell. Not Available,
        Storage Limit and the rest are about this order, not about ungating, so
        the ASIN can be offered to the same client again another time. */
-    for(const f of gated){
-      const {error}=await sb.from("mos_gating").delete()
-        .eq("asin", f.asin).eq("store_code", f.store_code);
+    const gateBy={};
+    for(const f of gated) (gateBy[f.store_code] ||= new Set()).add(f.asin);
+    for(const code in gateBy){
+      const list=[...gateBy[code]];
+      for(let i=0;i<list.length;i+=200){
+        const {error}=await sb.from("mos_gating").delete()
+          .eq("store_code", code).in("asin", list.slice(i,i+200));
+        if(error) throw error;
+      }
+    }
+
+    /* Marked, not deleted, and grouped by reason so hundreds of lines are a
+       few requests rather than one each. */
+    const at=new Date().toISOString();
+    const byWhy={};
+    for(const f of fixes) if(f.id!==undefined && f.id!==null) (byWhy[f.why||""] ||= []).push(f.id);
+    for(const why in byWhy){
+      const ids=byWhy[why];
+      for(let i=0;i<ids.length;i+=200){
+        const {error}=await sb.from("mos_allocations")
+          .update({released_at:at, release_reason:why||null}).in("id", ids.slice(i,i+200));
+        if(error) throw error;
+      }
+    }
+    for(const f of fixes){
+      if(f.id!==undefined && f.id!==null) continue;
+      const {error}=await sb.from("mos_allocations")
+        .update({released_at:at, release_reason:f.why||null})
+        .eq("batch_id", f.batch_id).eq("store_code", f.store_code).eq("asin", f.asin);
       if(error) throw error;
     }
 
-    /* Marked, not deleted. Deleting took the line off the sheet as well, so
-       the result that ended it could never be read back. */
-    const at=new Date().toISOString();
-    for(const f of fixes){
-      let q=sb.from("mos_allocations").update({released_at:at, release_reason:f.why||null});
-      q = (f.id!==undefined && f.id!==null) ? q.eq("id", f.id)
-          : q.eq("batch_id", f.batch_id).eq("store_code", f.store_code).eq("asin", f.asin);
-      const {error}=await q;
-      if(error) throw error;
-    }
     const hit=new Map(fixes.map(f=>[f.batch_id+"|"+f.store_code+"|"+f.asin, f.why||null]));
     for(const r of M.ledger){
       const k=r.batch_id+"|"+r.store_code+"|"+r.asin;
@@ -5119,17 +5161,38 @@ async function applyGatedFixes(fixes){
     }
     recompute();
     M.result=null;
-    renderMos();
-    M.gatedLog = (M.gatedLog||0) + fixes.length;
-    M.gatedGateLog = (M.gatedGateLog||0) + gated.length;
-    note(fixes.length.toLocaleString()+" line"+(fixes.length===1?"":"s")+" released \u00b7 "+
+    if(!quiet) renderMos();
+    const clients=new Set(fixes.map(f=>f.store_code)).size;
+    note(fixes.length.toLocaleString()+" line"+(fixes.length===1?"":"s")+" released"+
+      (clients>1 ? " across "+clients+" clients" : "")+" \u00b7 "+
       (gated.length ? gated.length+" also marked Gated \u00b7 " : "")+
       cash(value)+" back on budget.");
     return fixes.length;
   }catch(e){
-    note("Could not apply the Gated correction: "+(e.message||e), true);
+    note("Could not apply the release: "+(e.message||e), true);
     return 0;
   }finally{ M.gatedBusy=false; }
+}
+
+/* Every live line in every run, checked against OMS in one go. Opening each
+   client to make it update was never going to happen for eighty-six of them,
+   so the whole ledger is swept when the desk opens and every few minutes
+   while it stays open. */
+async function sweepOms(){
+  if(M.sweeping || M.gatedBusy) return;
+  const live=M.ledger.filter(r=>!r.released_at && r.tracking_code);
+  if(!live.length) return;
+  M.sweeping=true;
+  try{
+    await omsFetch(live.map(r=>r.tracking_code));
+    const rel=omsReleases(live);
+    if(rel.length) await applyGatedFixes(rel, true);
+    M.sweptAt=new Date();
+    if(M.view==="sheets" || M.view==="clients") renderMos();
+  }catch(e){
+    /* Say it once; a failing call is retried on the next tick, not hammered. */
+    if(!M.sweepWarned){ note("Could not check OMS: "+(e.message||e), true); M.sweepWarned=true; }
+  }finally{ M.sweeping=false; }
 }
 
 function omsBadge(code){
@@ -5200,7 +5263,7 @@ function renderSheets(){
           '<div><i>TOTAL COST</i><b>'+cash0(value)+'</b></div>'+
           '<div><i>ROI</i><b>'+(floor?(floor*100).toFixed(0)+'% ROI guaranteed':(roi*100).toFixed(1)+'%')+'</b>'+
             (floor?'<small>Up to '+(roi*100).toFixed(1)+'% potential</small>':'')+'</div>'+
-          '<div id="sh-oms"><i>IN OMS</i><b>\u2014</b><small>checking\u2026</small></div>'+
+          '<div id="sh-oms"><i>IN OMS</i><b>\u2014</b><small></small></div>'+
         '</div>'+
       '</div>'+
       '<div id="sh-fix" class="sh-fix" hidden></div>'+
@@ -5237,19 +5300,28 @@ function renderSheets(){
     };
     body.onclick=null;
 
-    /* OMS keeps moving after the order goes in, so the open sheet asks again
-       every half minute rather than showing whatever it saw once. */
+    /* Only the waiting answers still move once an order is in: no result yet,
+       Waiting for invoice, and the not-yet-verdicts in omsBand. The open sheet
+       asks OMS about those lines every half minute and leaves the rest alone;
+       what was seen last shows straight away. */
     if(M.gatedFor!==code){ M.gatedFor=code; M.gatedLog=0; M.gatedGateLog=0; }
     for(const r of lines){
       if(r.released_at && r.release_reason && !M.oms[r.tracking_code])
         M.oms[r.tracking_code]={final_result:r.release_reason};
     }
     const codes=lines.map(r=>r.tracking_code).filter(Boolean);
-    const paint=()=>{
+    const needsAsking=(r)=>{
+      if(!r.tracking_code || r.released_at) return false;   /* its answer is on the ledger */
+      const b=omsBand(r.tracking_code);
+      if(b.band==="wait") return true;                     /* no result yet, waiting for invoice, on hold, error */
+      if(b.held) return false;                             /* allocated to Amazon: final */
+      return !M.oms[r.tracking_code];                      /* a rejection seen on an earlier visit: confirm it before releasing */
+    };
+    const paint=(msg)=>{
       const box=el("sh-oms"); if(!box) return;
       const s=omsSummary(codes);
       box.innerHTML='<i>IN OMS</i><b>'+s.settled.toLocaleString()+' of '+codes.length.toLocaleString()+'</b>'+
-        '<small>'+(s.settled
+        '<small>'+(msg ? esc(msg) : s.settled
           ? (s.good?s.good+' good':'')+(s.bad?(s.good?' \u00b7 ':'')+s.bad+' rejected':'')+
             (s.waiting?' \u00b7 '+s.waiting+' waiting':'')
           : 'all waiting for result')+'</small>';
@@ -5260,7 +5332,8 @@ function renderSheets(){
 
       const fix=el("sh-fix");
       if(fix){
-        const n=M.gatedLog||0, g=M.gatedGateLog||0;
+        const rel=lines.filter(r=>r.released_at);
+        const n=rel.length, g=rel.filter(r=>/^gated$/i.test(String(r.release_reason||""))).length;
         fix.hidden=!n;
         if(n) fix.innerHTML='<span><b>'+n.toLocaleString()+'</b> line'+(n===1?'':'s')+
           ' came back with an answer that ends the hold, so the ASIN'+(n===1?'':'s')+
@@ -5281,21 +5354,31 @@ function renderSheets(){
       const n=await applyGatedFixes(fixes);
       return n>0;
     };
+    /* An answer that arrives after you have moved to another sheet must not be
+       painted there or stop that sheet's own timer. */
+    const token=M.sheetToken=(M.sheetToken||0)+1;
+    const here=()=>M.view==="sheets" && M.openRun===run.id && M.openClient===code && M.sheetToken===token;
     const poll=async()=>{
-      if(M.view!=="sheets" || M.openClient!==code) return;   /* stop when you leave */
+      if(!here()) return;                                    /* stop when you leave */
+      const ask=lines.filter(needsAsking).map(r=>r.tracking_code);
       try{
-        await omsFetch(codes);
-        if(await settleGated()){ renderSheets(); return; }   /* redraw with the line gone */
+        if(ask.length) await omsFetch(ask);
+        if(await settleGated()){ if(here()) renderSheets(); return; }   /* redraw with the line gone */
+        if(!here()) return;
         paint();
       }
       catch(e){
-        const box=el("sh-oms");
-        if(box) box.innerHTML='<i>IN OMS</i><b>\u2014</b><small>'+esc(String(e.message||e).slice(0,60))+'</small>';
+        if(here()) paint(String(e.message||e).slice(0,60));
         return;                                              /* do not hammer a failing call */
       }
       clearTimeout(M.omsTimer);
-      M.omsTimer=setTimeout(poll, 30000);
+      /* Keep going while a line can still move, or while a release it earned
+         has not been written yet (the write failed); otherwise stop. */
+      if(lines.some(needsAsking) || omsReleases(lines).length) M.omsTimer=setTimeout(poll, 30000);
     };
+    /* Draw what is already known, and say "checking" only for a sheet this
+       browser has never had an answer for. */
+    paint(codes.some(c=>!M.oms[c] && !M.omsSeen[c]) && lines.some(needsAsking) ? "checking\u2026" : "");
     clearTimeout(M.omsTimer);
     poll();
     return;
@@ -5379,7 +5462,15 @@ function renderSheets(){
   }
 
   head.innerHTML='<div class="sh-head"><h3>Previous offer sheets</h3>'+
-    '<span class="sh-sub">'+runs.length+' run'+(runs.length===1?'':'s')+' recorded</span></div>';
+    '<span class="sh-sub">'+runs.length+' run'+(runs.length===1?'':'s')+' recorded'+
+    (M.sweptAt ? ' \u00b7 OMS checked '+M.sweptAt.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : '')+
+    '</span><button class="ung-tool" id="sh-sweep" type="button">Check OMS now</button></div>';
+  if(el("sh-sweep")) el("sh-sweep").onclick=async function(){
+    this.disabled=true; this.textContent="Checking\u2026";
+    M.sweepWarned=false;
+    await sweepOms();
+    renderSheets();
+  };
   body.className="sh-grid";
   body.innerHTML = runs.length
     ? runs.map(run=>{
@@ -5619,6 +5710,9 @@ async function enterMos(){
     }
   }
   renderMos();
+  sweepOms();
+  clearInterval(M.sweepTimer);
+  M.sweepTimer=setInterval(()=>{ if(M.on && !document.hidden) sweepOms(); }, 5*60*1000);
 }
 function leaveMos(){
   M.on=false;
