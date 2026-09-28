@@ -37,7 +37,7 @@
   .ledger .done{margin-left:auto;border-left:1px solid #333F3B;padding-left:20px}
   .ledger .done .n{color:#7FD0A5}
 
-  main{padding:22px 24px 64px;max-width:1360px;margin:0 auto}
+  main{padding:22px 28px 64px}
   #view-amazon{max-width:none}
   section[hidden]{display:none}
   .stack{display:grid;gap:18px}
@@ -315,6 +315,605 @@
   .who.away{border-color:var(--rule);color:var(--ink3);background:var(--panel)}
   .who.away i{background:var(--rule)}
   @media (max-width:900px){.cols{grid-template-columns:1fr}.ledger .done{margin-left:0;border-left:0;padding-left:0}}
+
+  /* ===== UI refresh 2026-09 ===== */
+  /* One look for every view in both apps: a page header, white stat cards, a toolbar
+     row, tables in a card with a light header, soft pills. The old names (.stat, .chip,
+     .pill, .note, .empty, .bar, .cell) already mean something in one app or the other,
+     so the shared pieces carry a ui- prefix. The two <style> blocks further down win
+     ties, so a rule aimed at #sidenav, #mos-main or body needs an id to beat them. */
+  :root{--rule2:#E9EDEA; --amber:#8A5A0B; --wash-amber:#FBF1DC}
+  [hidden]{display:none!important}
+
+  /* page header: title and one line on the left, actions on the right.
+     At most one .btn.go per view. */
+  .ui-ph{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:0 0 16px}
+  .ui-ph > :first-child{flex:1 1 420px;min-width:0}
+  .ui-ph h2,#mos-main .ui-ph h2{margin:0;font:600 24px/1.2 var(--disp);letter-spacing:-.01em;color:var(--ink)}
+  .ui-ph p{margin:4px 0 0;max-width:95ch;font-size:14px;color:var(--ink2)}
+  .ui-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
+  .ui-meta{font-size:12px;color:var(--ink3)}
+  main .btn{border-radius:8px;padding:8px 14px;font-size:13px}
+
+  /* stat cards */
+  .ui-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:0 0 16px}
+  .ui-stat{min-width:0;padding:14px 16px;background:var(--panel);border:1px solid var(--rule);border-radius:12px}
+  .ui-stat i{display:block;font-style:normal;font-size:12px;color:var(--ink2)}
+  .ui-stat b{display:block;margin-top:2px;font:600 22px/1.25 var(--disp);letter-spacing:-.01em;color:var(--ink)}
+  .ui-stat small{display:block;margin-top:2px;font-size:12px;color:var(--ink3)}
+  .ui-stat.hot b{color:var(--amber)}
+  .ui-stat.good b{color:var(--amazon)}
+  .ui-bar{height:6px;margin-top:8px;border-radius:3px;background:var(--rule2);overflow:hidden}
+  .ui-bar span{display:block;height:100%;background:var(--amazon)}
+  .ui-bar.warn span{background:#C98A1A}
+  .ui-bar.full span{background:var(--flag)}
+
+  /* a card, its toolbar row (search, chips, .ui-spacer, meta) and its footer */
+  .ui-card{margin:0 0 16px;background:var(--panel);border:1px solid var(--rule);border-radius:12px;overflow:hidden}
+  .ui-card > .gridwrap{border-top:0}
+  .ui-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--rule)}
+  .ui-title{font:500 14px var(--sans);color:var(--ink)}
+  .ui-search{flex:0 1 280px;min-width:160px;padding:7px 12px;border:1px solid var(--rule);border-radius:8px;
+    background:#FAFBFA;font:400 14px var(--sans);color:var(--ink)}
+  .ui-search:hover{border-color:#C5CCC8}
+  .ui-search:focus{background:var(--panel);border-color:var(--ink3)}
+  .ui-chips{display:flex;gap:6px;flex-wrap:wrap}
+  .ui-chip{padding:5px 11px;border:1px solid var(--rule);border-radius:999px;background:var(--panel);
+    font:400 13px var(--sans);color:var(--ink2);white-space:nowrap;cursor:pointer}
+  .ui-chip:hover{border-color:#C5CCC8;color:var(--ink)}
+  .ui-chip.on,.ui-chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+  .ui-chip em{margin-left:4px;font-style:normal;color:var(--ink3)}
+  .ui-chip.on em,.ui-chip[aria-pressed="true"] em{color:#B9C3BF}
+  .ui-spacer{flex:1}
+  .ui-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;
+    border-top:1px solid var(--rule);font-size:12px;color:var(--ink3)}
+  .ui-foot > :first-child{flex:1 1 320px;min-width:0}
+  .ui-link{padding:0;border:0;background:none;font:500 13px var(--sans);color:var(--amazon);cursor:pointer}
+  .ui-link:hover{text-decoration:underline}
+
+  /* Columns toggle: a .btn.ui-cols inside .ui-colwrap, with a .ui-colmenu of checkboxes.
+     Hide a column with a class on a static ancestor (the render functions rebuild their
+     tables), and only under @media screen so a printed sheet keeps every column. */
+  .ui-colwrap{position:relative;display:inline-block}
+  .btn.ui-cols{display:inline-flex;align-items:center;gap:6px}
+  .btn.ui-cols::after{content:"\25BE";font-size:11px;color:var(--ink3)}
+  .btn.ui-cols[aria-expanded="true"]{border-color:var(--ink3);background:#F4F6F5}
+  .ui-colmenu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:200px;padding:6px;
+    background:var(--panel);border:1px solid var(--rule);border-radius:10px;box-shadow:0 8px 24px rgba(18,26,23,.14)}
+  .ui-colmenu label{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;
+    font-size:13px;color:var(--ink2);white-space:nowrap;cursor:pointer}
+  .ui-colmenu label:hover{background:#F4F6F5;color:var(--ink)}
+
+  /* a new, simple table: light header, quiet row rules */
+  .ui-tw{overflow:auto}
+  .ui-tw.tall{max-height:62vh}
+  table.ui-tbl{width:100%;border-collapse:collapse;font-size:14px}
+  table.ui-tbl th{position:sticky;top:0;z-index:1;padding:10px 14px;background:#FAFBFA;border-bottom:1px solid var(--rule);
+    font:500 12px var(--sans);letter-spacing:0;text-transform:none;color:var(--ink2);text-align:left;white-space:nowrap}
+  table.ui-tbl th.num{text-align:right}
+  table.ui-tbl td{padding:10px 14px;border-bottom:1px solid var(--rule2);vertical-align:middle;white-space:nowrap}
+  table.ui-tbl td.num{font-size:13px}
+  table.ui-tbl tr:last-child td{border-bottom:0}
+  table.ui-tbl tbody tr:hover td{background:#F7F9F8}
+  .ui-code{font:500 13px var(--mono);color:var(--ink)}
+  .ui-dim{color:var(--ink3)}
+
+  /* An existing table.grid (os-t too) with a light header: put .ui-light on its .gridwrap.
+     Screen only, so the printed offer sheet keeps its dark header. The header font changes,
+     so check the frozen Amazon columns (.c0-.c5 fixed offsets) before using it there;
+     .onitcol and .findcol keep their highlight colours. */
+  @media screen{
+    .ui-light table.grid thead th{border-bottom:1px solid var(--rule);
+      font:500 12px/1.3 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink2)}
+    .ui-light table.grid thead th:not(.onitcol):not(.findcol){background:#FAFBFA;border-right-color:var(--rule2)}
+    .ui-light table.grid.os-t thead th{position:sticky;top:0;z-index:3;vertical-align:bottom}
+  }
+
+  /* pills for status and ROI: good / thin / bad / info / gray */
+  .ui-pill{display:inline-block;padding:2px 9px;border-radius:999px;background:#EEF0EF;
+    font:500 12px/1.5 var(--sans);color:var(--ink2);white-space:nowrap}
+  .ui-pill.good{background:var(--wash-amazon);color:var(--amazon)}
+  .ui-pill.thin{background:var(--wash-amber);color:var(--amber)}
+  .ui-pill.bad{background:var(--wash-flag);color:var(--flag)}
+  .ui-pill.info{background:var(--wash-walmart);color:var(--walmart)}
+  .ui-pill.gray{background:#EEF0EF;color:var(--ink2)}
+
+  /* empty state, usually on a .ui-card */
+  .ui-empty{padding:48px 20px;text-align:center;color:var(--ink2)}
+  .ui-empty .ic{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;margin-bottom:10px;
+    border-radius:50%;background:var(--wash-amazon);color:var(--amazon);font-size:22px}
+  .ui-empty h3,#mos-main .ui-empty h3{margin:0 0 4px;font:600 17px/1.3 var(--disp);color:var(--ink)}
+  .ui-empty p{margin:0 auto;max-width:60ch;color:var(--ink2)}
+
+  /* The print is the PDF a client gets: page chrome stays off it. Add .ui-noprint to
+     anything else of the screen's that must not reach it. */
+  @media print{ .ui-ph,.ui-tools,.ui-foot,.ui-noprint,.cloudbar{display:none!important} }
+
+  /* ---- desk shell: the signed-in line, the live line, the pipeline strip ---- */
+  .masthead{padding:10px 28px 0;background:transparent;border-bottom:0}
+  .cloudbar{padding:8px 28px 0;background:transparent;border-bottom:0;font-size:12px;color:var(--ink2)}
+  .cloudbar b{font-weight:500;color:var(--amazon)}
+  .cloudbar b::before{content:"";display:inline-block;width:7px;height:7px;margin-right:6px;border-radius:50%;
+    background:currentColor;vertical-align:1px}
+  .wholabel{font:400 12px var(--sans);letter-spacing:0;text-transform:none;color:var(--ink2)}
+  .who{border-color:var(--rule);color:var(--ink2)}
+  /* renderLedger: .stat > .k (label) + .n (value), a .sep between stages, .done last */
+  .ledger{display:flex;flex-wrap:nowrap;align-items:stretch;gap:0;margin:16px 28px 0;padding:0;
+    background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:12px;overflow:hidden}
+  .ledger .stat{flex:1 1 0;min-width:0;padding:12px 16px;border-right:1px solid var(--rule2)}
+  .ledger .stat:last-child{border-right:0}
+  .ledger .k{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font:400 12px/1.4 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink2)}
+  .ledger .n{display:block;margin-top:2px;font:600 22px/1.25 var(--disp);letter-spacing:-.01em;color:var(--ink)}
+  .ledger .hot .n{color:var(--amber)}
+  /* the arrow sits on the line between two stages and takes no room of its own */
+  .ledger .sep{position:relative;z-index:1;flex:0 0 14px;align-self:center;margin:0 -7px;padding:0;
+    background:var(--panel);color:var(--ink3);font-size:16px;line-height:1;text-align:center}
+  .ledger .done{flex:0 0 150px;margin-left:0;border-left:0;padding-left:16px;background:#FAFBFA}
+  .ledger .done .n{color:var(--ink)}
+  @media (max-width:900px){
+    .ledger{flex-wrap:wrap}
+    .ledger .stat,.ledger .done{flex:1 1 30%}
+    .ledger .sep{display:none}
+  }
+
+  /* ---- Queue ---- */
+  #roster .ui-tools .ui-meta{min-width:0}
+  #roster td .rname{display:inline-block;max-width:340px;margin-left:8px;overflow:hidden;text-overflow:ellipsis;
+    vertical-align:bottom;font-size:13px;color:var(--ink3)}
+
+  /* ---- shared by All items and Walmart ---- */
+  /* brand on top, product muted below (Walmart puts the product-name input there) */
+  .ui-prod{min-width:180px;white-space:normal}
+  .ui-prod b{display:block;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-weight:500;font-size:13px;color:var(--ink)}
+  .ui-prod span{display:block;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-size:12px;color:var(--ink3)}
+  .ui-prod b + .win{margin-top:3px}
+  /* light editable boxes: a soft grey fill, a border only on hover and focus. Placeholders
+     (the O2I figures on All items) stay grey so a typed value reads darker. */
+  #view-all .win,#view-walmart .win{padding:4px 7px;border:1px solid transparent;border-radius:6px;background:#F4F6F5;
+    font:400 13px var(--mono);color:var(--ink)}
+  #view-all .win::placeholder,#view-walmart .win::placeholder{color:var(--ink3)}
+  #view-all .win:hover,#view-walmart .win:hover{border-color:var(--rule)}
+  #view-all .win:focus,#view-walmart .win:focus{border-color:var(--ink3);background:var(--panel);outline:none}
+  /* the spreadsheet grid, quieter: no vertical rules, lighter row rules */
+  #view-all table.grid{width:100%}
+  #view-walmart table.grid{width:100%;min-width:max-content}
+  #view-all table.grid th,#view-all table.grid td,
+  #view-walmart table.grid th,#view-walmart table.grid td{border-right:0;border-bottom-color:var(--rule2);vertical-align:middle}
+  #view-all table.grid thead th,#view-walmart table.grid thead th{border-bottom-color:var(--rule)}
+
+  /* ---- All items ---- */
+  #view-all table.alli thead th{padding:10px;text-align:left}
+  #view-all table.alli thead th.num{text-align:right}
+  #view-all table.alli th.sortable:hover{background:#F1F4F2;color:var(--ink)}
+  #view-all table.alli td{padding:8px 10px}
+  #view-all table.alli td.tight{font:400 12px var(--mono);color:var(--ink2)}
+  #view-all table.alli td.num{font:400 13px var(--mono)}
+  #view-all table.alli .win.aw{width:74px;min-width:0}
+  #view-all table.alli .pcnt .win.aw{width:60px}
+  /* Product takes whatever width is left (max-width:0 lets it shrink and ellipsize, the
+     full title is on hover); Note wraps, so the table fits more screens without scrolling */
+  #view-all table.alli td.ui-prod{width:28%;min-width:170px;max-width:0}
+  #view-all table.alli td.ui-prod b,#view-all table.alli td.ui-prod span{max-width:none}
+  #view-all table.alli td.ac-note{min-width:150px;max-width:240px;white-space:normal;font-size:12.5px;color:var(--ink2)}
+  #view-all td.ac-note button.mini{font:500 12px var(--sans);padding:2px 9px;margin-left:4px;border:1px solid var(--rule);border-radius:6px;background:var(--panel);color:var(--amazon);cursor:pointer}
+  #view-all td.ac-note button.mini:hover{border-color:var(--amazon)}
+  #view-all .ui-chips .ui-chip{padding:4px 10px;font-size:12.5px}
+  /* the Columns menu drops over the table, so this card must not clip (the grid scrolls itself) */
+  #view-all .all-card{overflow:visible}
+  /* when the chips push Columns onto a second line it stays on the right, so its menu
+     opens over the card and not under the sidebar */
+  #view-all .ui-tools > .ui-colwrap{margin-left:auto}
+  /* Columns toggle: #view-all carries acoff-<key>, each hideable cell ac-<key> */
+  @media screen{
+    #view-all.acoff-tracking .ac-tracking,#view-all.acoff-client .ac-client,#view-all.acoff-target .ac-target,
+    #view-all.acoff-profit .ac-profit,#view-all.acoff-breakeven .ac-breakeven,#view-all.acoff-amount .ac-amount,
+    #view-all.acoff-note .ac-note{display:none}
+  }
+
+  /* ---- Walmart ---- */
+  #wm-cadd{flex:0 0 150px;min-width:0}
+  #view-walmart table.grid td{padding:6px 8px}
+  #view-walmart table.grid thead th{padding:10px 8px}
+  #view-walmart table.grid thead th:not(.wc){text-align:left}
+  #view-walmart table.grid thead .wc{padding-right:18px}
+  #view-walmart table.grid thead th .d{font:400 11px var(--sans);color:var(--ink3)}
+  #view-walmart table.grid .w7{border-right:2px solid var(--ink3)}
+  #view-walmart table.grid td.c0{font:400 12px var(--mono);color:var(--ink3)}
+  #view-walmart table.grid td.w5{font:400 13px var(--mono);color:var(--ink2)}
+  /* a width per kind of field; an input at 100% would size the column to its default ~20 characters */
+  #view-walmart td.w3 .win{width:80px}
+  #view-walmart td.w4 .win{width:100px}
+  #view-walmart td.w1 .win{width:128px}
+  #view-walmart td.wlink .win,#view-walmart td.wname .win{width:240px}
+  #view-walmart td.wname .win{font:400 13px var(--sans)}
+  /* listing select and Result: pills. JS resets both class strings, so key only on them */
+  #view-walmart select.lsel{width:150px;padding:4px 8px;border:1px solid transparent;border-radius:6px;
+    font:500 12px var(--sans);background:var(--wash-amazon);color:var(--amazon);cursor:pointer}
+  #view-walmart select.lsel.bad{background:var(--wash-flag);color:var(--flag)}
+  #view-walmart select.lsel.none{background:#F4F6F5;color:var(--ink3)}
+  #view-walmart select.lsel:hover{border-color:var(--rule)}
+  #view-walmart select.lsel option,#view-walmart select.cell option{background:var(--panel);color:var(--ink)}
+  #view-walmart .res{display:inline-block;padding:2px 9px;border-radius:999px;font:500 12px/1.5 var(--sans);
+    text-align:left;white-space:nowrap}
+  #view-walmart .res.u{background:var(--wash-amazon);color:var(--amazon)}
+  #view-walmart .res.g{background:var(--wash-flag);color:var(--flag)}
+  #view-walmart .res.e{background:#EEF0EF;color:var(--ink2)}
+  #view-walmart .res.p{background:var(--wash-amber);color:var(--amber)}
+  /* client columns: Gated / Ungated as soft pills; blank is a dashed outline */
+  #view-walmart select.cell{-webkit-appearance:none;appearance:none;min-width:84px;padding:3px 8px;
+    border:1px solid transparent;border-radius:999px;font:500 12px var(--sans);text-align:center;text-align-last:center}
+  #view-walmart select.cell.u{background:var(--wash-amazon);color:var(--amazon)}
+  #view-walmart select.cell.g{background:#EEF0EF;color:var(--ink3)}
+  #view-walmart select.cell.e{background:transparent;border:1px dashed #CBD2CE;color:var(--ink3)}
+  #view-walmart select.cell:hover{border-color:var(--ink3)}
+
+  /* ---- Amazon ungating ---- */
+  /* The frozen columns .c0-.c5 sit at fixed left offsets (34/146/250/324/478), so nothing
+     here changes their widths or side padding. The listing select is narrowed to fit .c4. */
+  #view-amazon .az-msku{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+  #view-amazon .az-msku .cl{margin:0}
+  #msku-add{flex:0 0 190px;min-width:0}
+  #gq{flex:0 1 220px}
+  #findclient{flex:0 1 160px;min-width:0}
+  #view-amazon .az-pool{display:inline-flex;align-items:center;gap:6px}
+  #pool{padding:6px 8px;border:1px solid var(--rule);border-radius:8px;background:#FAFBFA;
+    font:400 13px var(--sans);color:var(--ink);cursor:pointer}
+  #view-amazon .btn.az-pg{padding:6px 11px;line-height:1.1}
+  /* "Being checked now" and the batch report: quiet bars across the top of the card */
+  #view-amazon .onitbar{margin:0;padding:10px 14px;border:0;border-bottom:1px solid var(--rule);border-radius:0;
+    background:#FAFBFA;font-size:13px;color:var(--ink2);gap:8px}
+  #view-amazon .onitbar .cl{margin:0;padding:2px 4px 2px 8px;border:0;border-radius:6px;
+    background:var(--wash-walmart);color:var(--walmart)}
+  #view-amazon .onitbar .cl b{font:500 12px var(--mono)}
+  #view-amazon .onitbar small{font:400 11.5px var(--mono);color:var(--walmart)}
+  #view-amazon .onitbar .clx{color:var(--walmart)}
+  #view-amazon .onitbar .clx:hover{color:var(--flag)}
+  #view-amazon .onitbar em{flex:0 1 auto;font-size:12px;color:var(--ink3)}
+  #view-amazon .az-report{display:block;box-shadow:inset 3px 0 0 var(--amazon);color:var(--ink)}
+  #view-amazon .az-report ul{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--ink2)}
+  /* the grid: light header (.ui-light), quiet rules, and a clear line after the old five */
+  #view-amazon table.grid th,#view-amazon table.grid td{border-right-color:var(--rule2);border-bottom-color:var(--rule2);
+    vertical-align:middle}
+  #view-amazon table.grid thead th{border-bottom-color:var(--rule)}
+  #view-amazon table.grid thead th:not(.stick){text-align:center}
+  #view-amazon table.grid thead th .d{font:400 11px var(--sans)}
+  #view-amazon table.grid .c5{border-right:2px solid var(--ink3)}
+  #view-amazon table.grid .az-div{border-left:2px solid var(--ink3)}
+  #view-amazon table.grid td.az-old:not(.findcol):not(.onitcol){background:#FAFBFA}
+  #view-amazon table.grid tbody tr:hover td.az-old:not(.findcol):not(.onitcol){background:#F2F5F3}
+  @media screen{
+    #view-amazon .ui-light table.grid thead th.az-old:not(.onitcol):not(.findcol){background:#F0F3F1}
+  }
+  /* Gated / Ungated: soft pills that stay real selects. setCell and the change handler
+     reset the class string to "cell u|g|e", so key only on those. */
+  #view-amazon select.cell{-webkit-appearance:none;appearance:none;min-width:80px;padding:1px 8px;
+    border:1px solid transparent;border-radius:999px;font:500 12px/1.4 var(--sans);text-align:center;text-align-last:center}
+  #view-amazon select.cell.u{background:var(--wash-amazon);color:var(--amazon)}
+  #view-amazon select.cell.g{background:#EEF0EF;color:var(--ink3)}
+  #view-amazon select.cell.e{background:transparent;color:#B5BDB9}
+  #view-amazon select.cell:hover{border-color:var(--ink3);color:var(--ink2)}
+  #view-amazon select.cell.u:hover{color:var(--amazon)}
+  /* listing status (JS resets it to "lsel [none|bad]") and Result, as pills */
+  #view-amazon select.lsel{width:140px;padding:2px 6px;border:1px solid transparent;border-radius:6px;
+    font:500 12px var(--sans);background:var(--wash-amazon);color:var(--amazon);cursor:pointer}
+  #view-amazon select.lsel.bad{background:var(--wash-flag);color:var(--flag)}
+  #view-amazon select.lsel.none{background:#F4F6F5;color:var(--ink3)}
+  #view-amazon select.lsel:hover{border-color:var(--rule)}
+  #view-amazon select.lsel option,#view-amazon select.pick option{background:var(--panel);color:var(--ink)}
+  #view-amazon .res{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;
+    padding:2px 9px;border-radius:999px;font:500 12px/1.5 var(--sans);text-align:left}
+  #view-amazon .res.u{background:var(--wash-amazon);color:var(--amazon)}
+  #view-amazon .res.g{background:var(--wash-flag);color:var(--flag)}
+  #view-amazon .res.e{background:#EEF0EF;color:var(--ink2)}
+  #view-amazon .res.p{background:var(--wash-amber);color:var(--amber)}
+  #view-amazon select.pick{padding:2px 6px;border:1px solid var(--rule);border-radius:6px;background:#FAFBFA;
+    font:500 12px var(--sans);color:var(--ink2)}
+  #view-amazon select.pick:hover{border-color:var(--ink3)}
+  #view-amazon select.pick.set{background:var(--wash-amazon);border-color:#A9CDB9;color:var(--amazon)}
+  /* the legend in the footer, same colours as the cells */
+  #view-amazon .az-legend{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+  #view-amazon .az-key{display:inline-block;padding:1px 9px;border-radius:999px;font:500 11.5px/1.5 var(--sans)}
+  #view-amazon .az-key.u{background:var(--wash-amazon);color:var(--amazon)}
+  #view-amazon .az-key.g{background:#EEF0EF;color:var(--ink3)}
+  #view-amazon .az-key.e{border:1px dashed #CBD2CE;color:var(--ink3)}
+  #view-amazon .az-key.p{margin-left:8px;background:var(--wash-amber);color:var(--amber)}
+
+  /* ---- Offer sheets ---- */
+  #os-results > .ui-tools{border-bottom:0}
+  #respick{border-top:1px solid var(--rule2)}
+  #respick:empty{display:none}
+  #os-results .resgrp{gap:5px;margin-right:10px}
+  #os-results .resgrp:last-child{margin-right:0}
+  #os-results .resgrp b{margin-right:2px;font:500 12px var(--sans);letter-spacing:0;text-transform:none;color:var(--ink2)}
+  #respick .reslabel{font:500 12px var(--sans);letter-spacing:0;text-transform:none;color:var(--ink2)}
+  #respick .chipbtn{padding:4px 10px;border-radius:999px;font:400 12.5px var(--sans)}
+  #respick .chipbtn small{font:400 12px var(--sans)}
+  #respick .sub{display:inline;margin:0;font-size:12px}
+  .os-help{max-width:120ch;margin:0 0 14px;font-size:12px;line-height:1.5;color:var(--ink3)}
+  /* Each .os-doc is also the page a client gets as a PDF, so the card look is screen only:
+     print keeps its own head (2px rule, uppercase figures) and its dark table header. */
+  @media screen{
+    #view-sheets .os-doc{margin:0 0 16px;border-radius:12px}
+    #view-sheets .os-doc-head{gap:16px 28px;padding:16px;border-bottom:1px solid var(--rule)}
+    #view-sheets .os-eyebrow{margin-bottom:2px;font:500 11px var(--mono);letter-spacing:.06em;color:var(--ink3)}
+    #view-sheets .os-who{font:600 22px/1.2 var(--disp);letter-spacing:-.01em}
+    #view-sheets .os-sub{margin-top:4px;font-size:13px}
+    #view-sheets .os-figs{gap:28px}
+    #view-sheets .os-fig{margin:0;padding:0;border-left:0}
+    #view-sheets .os-fig .k{font:400 12px var(--sans);letter-spacing:0;text-transform:none;color:var(--ink2)}
+    #view-sheets .os-fig .v{margin-top:0;font:600 18px/1.35 var(--disp)}
+    /* banners run edge to edge under the head: red under the minimum, amber while rows are held */
+    #view-sheets .os-doc > .warnbar{margin:0;padding:9px 16px;border:0;border-bottom:1px solid #EBCDC8;border-radius:0;
+      font-size:13px}
+    #view-sheets .os-doc > .warnbar.held{background:var(--wash-amber);border-bottom-color:#EFDDB4;color:var(--amber)}
+    #view-sheets .os-foot{gap:8px;padding:12px 16px}
+    /* Finalise shows on every open sheet, so it is a soft green, not the view's one primary */
+    #view-sheets .btn.os-final{background:var(--wash-amazon);border-color:#BFD8CB;color:var(--amazon)}
+    #view-sheets .btn.os-final:hover{border-color:var(--amazon)}
+    #view-sheets .os-note{font-size:12px}
+  }
+
+  /* ---- Manual offer sheet: Clients, Good to Order ASINs, ASIN database ---- */
+  /* The sidenav and MOS <style> blocks load after this one and win ties, so every
+     rule here starts with the tab's id. One button size across the three tabs, and
+     the green .ung-tool.go no longer turns white on hover. */
+  #mos-clients-rpt .ung-tool,#mos-goods .ung-tool,#mos-db .ung-tool,
+  #mos-clients-rpt .mos-btn,#mos-clients-rpt .btn,#mos-goods .btn{padding:7px 13px;border-radius:8px;font:500 13px/1.35 var(--sans)}
+  #mos-clients-rpt .ung-tool:hover,#mos-goods .ung-tool:hover,#mos-db .ung-tool:hover{border-color:#C5CCC8;background:var(--panel)}
+  #mos-clients-rpt .ung-tool.go,#mos-goods .ung-tool.go,#mos-db .ung-tool.go{background:var(--amazon);border-color:var(--amazon);color:#fff}
+  #mos-clients-rpt .ung-tool.go:hover,#mos-goods .ung-tool.go:hover,#mos-db .ung-tool.go:hover{background:#18543a;border-color:#18543a;filter:none}
+  #cl-month{padding:7px 10px;border:1px solid var(--rule);border-radius:8px;background:#FAFBFA;
+    font:400 13px/1.35 var(--sans);color:var(--ink);cursor:pointer}
+  #cl-month:hover{border-color:#C5CCC8}
+  #mos-goods .ui-tools .ung-only{font:400 13px var(--sans);color:var(--ink2);cursor:pointer}
+  /* the Columns menus drop over the table, so those two cards must not clip */
+  #cl-card,#goods-card{overflow:visible}
+  #cl-card > .ung-grid,#goods-card > .ung-grid,#db-card > .ung-grid{border:0;border-radius:0;box-shadow:none;background:var(--panel)}
+  #mos-goods .ui-foot .ung-count,#mos-db .ui-foot .ung-count{margin-left:0;font:400 12px var(--sans);color:var(--ink3)}
+
+  /* ---- MOS Clients ---- */
+  #cl-tally .ui-stat b small{display:inline;margin:0;font:400 14px var(--sans);color:var(--ink3)}
+  #mos-clients-rpt .cl-picked{margin:0;padding:9px 14px;border-bottom:1px solid var(--rule2);background:#FAFBFA;
+    font-size:13px;color:var(--ink2)}
+  #mos-clients-rpt .cl-picked:empty{display:none}
+  #mos-clients-rpt .cl-picked .mono{font:400 12px var(--mono)}
+  #mos-clients-rpt .cl-picked .mos-mini{margin-left:6px}
+  #mos-clients-rpt .cl-hint{margin:-6px 0 0;max-width:120ch;font-size:12px;line-height:1.5;color:var(--ink3)}
+  /* a client's past sheets, opened from its row (showClientRuns sets and clears .ung-picker) */
+  #cl-open.ung-picker{margin:0;padding:12px 14px;border:0;border-bottom:1px solid var(--rule);border-radius:0;background:#FAFBFA}
+  #cl-open > .ung-ok{margin:10px 14px}
+  #cl-open .ung-pick-head b{font:500 14px var(--sans)}
+  #cl-open .ungtbl.imp{background:var(--panel)}
+  #cl-open .ungtbl.imp thead th{padding:8px 11px;background:#FAFBFA;border-right:0;border-bottom:1px solid var(--rule);
+    font:500 12px/1.3 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink2)}
+  #cl-open .ungtbl.imp td{border-right:0;border-bottom-color:var(--rule2);font:400 13px var(--mono)}
+  #cl-open .ungtbl.imp td.c{font:500 13px var(--sans)}
+  /* the table: light header, one Budget used cell, ROI as a pill */
+  #cl-grid .ungtbl.clients{font:400 13px var(--sans)}
+  #cl-grid .ungtbl.clients thead th{padding:10px 12px;min-width:0;background:#FAFBFA;border-right:0;border-bottom:1px solid var(--rule);
+    font:500 12px/1.3 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink2);text-align:right}
+  #cl-grid .ungtbl.clients thead th.l{text-align:left}
+  #cl-grid .ungtbl.clients thead th.cs:hover{background:#F1F4F2;color:var(--ink)}
+  #cl-grid .ungtbl.clients thead th.rank,#cl-grid .ungtbl.clients thead th.rank:hover{background:#FAFBFA;color:var(--ink3)}
+  #cl-grid .ungtbl.clients tbody tr{contain-intrinsic-size:0 50px}
+  #cl-grid .ungtbl.clients td{padding:9px 12px;border-right:0;border-bottom:1px solid var(--rule2);vertical-align:middle;
+    background:var(--panel);font:400 13px var(--mono);color:var(--ink)}
+  #cl-grid .ungtbl.clients tbody tr:hover td{background:#F7F9F8;background-image:none}
+  #cl-grid .ungtbl.clients tbody tr:last-child td{border-bottom:0}
+  #cl-grid .ungtbl.clients tr > :first-child{text-align:center}
+  #cl-grid .ungtbl.clients td.rank{width:40px;font-size:12px}
+  #cl-grid .ungtbl.clients td.dim,#cl-grid .ungtbl.clients .dim{color:var(--ink3)}
+  #cl-grid .ungtbl.clients td.c{text-align:left;font:500 13px var(--mono)}
+  #cl-grid .ungtbl.clients td.d{text-align:left;font:400 12.5px var(--sans);color:var(--ink3)}
+  #cl-grid .ungtbl.clients td.bu{width:240px;min-width:200px;text-align:left}
+  #cl-grid .ungtbl.clients .bu-t{display:flex;justify-content:space-between;gap:12px;white-space:nowrap;
+    font:400 12px var(--sans);color:var(--ink2)}
+  #cl-grid .ungtbl.clients .bu-t b{font:500 13px var(--mono);color:var(--ink)}
+  #cl-grid .ungtbl.clients .ui-bar{margin-top:6px}
+  #cl-grid .ungtbl.clients .mos-pill{margin:0}
+  /* the preview of a run (renderResult): cards, notes, and two tables in cards */
+  #mos-out .cl-outh{margin:0 0 12px}
+  #mos-out .cl-outh h3{margin:0;font:600 18px/1.25 var(--disp);letter-spacing:-.01em;color:var(--ink)}
+  #mos-out .cl-outh p{margin:3px 0 0;font-size:13px}
+  #mos-totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:0 0 12px}
+  #mos-totals .mos-stat{display:flex;flex-direction:column;padding:14px 16px;background:var(--panel);
+    border:1px solid var(--rule);border-radius:12px}
+  #mos-totals .mos-stat span{order:-1;font-size:12px;color:var(--ink2)}
+  #mos-totals .mos-stat span::first-letter{text-transform:uppercase}
+  #mos-totals .mos-stat b{margin-top:2px;font:600 22px/1.25 var(--disp);letter-spacing:-.01em;color:var(--ink)}
+  #mos-dropped .mos-warn,#mos-dropped .mos-ok{margin:0 0 12px;padding:10px 14px;border:1px solid var(--rule);
+    border-left:3px solid #C98A1A;border-radius:0 8px 8px 0;background:var(--panel);font-size:13px;line-height:1.5;color:var(--ink2)}
+  #mos-dropped .mos-ok{border-left-color:var(--amazon)}
+  #mos-dropped b{color:var(--ink)}
+  #mos-out .ui-card > .mos-scroll{border:0;border-radius:0}
+  #mos-out .mos-table{font:400 13px var(--sans)}
+  #mos-out .mos-table th{padding:9px 12px;background:#FAFBFA;font:500 12px/1.3 var(--sans);letter-spacing:0;
+    text-transform:none;color:var(--ink2)}
+  #mos-out .mos-table th.r{text-align:right}
+  #mos-out .mos-table th.s:hover{color:var(--ink)}
+  #mos-out .mos-table td{padding:8px 12px;border-bottom-color:var(--rule2);vertical-align:middle}
+  #mos-out .mos-table tr:last-child td{border-bottom:0}
+  #mos-out .mos-table tbody tr:hover{background:#F7F9F8}
+
+  /* ---- MOS Good to Order ASINs ---- */
+  #goods-grid .ungtbl.goods{font:400 13px var(--sans)}
+  #goods-grid .ungtbl.goods thead th{padding:10px 12px;min-width:0;background:#FAFBFA;border-right:0;border-bottom:1px solid var(--rule);
+    font:500 12px/1.3 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink2);text-align:left}
+  #goods-grid .ungtbl.goods thead th.gn,#goods-grid .ungtbl.goods thead th.gm,#goods-grid .ungtbl.goods thead th.gp,
+  #goods-grid .ungtbl.goods thead th.num{text-align:right}
+  #goods-grid .ungtbl.goods thead th.num{z-index:3;color:var(--ink3)}
+  /* # and ASIN stay put while the rest scrolls (td.gasin is already sticky at 40px) */
+  #goods-grid .ungtbl.goods thead th.gasin{position:sticky;left:40px;z-index:3;border-right:1px solid var(--rule2)}
+  #goods-grid .ungtbl.goods tbody tr{contain-intrinsic-size:0 46px}
+  #goods-grid .ungtbl.goods td,#goods-grid .ungtbl.goods tbody th.num{padding:8px 12px;min-width:0;border-right:0;
+    border-bottom:1px solid var(--rule2);vertical-align:middle;background:var(--panel)}
+  #goods-grid .ungtbl.goods tbody th.num{padding:8px 6px;font:400 11px var(--mono);color:var(--ink3)}
+  #goods-grid .ungtbl.goods tbody tr:hover td,#goods-grid .ungtbl.goods tbody tr:hover th.num{background:#F7F9F8;background-image:none}
+  #goods-grid .ungtbl.goods td.gasin{border-right:1px solid var(--rule2);font:500 13px var(--mono);color:var(--ink)}
+  #goods-grid .ungtbl.goods .gupc{display:block;margin-top:1px;font:400 11.5px var(--mono);color:var(--ink3)}
+  #goods-grid .ungtbl.goods td.gm,#goods-grid .ungtbl.goods td.gn{font:400 13px var(--mono)}
+  #goods-grid .ungtbl.goods td.gp{text-align:right}
+  #goods-grid .ungtbl.goods td.neg{color:var(--flag)}
+  #goods-grid .ungtbl.goods td.gs{font-size:13px;color:var(--ink2)}
+  #goods-grid .ungtbl.goods td.gl a{font:500 12.5px var(--sans);color:var(--amazon)}
+  #goods-grid .ungtbl.goods tr.retired td{color:var(--ink3)}
+  #goods-grid .ungtbl.goods tr.retired td.gasin .gone{margin-top:2px;font:500 10px var(--sans);letter-spacing:.04em;color:#a08a5c}
+
+  /* ---- MOS ASIN database ---- */
+  #mos-db .ung-legend{gap:14px;font:400 12px var(--sans);color:var(--ink2)}
+  #mos-db .ung-legend > span{display:inline-flex;align-items:center;gap:6px}
+  #mos-db .ung-legend i{width:14px;height:14px;margin:0;border:0;border-radius:4px;vertical-align:middle}
+  #mos-db .ung-legend i.u{background:#3E9B6C}
+  #mos-db .ung-legend i.g{background:#E3E7E5}
+  #mos-db .ung-legend i.p{background:#E5B454}
+  #mos-db .ung-legend i.b{background:transparent;border:1px dashed #BFC7C3}
+  /* the retired note (renderDb puts it between #db-picker and #db-grid) and the Extract
+     panel read as quiet strips inside the card */
+  #db-card > .ung-warn{margin:0;padding:10px 14px;border-radius:0;border-bottom:1px solid var(--rule2);background:#FAFBFA;
+    box-shadow:inset 3px 0 0 var(--walmart);font:400 13px/1.5 var(--sans);color:var(--ink2)}
+  #db-card > .ung-warn b{font-weight:500;color:var(--ink)}
+  #db-card > #db-picker{margin:0;border:0;border-bottom:1px solid var(--rule);border-radius:0;background:#FAFBFA}
+  #mos-db #db-more{margin-left:8px;padding:0;border:0;background:none;font:500 13px var(--sans);color:var(--amazon)}
+  #mos-db #db-more:hover{text-decoration:underline}
+  #db-count{display:inline-block}
+  #db-count::first-letter{text-transform:uppercase}
+  /* The grid: light header, and every answer a small square keyed on data-s (always right;
+     the class goes stale after an edit until the next draw). The lead cells keep their widths,
+     because th.cor and th.slot sit at fixed left offsets (40px, 158px); the subhead's top
+     matches the first header row's height. */
+  #db-grid .ungtbl thead th{background:#FAFBFA;color:var(--ink2);border-right-color:var(--rule2)}
+  #db-grid .ungtbl thead tr:first-child th{height:32px;padding:0 2px;border-bottom:1px solid var(--rule2);
+    font:500 11px var(--mono);letter-spacing:0;text-transform:none}
+  #db-grid .ungtbl thead tr:first-child th.cor{padding-left:8px;font:500 12px var(--sans)}
+  #db-grid .ungtbl thead tr:first-child th.num,#db-grid .ungtbl thead tr:first-child th.slot{font:500 12px var(--sans)}
+  #db-grid .ungtbl thead tr.subhead th{top:32px;height:20px;padding:0;background:#F4F6F5;border-bottom:1px solid var(--rule);
+    font:400 9.5px var(--sans);font-variant-numeric:tabular-nums;letter-spacing:-.01em;color:var(--ink3)}
+  #db-grid .ungtbl thead tr.subhead th.cor{padding-left:8px;font:400 11px var(--sans);letter-spacing:0;text-transform:none;color:var(--ink3)}
+  #db-grid .ungtbl thead tr.subhead th.cnt.zero{color:#C2C8C4}
+  #db-grid .ungtbl thead th:not(.num):not(.cor):not(.slot){width:34px;min-width:34px;max-width:34px}
+  #db-grid .ungtbl tbody th.cor{font:500 12px var(--mono);color:var(--ink)}
+  #db-grid .ungtbl th.slot{font:500 11px var(--mono)}
+  #db-grid .ungtbl tbody tr{contain-intrinsic-size:0 27px}
+  #db-grid .ungtbl td.ucell{width:34px;min-width:34px;max-width:34px;height:26px;padding:0;
+    border-right-color:#F1F3F2;border-bottom-color:#F1F3F2;background:var(--panel);box-shadow:none;opacity:1;
+    font-size:0;line-height:0;text-align:center;vertical-align:middle}
+  #db-grid .ungtbl td.ucell::before{content:"";display:inline-block;width:14px;height:14px;border-radius:4px;
+    vertical-align:middle;background:#E3E7E5}
+  #db-grid .ungtbl td.ucell[data-s="ungated"]::before{background:#3E9B6C}
+  #db-grid .ungtbl td.ucell[data-s="pending"]::before{background:#E5B454}
+  #db-grid .ungtbl td.ucell[data-s="blank"]::before{background:transparent;border:1px dashed #BFC7C3}
+  #db-grid .ungtbl td.ucell:hover{outline:0}
+  #db-grid .ungtbl td.ucell:hover::before{box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--ink2)}
+  /* while its dropdown is open (_ungEdit) the cell shows it, floating over the neighbours */
+  #db-grid .ungtbl td.ucell:focus-within{position:relative}
+  #db-grid .ungtbl td.ucell:focus-within::before{display:none}
+  #db-grid .ungtbl td.ucell:focus-within .ung-pick{position:absolute;left:0;top:50%;z-index:4;width:auto;min-width:120px;
+    transform:translateY(-50%);font:500 12px var(--sans)}
+
+  /* ---- Manual offer sheet: Ungate Checking and Offer sheets ---- */
+  /* Same buttons as the other three tabs; every rule starts with the tab's id. */
+  #mos-ungate .ung-tool,#mos-sheets .ung-tool{padding:7px 13px;border-radius:8px;font:500 13px/1.35 var(--sans)}
+  #mos-ungate .ung-tool:hover,#mos-sheets .ung-tool:hover{border-color:#C5CCC8;background:var(--panel)}
+  #mos-ungate .ung-tool.go,#mos-sheets .ung-tool.go{background:var(--amazon);border-color:var(--amazon);color:#fff}
+  #mos-ungate .ung-tool.go:hover,#mos-sheets .ung-tool.go:hover{background:#18543a;border-color:#18543a;filter:none}
+  #mos-ungate .ung-tool:disabled,#mos-sheets .ung-tool:disabled{background:var(--panel);border-color:var(--rule);color:var(--ink3)}
+  #mos-ungate .ung-tool.go:disabled,#mos-sheets .ung-tool.go:disabled{background:var(--amazon);border-color:var(--amazon);color:#fff}
+  #mos-sheets .ung-tool.warn{border-color:#E2BEB9;color:var(--flag)}
+  #mos-sheets .ung-tool.warn:hover{border-color:#D9A9A2;background:var(--wash-flag)}
+
+  /* ---- MOS Ungate Checking ---- */
+  /* While the import preview or the Extract panel is open, its Apply / Extract is the green one. */
+  #mos-ungate:has(#ung-picker:not([hidden])) #ung-import{background:var(--panel);border-color:var(--rule);color:var(--ink)}
+  #mos-ungate #ung-picker{margin:0 0 16px;padding:14px 16px;border-radius:12px}
+  #mos-ungate #ung-picker .ung-pick-head b{font:500 14px var(--sans)}
+  #mos-ungate #ung-picker .ung-pick-find{padding:7px 12px;border-radius:8px;background:#FAFBFA;font-size:13px}
+  #mos-ungate #ung-picker .ungtbl.imp thead th{padding:8px 11px;background:#FAFBFA;border-right:0;border-bottom:1px solid var(--rule);
+    font:500 12px/1.3 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink2)}
+  #mos-ungate #ung-picker .ungtbl.imp td{border-right:0;border-bottom-color:var(--rule2);font:400 13px var(--mono)}
+  #mos-ungate #ung-picker .ungtbl.imp td.c{font:500 13px var(--mono)}
+  #mos-ungate #ung-picker .ung-pick-list{border-color:var(--rule2)}
+  /* the client list on the left, the picked client's ASINs on the right */
+  #mos-ungate .ung-split{display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px;align-items:start}
+  #mos-ungate .ung-split > .ui-card{margin:0}
+  @media (max-width:900px){ #mos-ungate .ung-split{grid-template-columns:minmax(0,1fr)} }
+  #mos-ungate .ung-clist .ui-search{flex:1 1 auto;min-width:0}
+  #ung-clients{max-height:62vh;overflow:auto}
+  #ung-clients .ung-crow{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border:0;
+    border-bottom:1px solid var(--rule2);background:var(--panel);text-align:left;cursor:pointer;font:400 13px var(--sans);color:var(--ink)}
+  #ung-clients .ung-crow:last-child{border-bottom:0}
+  #ung-clients .ung-crow:hover{background:#F7F9F8}
+  #ung-clients .ung-crow[aria-pressed="true"]{background:var(--wash-amazon);box-shadow:inset 3px 0 0 var(--amazon)}
+  #ung-clients .ung-crow .ui-code{flex:0 0 48px}
+  #ung-clients .ung-crow .ui-bar{display:block;flex:1;min-width:0;margin:0}
+  #ung-clients .ung-crow .n{flex:0 0 48px;text-align:right;font:400 12px var(--mono);color:var(--ink2)}
+  #ung-clients .ung-crow.clear .ui-code,#ung-clients .ung-crow.clear .n{color:var(--ink3)}
+  #ung-clients .ung-cnone{padding:14px;font-size:13px;color:var(--ink3)}
+  #mos-ungate .ung-clist .ui-foot > :first-child{flex:1 1 auto}
+  #mos-ungate .ung-work > .ung-grid{max-height:66vh;border:0;border-radius:0;box-shadow:none;background:var(--panel)}
+  #mos-ungate #ung-title{font-size:15px}
+  #mos-ungate #ung-search{flex:0 1 240px;min-width:160px;padding:7px 12px}
+  #mos-ungate .ui-foot .ung-count{margin-left:0;font:400 12px var(--sans);color:var(--ink3);text-align:left}
+  #mos-ungate .ung-work > .ui-foot:has(#ung-count:empty):has(#ung-more[hidden]){display:none}
+  #ung-grid .ung-wtbl td{padding:7px 14px}
+  #ung-grid .ung-wtbl td.ub{max-width:280px;overflow:hidden;text-overflow:ellipsis;color:var(--ink2)}
+  /* one answer per row; the one on record is filled in */
+  #ung-grid .ung-seg{display:inline-flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden;vertical-align:middle}
+  #ung-grid .ung-seg button{padding:4px 10px;border:0;border-right:1px solid var(--rule);background:var(--panel);
+    font:400 12.5px/1.35 var(--sans);color:var(--ink2);white-space:nowrap;cursor:pointer}
+  #ung-grid .ung-seg button:last-child{border-right:0}
+  #ung-grid .ung-seg button[aria-pressed="false"]:hover{background:#F4F6F5;color:var(--ink)}
+  #ung-grid .ung-seg button[data-v="ungated"][aria-pressed="true"]{background:var(--amazon);color:#fff}
+  #ung-grid .ung-seg button[data-v="gated"][aria-pressed="true"]{background:var(--ink2);color:#fff}
+  #ung-grid .ung-seg button[data-v="pending"][aria-pressed="true"]{background:#C98A1A;color:#fff}
+  #ung-grid .ung-seg button[data-v="blank"][aria-pressed="true"]{background:#EEF0EF;color:var(--ink)}
+
+  /* ---- MOS Offer sheets ---- */
+  /* the trail back, above the title: Offer sheets / the run / the client */
+  #mos-sheets .sh-crumb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px;font-size:13px;color:var(--ink3)}
+  #mos-sheets .sh-crumb b{font-weight:400;color:var(--ink2)}
+  /* runs, and the clients of a run, as cards. #sheets-body gets .sh-grid only while it shows cards. */
+  #sheets-body.sh-grid{grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+  #mos-sheets .sh-card.sh-run{padding:16px;border-radius:12px;box-shadow:none}
+  #mos-sheets .sh-card.sh-run:hover{border-color:#C5CCC8;box-shadow:0 4px 14px rgba(18,26,23,.08);transform:none}
+  #mos-sheets .sh-rtop{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  #mos-sheets .sh-rtop h3{margin:0;font:600 17px/1.3 var(--disp);letter-spacing:-.01em;color:var(--ink)}
+  #mos-sheets .sh-rtop h3.ui-code{font:600 16px/1.3 var(--mono);letter-spacing:0}
+  #mos-sheets .sh-run > .ui-meta{margin-top:2px}
+  #mos-sheets .sh-kv{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
+  #mos-sheets .sh-kv i{display:block;font-style:normal;font-size:12px;color:var(--ink2)}
+  #mos-sheets .sh-kv b{display:block;font:600 16px/1.35 var(--disp);color:var(--ink)}
+  #mos-sheets .sh-held{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink2)}
+  #mos-sheets .sh-run .ui-bar{margin-top:6px}
+  #mos-sheets .sh-rfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px}
+  #mos-sheets .sh-btns{display:flex;gap:6px}
+  /* the whole card opens it; Open is a soft green hint rather than a second primary button */
+  #mos-sheets .sh-go{padding:7px 13px;border:1px solid #A9CDB9;border-radius:8px;background:var(--wash-amazon);
+    font:500 13px/1.35 var(--sans);color:var(--amazon)}
+  #mos-sheets .sh-run:hover .sh-go{border-color:var(--amazon)}
+  /* one client's sheet: white tiles (the IN OMS tile keeps its markup for the OMS tests,
+     so its label is re-spelled here), a quiet amber note, the lines in a card */
+  #mos-sheets #sh-oms > i{font-size:0}
+  #mos-sheets #sh-oms > i::before{content:"In OMS";font-size:12px}
+  #mos-sheets .sh-tiles .ui-stat small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #mos-sheets .sh-fix{display:block;margin:0 0 16px;padding:10px 14px;background:var(--panel);border:1px solid var(--rule);
+    border-left:3px solid #C98A1A;border-radius:0 8px 8px 0;font:400 13px/1.5 var(--sans);color:var(--ink2)}
+  #mos-sheets .sh-fix b{font-weight:600;color:var(--ink)}
+  #mos-sheets .sh-lcard .ui-search{flex:0 1 240px}
+  #mos-sheets .sh-ltbl td{padding:9px 14px}
+  #mos-sheets .sh-ltbl td.num{font:400 13px var(--mono)}
+  #mos-sheets .sh-ltbl td.b{font-weight:600;color:var(--ink)}
+  #mos-sheets .sh-ltbl td.dim{color:var(--ink3)}
+  #mos-sheets .sh-ltbl td.pos{color:var(--amazon)}
+  #mos-sheets .sh-ltbl td.neg{color:var(--flag)}
+  #mos-sheets .sh-ltbl td.sh-brand{max-width:260px;overflow:hidden;text-overflow:ellipsis;color:var(--ink2)}
+  /* Final result (omsBadge): green allocated, red when it ended the hold, grey while waiting */
+  #mos-sheets .oms{padding:2px 9px;border-radius:999px;font:500 12px/1.5 var(--sans);letter-spacing:0}
+  #mos-sheets .oms.good{background:var(--wash-amazon);color:var(--amazon)}
+  #mos-sheets .oms.bad{background:var(--wash-flag);color:var(--flag)}
+  #mos-sheets .oms.wait,#mos-sheets .oms.none{background:#EEF0EF;color:var(--ink2)}
 </style>
 
 <div id="gate" hidden>
@@ -328,7 +927,7 @@
 </div>
 
 <aside id="sidenav">
-  <div class="brand"><div class="wordmark">Reallocation desk<span id="batchchip">O2I &rarr; Amazon &rarr; Walmart &rarr; Dom</span></div></div>
+  <div class="brand"><div class="wordmark">Reallocation desk<span id="batchchip">O2I &rarr; Amazon &rarr; Walmart &rarr; For Liquidation</span></div></div>
   <div class="navlabel">Apps</div>
   <div id="mos-switch">
     <button data-app="realloc" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Reallocation desk</button>
@@ -340,7 +939,7 @@
     <button data-view="all" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>All items</button>
     <button data-view="amazon" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0"/></svg>Amazon ungating</button>
     <button data-view="walmart" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11h16V9"/><path d="M9 22V12h6v10"/></svg>Walmart</button>
-    <button data-view="dom" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Dom</button>
+    <button data-view="dom" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>For Liquidation</button>
     <button data-view="sheets" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>Offer sheets</button>
   </nav>
   <nav class="tabs" id="mos-tabs">
@@ -610,19 +1209,26 @@ body{padding-left:214px}
 @media print{#sidenav{display:none!important}body{padding-left:0}}
 </style>
 
-<div class="cloudbar" id="cloudbar" hidden><span>Live — you are seeing your team's changes as they happen</span>
+<div class="cloudbar" id="cloudbar" hidden><span><b>Live</b> &nbsp;you are seeing your team's changes as they happen</span>
   <span id="whobar" class="whobar"></span></div>
 <div class="ledger" id="ledger"></div>
 
 <main>
   <section id="view-queue">
-    <div class="panel" id="filelist"></div>
-    <div class="panel">
-      <h2>The roster</h2>
-      <div class="body"><p class="note" id="rosternote"></p>
-        <p class="note">Clients come from O2I. Anyone not allocatable there is out of the queue.
-          The order is fewest already allocated to Amazon first, counted from the OMS portal.
-          Store codes are three letters; anything else is ignored.</p></div>
+    <!-- page header and stat cards, rewritten by renderFiles on every render -->
+    <div id="filelist"></div>
+    <!-- the roster card stays put; renderRoster fills only the body and the footer -->
+    <div class="ui-card" id="roster">
+      <div class="ui-tools"><span class="ui-title">Roster</span>
+        <span class="ui-meta" id="rosternote"></span><span class="ui-spacer"></span>
+        <input type="search" class="ui-search" id="roster-q" placeholder="Find a store" aria-label="Find a store"></div>
+      <div class="ui-tw tall"><table class="ui-tbl">
+        <thead><tr><th class="num">#</th><th>Store</th><th class="num">Allocated to Amazon</th><th>Account</th><th>In the queue</th></tr></thead>
+        <tbody id="roster-body"></tbody>
+      </table></div>
+      <div class="ui-foot"><span>Fewest allocated to Amazon (counted from the OMS portal) go first. Anyone not
+        allocatable in O2I is out of the queue. Store codes are three letters; anything else is ignored.</span>
+        <span id="roster-foot"></span></div>
     </div>
     <div class="panel" id="readreport" hidden></div>
   </section>
@@ -633,35 +1239,39 @@ body{padding-left:214px}
   <section id="view-walmart" hidden><div id="wm-grid"></div></section>
 
   <section id="view-dom" hidden>
-    <div class="panel">
-      <h2>Final list &mdash; no home on Amazon or Walmart</h2>
-      <div class="body flush" id="dom-table"></div>
-      <div class="toolbar"><button class="btn" id="dom-csv">Download Dom list</button></div>
+    <div class="ui-ph">
+      <div><h2>For Liquidation</h2><p>The final list: items with no home on Amazon or Walmart.</p></div>
+      <div class="ui-acts"><button class="btn" id="dom-csv">Download For Liquidation list</button></div>
     </div>
+    <div id="dom-table"></div>
   </section>
 
   <section id="view-sheets" hidden>
-    <div class="panel">
-      <h2>Offer sheets</h2>
-      <div class="body flush" id="sheet-table"></div>
-      <div class="toolbar" id="respick"></div>
-      <div class="toolbar">
-        <span style="width:100%;height:0"></span>
+    <!-- #os-sum is filled by renderSheets -->
+    <div class="ui-ph">
+      <div><h2>Offer sheets</h2><p id="os-sum">One sheet per client and channel, ready to send.</p></div>
+    </div>
+    <!-- the Reallocation results export sits above the sheets so it is not buried under them;
+         #respick is filled by renderResultPicker and hides itself when empty -->
+    <div class="ui-card ui-noprint" id="os-results">
+      <div class="ui-tools"><span class="ui-title">Reallocation results</span>
+        <span class="ui-meta" title="Rows that landed with a client, in the O2I layout, with the Walmart rows carrying whatever you typed in">In the O2I layout; Walmart rows carry what you typed.</span>
+        <span class="ui-spacer"></span>
         <span class="resgrp"><b>Amazon</b>
-          <button class="btn go sm" data-res="amazon" data-kind="copy">Copy</button>
+          <button class="btn sm" data-res="amazon" data-kind="copy">Copy</button>
           <button class="btn sm" data-res="amazon" data-kind="csv">.csv</button>
           <button class="btn sm" data-res="amazon" data-kind="xlsx">.xlsx</button></span>
         <span class="resgrp"><b>Walmart</b>
-          <button class="btn go sm" data-res="walmart" data-kind="copy">Copy</button>
+          <button class="btn sm" data-res="walmart" data-kind="copy">Copy</button>
           <button class="btn sm" data-res="walmart" data-kind="csv">.csv</button>
           <button class="btn sm" data-res="walmart" data-kind="xlsx">.xlsx</button></span>
         <span class="resgrp"><b>Both</b>
           <button class="btn sm" data-res="all" data-kind="copy">Copy</button>
           <button class="btn sm" data-res="all" data-kind="csv">.csv</button>
-          <button class="btn sm" data-res="all" data-kind="xlsx">.xlsx</button></span>
-        <span style="font-size:13px;color:var(--ink2)">Rows that landed with a client, in the O2I layout,
-          with the Walmart rows carrying whatever you typed in.</span></div>
+          <button class="btn sm" data-res="all" data-kind="xlsx">.xlsx</button></span></div>
+      <div class="ui-tools" id="respick"></div>
     </div>
+    <div id="sheet-table"></div>
   </section>
 </main>
 
@@ -679,7 +1289,7 @@ body{padding-left:214px}
 body.mos-on #tabs, body.mos-on main, body.mos-on .ledger{display:none}
 body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
 
-#mos-main{padding:22px 26px 70px;max-width:1500px}
+#mos-main{padding:22px 28px 70px}
 #mos-main h2{margin:0 0 4px;font:600 19px/1.2 var(--disp);letter-spacing:-.01em}
 #mos-main h3{margin:26px 0 9px;font:600 13.5px/1.3 var(--sans);color:var(--ink)}
 #mos-main .lede{margin:0 0 18px;color:var(--ink2);font-size:13px;max-width:70ch}
@@ -791,71 +1401,133 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
 
   <!-- ===== MANUAL OFFER SHEET ===== -->
   <section id="mos-goods" class="ungwrap">
-    <div class="ung-bar">
-      <button class="ung-tool go" id="goods-sync" type="button">Refresh from Ungate List 3.0</button>
-      <button class="ung-tool" id="goods-upload" type="button">Upload a CSV instead</button>
-      <label class="ung-only"><input type="checkbox" id="goods-retired"> Show retired too</label>
-      <input type="file" id="mos-asin-drop-input" accept=".csv,.tsv,.xlsx,.xls,text/csv" hidden>
-      <span id="goods-count" class="ung-count"></span>
+    <div class="ui-ph">
+      <div><h2>Good to Order ASINs</h2><p>The ASIN list from Ungate List 3.0.<span id="goods-synced"></span></p></div>
+      <div class="ui-acts">
+        <button class="ung-tool" id="goods-upload" type="button">Upload a CSV instead</button>
+        <button class="ung-tool go" id="goods-sync" type="button">Refresh from Ungate List 3.0</button>
+        <input type="file" id="mos-asin-drop-input" accept=".csv,.tsv,.xlsx,.xls,text/csv" hidden>
+      </div>
     </div>
-
-    <div class="ung-grid" id="goods-grid"></div>
+    <div id="goods-tally" class="ui-stats"></div>
+    <div class="ui-card" id="goods-card">
+      <div class="ui-tools">
+        <input id="goods-search" class="ui-search" placeholder="Find ASIN, UPC or brand" autocomplete="off">
+        <div class="ui-chips" id="goods-chips"></div>
+        <span class="ui-spacer"></span>
+        <label class="ung-only"><input type="checkbox" id="goods-retired"> Show retired</label>
+        <div class="ui-colwrap">
+          <button class="btn ui-cols" id="goods-cols" type="button" aria-expanded="false" aria-controls="goods-colmenu">Columns</button>
+          <div class="ui-colmenu" id="goods-colmenu" hidden></div>
+        </div>
+      </div>
+      <div class="ung-grid" id="goods-grid"></div>
+      <div class="ui-foot"><span id="goods-hidden"></span><span id="goods-count" class="ung-count"></span></div>
+    </div>
   </section>
 
   <section id="mos-ungate" class="ungwrap" hidden>
-    <div class="ung-bar">
-      <button class="ung-tool" id="ung-import" type="button">Import</button>
-      <button class="ung-tool" id="ung-add" type="button">Add client</button>
-      <button class="ung-tool" id="ung-extract" type="button">Extract&hellip;</button>
-      <input type="file" id="ung-import-input" accept=".csv,.tsv,.xlsx,.xls,text/csv" hidden>
-      <span id="ung-count" class="ung-count"></span>
+    <div class="ui-ph">
+      <div><h2>Ungate Checking</h2><p>Only clients with ASINs left to check. Pick one, then mark each ASIN.</p></div>
+      <div class="ui-acts">
+        <button class="ung-tool" id="ung-add" type="button">Add client</button>
+        <button class="ung-tool" id="ung-extract" type="button">Extract&hellip;</button>
+        <button class="ung-tool go" id="ung-import" type="button">Import</button>
+        <input type="file" id="ung-import-input" accept=".csv,.tsv,.xlsx,.xls,text/csv" hidden>
+      </div>
     </div>
+    <div id="ung-tally" class="ui-stats"></div>
+    <!-- the import preview and the Extract panel -->
     <div id="ung-picker" class="ung-picker" hidden></div>
-    <div id="ung-grid" class="ung-grid"></div>
+    <!-- Left, the clients with work; right, the picked client's ASINs. The right table sits in
+         #ung-grid, whose cells carry no wcell/ucell class, so ungWire's cell click ignores them. -->
+    <div class="ung-split">
+      <div class="ui-card ung-clist">
+        <div class="ui-tools"><input id="ung-cfind" class="ui-search" placeholder="Find a client" autocomplete="off"></div>
+        <div id="ung-clients"></div>
+        <div class="ui-foot" id="ung-cfoot"></div>
+      </div>
+      <div class="ui-card ung-work">
+        <div class="ui-tools">
+          <b class="ui-code" id="ung-title"></b><span class="ui-meta" id="ung-sub"></span>
+          <span class="ui-spacer"></span>
+          <input id="ung-search" class="ui-search" placeholder="Filter ASIN, UPC or brand" autocomplete="off">
+          <div class="ui-chips" id="ung-chips"></div>
+        </div>
+        <div id="ung-grid" class="ung-grid"></div>
+        <div class="ui-foot"><span id="ung-count" class="ung-count"></span><button class="ui-link" id="ung-more" type="button" hidden>Show 400 more</button></div>
+      </div>
+    </div>
   </section>
   <section id="mos-db" class="ungwrap" hidden>
-    <div class="ung-bar">
-      <input id="db-search" placeholder="Filter ASIN&hellip;" autocomplete="off">
-      <span class="ung-legend"><i class="g"></i>Gated<i class="u"></i>Ungated</span>
-      <button class="ung-tool" id="db-extract" type="button">Extract&hellip;</button>
-      <span id="db-count" class="ung-count"></span>
+    <div class="ui-ph">
+      <div><h2>ASIN database</h2><p>Every answer on record: one row per ASIN, one column per client.</p></div>
+      <div class="ui-acts"><button class="ung-tool" id="db-extract" type="button">Extract&hellip;</button></div>
     </div>
-    <div id="db-tally" class="ung-tally"></div>
-    
-    <div id="db-picker" class="ung-picker" hidden></div>
-    <div id="db-grid" class="ung-grid"></div>
+    <div id="db-tally" class="ui-stats"></div>
+    <!-- #db-picker stays right before #db-grid: the retired note is inserted between them -->
+    <div class="ui-card" id="db-card">
+      <div class="ui-tools">
+        <input id="db-search" class="ui-search" placeholder="Filter ASIN" autocomplete="off">
+        <span class="ui-spacer"></span>
+        <span class="ung-legend"><span><i class="u"></i>Ungated</span><span><i class="g"></i>Gated</span><span><i class="p"></i>Pending</span><span><i class="b"></i>Not checked</span></span>
+      </div>
+      <div id="db-picker" class="ung-picker" hidden></div>
+      <div id="db-grid" class="ung-grid"></div>
+      <div class="ui-foot"><span>Hover a square for the client and the answer; click it to change the answer.</span><span id="db-count" class="ung-count"></span></div>
+    </div>
   </section>
 
   <section id="mos-clients-rpt" class="ungwrap" hidden>
-    <div id="cl-tally" class="ung-tally"></div>
-    <div class="ung-bar">
-      <select id="cl-month"></select>
-      <input id="cl-search" placeholder="Find a client&hellip;" autocomplete="false">
-      <button class="ung-tool" id="cl-pick-shown" type="button">Tick only these</button>
-      <span id="cl-count" class="ung-count"></span>
-    </div>
-    <p class="lede" style="margin:0 0 10px" id="mos-picked"></p>
-    <div id="cl-open"></div>
-    <div class="ung-grid" id="cl-grid"></div>
-
-    <div class="mos-card" style="margin-top:16px">
-      <div class="mos-row" style="margin-top:0">
+    <div class="ui-ph">
+      <div><h2>Clients</h2><p>Who gets served this month and how much budget each has left.</p></div>
+      <div class="ui-acts">
+        <select id="cl-month" aria-label="Month"></select>
         <button class="mos-btn quiet" id="mos-preview">Preview</button>
         <button class="mos-btn" id="mos-commit" disabled>Generate and record</button>
-        <button class="mos-btn quiet" id="mos-separate" disabled>One sheet per client</button>
-        <button class="mos-btn quiet" id="mos-listings" disabled>Listing extracts</button>
       </div>
-      <div class="hint" style="margin-top:9px;color:var(--ink3);font-size:12px">Preview changes nothing. Generate records the allocations for everyone, which is what uses up the client slots; the sheets themselves are downloaded from the Offer sheets tab.</div>
     </div>
+    <div id="cl-tally" class="ui-stats"></div>
 
+    <!-- A preview lands here, right under the buttons that made it. -->
     <div id="mos-out" hidden>
+      <div class="ui-ph cl-outh">
+        <div><h3>Preview of this run</h3><p>What Generate and record would book. Nothing is recorded until you press it.</p></div>
+        <div class="ui-acts">
+          <button class="mos-btn quiet" id="mos-separate" disabled>One sheet per client</button>
+          <button class="mos-btn quiet" id="mos-listings" disabled>Listing extracts</button>
+        </div>
+      </div>
       <div class="mos-stats" id="mos-totals"></div>
       <div id="mos-dropped"></div>
-      <h3>Per client</h3>
-      <div class="mos-scroll" id="mos-per-client"></div>
-      <h3>Why clients were passed over</h3>
-      <div class="mos-scroll" style="max-height:260px" id="mos-skips"></div>
+      <div class="ui-card">
+        <div class="ui-tools"><span class="ui-title">Per client</span></div>
+        <div class="mos-scroll" id="mos-per-client"></div>
+      </div>
+      <div class="ui-card">
+        <div class="ui-tools"><span class="ui-title">Why clients were passed over</span></div>
+        <div class="mos-scroll" style="max-height:260px" id="mos-skips"></div>
+      </div>
     </div>
+
+    <div class="ui-card" id="cl-card">
+      <div class="ui-tools">
+        <input id="cl-search" class="ui-search" placeholder="Find a client" autocomplete="off">
+        <button class="ung-tool" id="cl-pick-shown" type="button">Tick only these</button>
+        <div class="ui-chips" id="cl-chips"></div>
+        <span class="ui-spacer"></span>
+        <span id="cl-count" class="ui-meta"></span>
+        <div class="ui-colwrap">
+          <button class="btn ui-cols" id="cl-cols" type="button" aria-expanded="false" aria-controls="cl-colmenu">Columns</button>
+          <div class="ui-colmenu" id="cl-colmenu" hidden></div>
+        </div>
+      </div>
+      <p class="cl-picked" id="mos-picked"></p>
+      <div id="cl-open"></div>
+      <div class="ung-grid" id="cl-grid"></div>
+      <div class="ui-foot"><span id="cl-hidden"></span><span id="cl-sorted"></span></div>
+    </div>
+    <p class="hint cl-hint">Preview changes nothing. Generate records the allocations for everyone, which is what uses up the client slots; the sheets themselves are downloaded from the Offer sheets tab.</p>
   </section>
 
   <section id="mos-sheets" class="ungwrap" hidden>
@@ -1010,11 +1682,10 @@ function rebuildStores(){
   if(dl) dl.innerHTML = stores.map(s=>`<option value="${esc(s.code)}">${esc(s.name)}</option>`).join("");
   const n = document.getElementById("rosternote");
   const blocked = stores.filter(x=>!canAllocate(x.code)).length;
+  /* the first and last in the order are the top and bottom rows of the roster table */
   if(n) n.textContent = stores.length
-    ? stores.length + " stores from O2I, fewest allocated to Amazon first \u2014 " + stores[0].code
-      + " (" + allocCount(stores[0].code) + ") first, " + stores[stores.length-1].code
-      + " (" + allocCount(stores[stores.length-1].code) + ") last"
-      + (blocked ? " \u00b7 " + blocked + " on hold and out of the queue" : "")
+    ? stores.length + " stores from O2I \u00b7 " + (stores.length - blocked) + " in the queue"
+      + (blocked ? " \u00b7 " + blocked + " on hold" : "")
       + (omsNote ? " \u00b7 " + omsNote : "")
     : "Waiting for the roster from O2I.";
 }
@@ -1257,7 +1928,7 @@ function laterRender(){
 }
 /* who is here, and which tab they are on */
 const VIEW_NAMES = { queue:"Queue", all:"All items", amazon:"Amazon ungating",
-                     walmart:"Walmart", dom:"Dom", sheets:"Offer sheets" };
+                     walmart:"Walmart", dom:"For Liquidation", sheets:"Offer sheets" };
 function shortName(email){
   const n = String(email || "").split("@")[0].replace(/[._-]+/g, " ").replace(/\d+/g, "").trim();
   if(!n) return "someone";
@@ -1359,22 +2030,68 @@ function renderFiles(){
   if(!el) return;
   el.hidden = false;
   const when = queueAt ? new Date(queueAt).toLocaleString(undefined,
-    {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"}) : "not yet";
+    {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"}) : "";
   const placed = items.filter(i=>i.stage==="allocated"||i.stage==="basket").length;
   const open = items.filter(i=>i.stage==="unchecked").length;
-  el.innerHTML = `<h2>The queue</h2><div class="body">
-    <p class="note">Read straight from the portal. Only <strong>For Re-Allocation</strong> and
-      <strong>No Client Assigned</strong> appear here \u2014 when a status changes there, the row leaves this list.</p>
-    <div class="tally" style="padding:4px 0 14px">
-      ${Object.entries(queueCounts).map(([k,v])=>`<div class="t"><span class="n">${v}</span><span class="k">${esc(k)}</span></div>`).join("")}
-      <div class="t"><span class="n">${items.length}</span><span class="k">rows in play</span></div>
-      <div class="t"><span class="n">${placed}</span><span class="k">placed</span></div>
-      <div class="t"><span class="n">${open}</span><span class="k">to check</span></div>
+  /* the portal's own count per status; more than one status shares the first card */
+  const qc = Object.entries(queueCounts);
+  const first = qc.length === 1
+    ? `<i>${esc(qc[0][0])}</i><b>${esc(qc[0][1])}</b>`
+    : `<i>In the portal queue</i><b>${qc.length ? qc.reduce((a,[,v])=>a + (Number(v) || 0), 0) : "\u2014"}</b>
+       <small>${qc.length ? qc.map(([k,v])=>esc(k) + " " + esc(v)).join(" \u00b7 ") : "not read yet"}</small>`;
+  const pct = items.length ? Math.round(placed / items.length * 100) : 0;
+  el.innerHTML = `<div class="ui-ph">
+      <div><h2>Queue</h2><p>Read straight from the portal: only <strong>For Re-Allocation</strong> and
+        <strong>No Client Assigned</strong>. A row leaves when its status changes there.</p></div>
+      <div class="ui-acts"><span class="ui-meta">${when ? "Last read " + esc(when) : "Not read yet"}${
+        queueSkipped?` \u00b7 ${queueSkipped} row${queueSkipped===1?"":"s"} skipped, no product record`:""}</span>
+        <button class="btn go" id="q-refresh" ${queueLoading?"disabled":""}>${queueLoading?"Reading\u2026":"Refresh from the portal"}</button></div>
     </div>
-    <button class="btn go" id="q-refresh" ${queueLoading?"disabled":""}>${queueLoading?"Reading\u2026":"Refresh from the portal"}</button>
-    <span style="margin-left:10px;font-size:12.5px;color:var(--ink3)">last read ${esc(when)}${
-      queueSkipped?` \u00b7 ${queueSkipped} row${queueSkipped===1?"":"s"} skipped, no product record`:""}</span>
-  </div>`;
+    <div class="ui-stats">
+      <div class="ui-stat">${first}</div>
+      <div class="ui-stat"><i>Rows in play</i><b>${items.length}</b></div>
+      <div class="ui-stat"><i>Placed</i><b>${placed}</b><div class="ui-bar"><span style="width:${pct}%"></span></div></div>
+      <div class="ui-stat"><i>To check</i><b>${open}</b></div>
+    </div>`;
+  renderRoster();
+}
+
+/* The roster as a table. It only changes when the queue is read again, so it is
+   redrawn when the list, the search or "show all" changes, not on every render. */
+const ROSTER_CAP = 50;
+let rosterQuery = "", rosterAll = false, rosterDrawn = null;
+function acctPill(s){
+  const t = String(s || "").trim();
+  if(!t || t === "(blank)") return `<span class="ui-pill gray">blank</span>`;
+  const c = /^active$/i.test(t) ? "good" : /hold|pause|pend/i.test(t) ? "thin" : "bad";
+  return `<span class="ui-pill ${c}">${esc(t)}</span>`;
+}
+function renderRoster(){
+  const body = document.getElementById("roster-body"), foot = document.getElementById("roster-foot");
+  if(!body || !foot) return;
+  if(rosterDrawn && rosterDrawn.s === stores && rosterDrawn.q === rosterQuery && rosterDrawn.all === rosterAll) return;
+  rosterDrawn = { s: stores, q: rosterQuery, all: rosterAll };
+  if(!stores.length){
+    body.innerHTML = `<tr><td colspan="5" class="ui-dim">Waiting for the roster from O2I.</td></tr>`;
+    foot.innerHTML = "";
+    return;
+  }
+  const q = rosterQuery.trim().toUpperCase();
+  const hits = stores.map((s,i)=>({ s, n: i+1 })).filter(({s})=> !q
+    || String(s.code).toUpperCase().includes(q) || String(s.name || "").toUpperCase().includes(q));
+  const shown = rosterAll || q ? hits : hits.slice(0, ROSTER_CAP);
+  body.innerHTML = shown.length ? shown.map(({s,n})=>{
+    const inQ = canAllocate(s.code);
+    return `<tr><td class="num ui-dim">${n}</td>
+      <td><span class="ui-code">${esc(s.code)}</span>${s.name && s.name !== s.code
+        ? `<span class="rname" title="${esc(s.name)}">${esc(s.name)}</span>` : ""}</td>
+      <td class="num">${allocCount(s.code)}</td>
+      <td>${acctPill(s.status_account)}</td>
+      <td>${inQ ? "Yes" : `<span class="ui-dim" title="Not allocatable in O2I">Out</span>`}</td></tr>`;
+  }).join("") : `<tr><td colspan="5" class="ui-dim">No store matches that.</td></tr>`;
+  foot.innerHTML = (q ? hits.length + " of " + stores.length + " match" : "Showing " + shown.length + " of " + stores.length)
+    + (!q && stores.length > ROSTER_CAP
+        ? ` \u00b7 <button type="button" class="ui-link" id="roster-more">${rosterAll ? "Show fewer" : "Show all " + stores.length}</button>` : "");
 }
 
 /* ---------------- file reading ---------------- */
@@ -1671,6 +2388,9 @@ function removeClientColumn(code){
   Object.values(wm).forEach(r=>{ if(r.st) delete r.st[code]; });
 }
 const NO_WM = "No WM # found";
+/* "Dom" is still the internal name (view key, where-kind, the Result text in
+   walmart-sheet.csv); on screen that list is called For Liquidation */
+const liqLabel = s => String(s == null ? "" : s).replace(/\bDom\b/g, "For Liquidation");
 function wmResult(it){
   const r = wmRec(it.id);
   if(r.listing && !/^no error$/i.test(r.listing))
@@ -1893,10 +2613,16 @@ function renderGrid(){
   const el = document.getElementById("amazon");
   const rows0 = gridRows();
   if(!rows0.length){
-    el.innerHTML = `<div class="panel"><h2>Amazon ungating</h2><div class="body">
-      <p class="note" style="margin:0">${lastSheetNames.length
-        ? "No ASIN rows in the uploaded sheet. Every identifier looked like a Walmart number."
-        : "Upload the O2I sheet first."}</p></div></div>`;
+    /* every ASIN may have moved on, which hides them all - keep the way back to them */
+    const gone = gridRows(true).length;
+    el.innerHTML = `<div class="ui-ph"><div><h2>Amazon ungating</h2>
+        <p>Mark each ASIN Gated or Ungated per client. The old five decide where it goes.</p></div>
+      ${gone ? `<div class="ui-acts"><button class="btn" id="showdone">Show ${gone} on Walmart</button></div>` : ""}</div>
+      <div class="ui-card ui-empty"><h3>${gone ? "Nothing left to check" : "No ASINs yet"}</h3><p>${gone
+        ? "Every ASIN has moved on to Walmart or For Liquidation."
+        : lastSheetNames.length
+          ? "No ASIN rows in the uploaded sheet. Every identifier looked like a Walmart number."
+          : "ASINs appear here once the queue has been read from the portal."}</p></div>`;
     return;
   }
   const q = gridQuery.trim().toUpperCase();
@@ -1906,63 +2632,75 @@ function renderGrid(){
   if(colMode==="split"){ const sp = splitCols(); if(sp.last.length) boundary = sp.last.length; }
   if(colMode==="rand" && randomCols && randomCols.last.length) boundary = randomCols.last.length;
   const done = rows0.filter(r=>markOf(r.asin).listing).length;
+  const gone = gridRows(true).filter(g=>settledAsin(g.asin)).length;
+  const total = pagedList().length;
+  const ks = Object.keys(checking);
+  /* one class string per client column, built once and not per cell: the found client,
+     the one being checked, the old five (left of the line) and the first column after them */
+  const colCls = cols.map((st,i)=>[findCode===st.code ? "findcol" : "", checking[st.code] ? "onitcol" : "",
+    i < boundary ? "az-old" : "", i === boundary ? "az-div" : ""].filter(Boolean).join(" "));
 
-  el.innerHTML = `<div class="panel">
-    <h2>Amazon ungating &mdash; ${rows0.length} ASINs, ${done} with a listing status set</h2>
-    <div class="gridbar">
-      ${`<button class="btn sm" id="shuffle">Shuffle</button>
-        <label style="font-size:13px;color:var(--ink2)">drawn from the oldest
-          <select id="pool" class="lsel none" style="width:auto;margin-left:5px">
-            ${[25,50,100].map(v=>`<option value="${v}"${randPool===v?" selected":""}>${v}</option>`).join("")}
-            <option value="9999"${randPool===9999?" selected":""}>half</option>
-          </select></label>`}
-      <input type="search" id="gq" placeholder="Filter ASIN or brand" value="${esc(gridQuery)}">
-      ${(()=>{ const gone = gridRows(true).filter(g=>settledAsin(g.asin)).length;
-        return gone ? `<button class="btn sm" id="showdone">${showDone
-          ? "Hide the " + gone + " on Walmart" : "Show " + gone + " on Walmart"}</button>` : ""; })()}
-      <input class="win" id="findclient" list="store-opts" placeholder="Find a client" style="width:150px"
-        value="${esc(findCode)}">
-      ${findCode ? `<button class="btn sm" id="clearfind">Clear ${esc(findCode)}</button>` : ""}
-      ${(()=>{ const total = pagedList().length;
-        if(total <= PAGE) return "";
-        const from = colPage * PAGE + 1, to = Math.min(total, (colPage + 1) * PAGE);
-        return `<span style="display:flex;gap:5px;align-items:center;font-size:12.5px;color:var(--ink2)">
-          <button class="btn sm" id="pgprev" ${colPage===0?"disabled":""}>&lsaquo;</button>
-          clients ${from}&ndash;${to} of ${total}
-          <button class="btn sm" id="pgnext" ${to>=total?"disabled":""}>&rsaquo;</button></span>`; })()}
-      <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">
-        <span style="font-size:13px;color:var(--ink2)">MSKU for</span>
-        ${mskuPick.map(c=>`<span class="cl"><b>${esc(c)}</b>
-          <button class="clx" data-mskux="${esc(c)}" aria-label="Remove ${esc(c)}">&times;</button></span>`).join("")}
-        <input class="win" id="msku-add" list="store-opts" placeholder="store code, then Enter" style="width:150px">
-        <button class="btn go sm" id="msku-go" ${mskuPick.length?"":"disabled"}>Export${mskuPick.length>1?" "+mskuPick.length+" files":""}</button>
-        <button class="btn sm" id="batch-pick">Import batch results</button>
+  el.innerHTML = `<div class="ui-ph">
+      <div><h2>Amazon ungating</h2>
+        <p>${rows0.length} ASIN${rows0.length===1?"":"s"}, ${done} with a listing status set.${boundary > 0
+          ? " Work the old five (left of the line) first." : ""}</p></div>
+      <div class="ui-acts">
+        <span class="az-msku" title="A Seller Central listing file per store: MSKU = STORE-ASIN-1PACK">
+          <span class="ui-meta">MSKU for</span>
+          ${mskuPick.map(c=>`<span class="cl"><b>${esc(c)}</b>
+            <button class="clx" data-mskux="${esc(c)}" aria-label="Remove ${esc(c)}">&times;</button></span>`).join("")}
+          <input class="ui-search" id="msku-add" list="store-opts" placeholder="Store code, then Enter"
+            aria-label="Add a store to the MSKU export">
+          <button class="btn" id="msku-go" ${mskuPick.length?"":"disabled"}>Export MSKU${mskuPick.length>1?" ("+mskuPick.length+" files)":""}</button>
+        </span>
+        <button class="btn go" id="batch-pick">Import batch results</button>
         <input type="file" id="batch-file" accept=".xlsx,.xlsm,.xls,.csv" multiple hidden>
-      </span>
+      </div>
     </div>
-    ${batchReport ? `<div class="onitbar" style="display:block">
+    <div class="ui-card">
+    ${ks.length ? `<div class="onitbar az-checking">Being checked now:
+        ${ks.map(c=>`<span class="cl"><b>${esc(c)}</b> <small>${esc(since(checking[c].at))}</small>
+          <button class="clx" data-check="${esc(c)}" aria-label="Clear ${esc(c)}">&times;</button></span>`).join("")}
+        <em>Everyone sees these as they happen.</em>
+      </div>` : ""}
+    ${batchReport ? `<div class="onitbar az-report">
       <strong>${batchReport.files.length} batch files read</strong> &mdash; ${batchReport.ung} ungated,
       ${batchReport.gat} gated across ${batchReport.asins.size} ASINs
       <button class="clx" id="batchclose" style="float:right" aria-label="Dismiss">&times;</button>
-      <ul style="margin:8px 0 0;padding-left:18px">
+      <ul>
         ${batchReport.files.map(f=>`<li>${esc(f)}</li>`).join("")}
         ${batchReport.noMsku.length?`<li>no MSKU column: ${esc(batchReport.noMsku.join(", "))}</li>`:""}
         ${batchReport.empty.length?`<li>no rows: ${esc(batchReport.empty.join(", "))}</li>`:""}
         ${batchReport.noAsin?`<li>${batchReport.noAsin} rows skipped \u2014 ASIN not in this file</li>`:""}
         ${batchReport.noStore?`<li>${batchReport.noStore} rows skipped \u2014 store not in the roster</li>`:""}
       </ul></div>` : ""}
-    ${(()=>{ const ks = Object.keys(checking);
-      return ks.length ? `<div class="onitbar">Being checked now:
-        ${ks.map(c=>`<span class="cl"><b>${esc(c)}</b> <small>${esc(since(checking[c].at))}</small>
-          <button class="clx" data-check="${esc(c)}" aria-label="Clear ${esc(c)}">&times;</button></span>`).join("")}
-        <em>Everyone sees these as they happen.</em>
-      </div>` : ""; })()}
-    <div class="gridwrap">
+    <div class="ui-tools">
+      <button class="btn" id="shuffle">Shuffle</button>
+      <label class="ui-meta az-pool">drawn from the oldest
+        <select id="pool">
+          ${[25,50,100].map(v=>`<option value="${v}"${randPool===v?" selected":""}>${v}</option>`).join("")}
+          <option value="9999"${randPool===9999?" selected":""}>half</option>
+        </select></label>
+      <input type="search" class="ui-search" id="gq" placeholder="Filter ASIN or brand" value="${esc(gridQuery)}"
+        aria-label="Filter ASIN or brand">
+      <input class="ui-search" id="findclient" list="store-opts" placeholder="Find a client"
+        value="${esc(findCode)}" aria-label="Find a client">
+      ${findCode ? `<button class="btn" id="clearfind">Clear ${esc(findCode)}</button>` : ""}
+      <span class="ui-spacer"></span>
+      ${gone ? `<button class="btn" id="showdone">${showDone
+        ? "Hide the " + gone + " on Walmart" : "Show " + gone + " on Walmart"}</button>` : ""}
+      ${(()=>{ if(total <= PAGE) return "";
+        const from = colPage * PAGE + 1, to = Math.min(total, (colPage + 1) * PAGE);
+        return `<span class="ui-meta">Clients ${from}&ndash;${to} of ${total}</span>
+          <button class="btn az-pg" id="pgprev" ${colPage===0?"disabled":""} aria-label="Previous clients">&lsaquo;</button>
+          <button class="btn az-pg" id="pgnext" ${to>=total?"disabled":""} aria-label="Next clients">&rsaquo;</button>`; })()}
+    </div>
+    <div class="gridwrap ui-light">
       <table class="grid"><thead><tr>
-      <th class="stick c0"></th><th class="stick c1">ASIN</th><th class="stick c2">Brand</th>
+      <th class="stick c0">#</th><th class="stick c1">ASIN</th><th class="stick c2">Brand</th>
       <th class="stick c3" title="Ungated marks / clients checked">Ung / Chk</th>
       <th class="stick c4">Listing status</th><th class="stick c5">Result</th>
-      ${cols.map((st,i)=>`<th id="h_${esc(st.code)}" class="${findCode===st.code?"findcol":""}${checking[st.code]?" onitcol":""}"${i===boundary?' style="border-left:2px solid var(--ink3)"':''}>
+      ${cols.map((st,i)=>`<th id="h_${esc(st.code)}"${colCls[i] ? ` class="${colCls[i]}"` : ""}>
         <span class="hd">${esc(st.code)}<button
           class="prob take" data-take="${esc(st.code)}"
           title="Priority \u2014 give ${esc(st.code)} every row it is ungated for">&raquo;</button>${
@@ -1990,16 +2728,20 @@ function renderGrid(){
         <td class="stick c5" id="r_${esc(r.asin)}">${resultCell(r)}</td>
         ${cols.map((st,i)=>{
           const v = m.stores[st.code] || "";
-          return `<td class="${findCode===st.code?"findcol":""}${checking[st.code]?" onitcol":""}"${i===boundary?' style="border-left:2px solid var(--ink3)"':''}><select class="cell ${cellClass(v)}"
+          return `<td${colCls[i] ? ` class="${colCls[i]}"` : ""}><select class="cell ${cellClass(v)}"
             id="c_${esc(r.asin)}_${esc(st.code)}" data-asin="${esc(r.asin)}" data-code="${esc(st.code)}"
             title="${esc(st.code)} · ${esc(st.name)} · ${allocCount(st.code)} allocated to Amazon"
             ><option value=""${v?"":" selected"}>&mdash;</option><option value="Gated"${v==="Gated"?" selected":""}>Gated</option><option value="Ungated"${v==="Ungated"?" selected":""}>Ungated</option></select></td>`;
         }).join("")}</tr>`;
     }).join("")}
     </tbody></table></div>
-    <div class="toolbar">
-      <button class="btn" id="grid-csv">Download this worksheet as CSV</button>
-      <button class="btn warn" id="grid-clear">Clear all marks</button>
+    <div class="ui-foot">
+      <span class="az-legend"><span class="az-key u">Ungated</span><span class="az-key g">Gated</span><span
+        class="az-key e">&mdash;</span>not checked yet <span class="az-key p">Held</span>a Result waiting on newer clients</span>
+      <span class="ui-acts"><span>${rows.length === rows0.length ? rows0.length + " ASINs"
+          : "Showing " + rows.length + " of " + rows0.length}</span>
+        <button class="btn" id="grid-csv">Download this worksheet as CSV</button>
+        <button class="btn warn" id="grid-clear">Clear all marks</button></span>
     </div></div>`;
   restoreScroll("#view-amazon", keep);
 }
@@ -2051,7 +2793,7 @@ function whereOf(it){
        labelled, so it is obvious why no sheet is picking it up. */
     const back = '<button class="mini" data-osreturn="'+it.id+'">Put back</button>';
     return {k: /^B0/i.test(it.asin) ? "To check" : "Walmart", c:"off",
-            d:"Taken off the offer sheet " + back};
+            d:"Taken off the offer sheet", back};
   }
   if(it.stage === "walmart"){
     const r = wmResult(it);
@@ -2084,7 +2826,10 @@ function allGroups(){
     g.w = { k: kinds.length === 1 ? kinds[0] : "Mixed",
             c: kinds.length === 1 ? g.ws[0].c : "flag",
             client: clients.join(", "),
-            d: kinds.length === 1 ? (g.ws[0].d || "") : kinds.join(" + ") };
+            d: kinds.length === 1 ? (g.ws[0].d || "") : kinds.join(" + "),
+            /* folded rows that were all taken off come back together */
+            back: g.ws.every(x=>x.back)
+              ? '<button class="mini" data-osreturn="'+g.ids.join(",")+'">Put back</button>' : "" };
     return g;
   });
 }
@@ -2168,10 +2913,48 @@ function applyBulk(sheetsObj, filename){
     + (unknown ? " \u00b7 " + unknown + " ASINs in the file are not in the queue" : ""));
 }
 
+/* The Columns toggle on All items. Hiding is a class on the static #view-all (renderAll
+   rebuilds its table on every keystroke) and only on screen; the inputs stay in the page,
+   so typed values and saved edits are untouched. Remembered per browser. */
+const ALL_COLS_KEY = "desk.allcols.v1";
+const ALL_HIDEABLE = [["tracking","Tracking"],["client","Client"],["target","90d average"],["profit","Profit"],
+  ["breakeven","Breakeven"],["amount","Amount"],["note","Note"]];
+let allHidden = (()=>{
+  try{ const v = JSON.parse(localStorage.getItem(ALL_COLS_KEY) || "null"); if(Array.isArray(v)) return new Set(v); }catch(e){}
+  return new Set(["target","profit","breakeven"]);
+})();
+let allColsOpen = false;
+function hiddenLine(){
+  const off = ALL_HIDEABLE.filter(([k])=>allHidden.has(k)).map(([,label])=>label);
+  return off.length ? "Hidden columns: " + off.join(", ") : "All columns shown";
+}
+function paintAllCols(){
+  const v = document.getElementById("view-all"); if(!v) return;
+  ALL_HIDEABLE.forEach(([k])=>v.classList.toggle("acoff-" + k, allHidden.has(k)));
+  const b = document.getElementById("all-cols"); if(b) b.setAttribute("aria-expanded", String(allColsOpen));
+  const m = document.getElementById("all-colmenu"); if(m) m.hidden = !allColsOpen;
+  const f = document.getElementById("all-hidden"); if(f) f.textContent = hiddenLine();
+}
+/* pills for Listing and Where. w.k stays the data key ("Dom" included); only the label changes */
+function listingPill(ls){
+  return ls ? `<span class="ui-pill ${/^no error$/i.test(ls) ? "good" : "bad"}">${esc(ls)}</span>`
+            : `<span class="ui-pill gray">Not set</span>`;
+}
+function wherePill(w){
+  const c = w.c === "off" ? "thin" : w.c === "flag" ? "bad" : (w.c === "az" || w.k === "Walmart offer") ? "good"
+          : w.c === "wm" ? "info" : w.k === "Accumulating" ? "thin" : "gray";
+  return `<span class="ui-pill ${c}">${esc(liqLabel(w.k))}</span>`;
+}
+
 function renderAll(){
   const keep = gridScroll("#view-all");
   const el = document.getElementById("allitems");
-  if(!items.length){ el.innerHTML = `<div class="panel"><p class="empty">Upload an O2I export first.</p></div>`; return; }
+  paintAllCols();
+  if(!items.length){
+    el.innerHTML = `<div class="ui-ph"><div><h2>All items</h2><p>Every ASIN in the queue and where it is now.</p></div></div>
+      <div class="ui-card ui-empty"><h3>No items yet</h3><p>Items appear here once the queue has been read from the portal.</p></div>`;
+    return;
+  }
   const rows = allGroups();
   const tally = {};
   rows.forEach(r=>{ tally[r.w.k] = (tally[r.w.k]||0) + 1; });
@@ -2184,6 +2967,7 @@ function renderAll(){
       case "id":        return String(v.id || "");
       case "brand":     return it.brand || "";
       case "title":     return v.title || "";
+      case "product":   return (it.brand || "") + " " + (v.title || "");
       case "listing":   return v.listing || "";
       case "where":     return w.k || "";
       case "client":    return w.client || "";
@@ -2213,63 +2997,84 @@ function renderAll(){
   const openTotal = rows.filter(r=>r.w.k !== "Offer sheet" && r.w.k !== "Walmart offer")
                         .reduce((a,r)=>a + r.v.amount, 0);
 
-  el.innerHTML = `<div class="panel">
-    <h2>All items to reallocate &mdash; ${rows.length} ASIN${rows.length===1?"":"s"} from ${items.length} O2I row${items.length===1?"":"s"}</h2>
-    <div class="tally">
-      ${ALL_TABS.slice(1).map(k=>`<div class="t"><span class="n">${tally[k]||0}</span><span class="k">${esc(k)}</span></div>`).join("")}
-      <div class="t"><span class="n">${money(openTotal)}</span><span class="k">still unplaced</span></div>
-    </div>
-    <div class="filterbar">
-      <div class="seg" id="allmode">
-        ${ALL_TABS.map(k=>`<button data-af="${esc(k)}" aria-pressed="${allFilter===k}">${k==="all"?"All":esc(k)}</button>`).join("")}
+  const toCheck = tally["To check"] || 0;
+  /* brand and product share one cell; the ac-* classes are what the Columns toggle hides */
+  const HEAD = [["tracking","Tracking","ac-tracking"],["product","Product",""],["listing","Listing",""],
+    ["where","Where",""],["client","Client","ac-client"],["id","ASIN / WM #",""],
+    ["bsz","Bundle","num"],["sellable","Qty","num"],["unit","Unit cost","num"],
+    ["target","90d average","num ac-target"],["profit","Profit","num ac-profit"],["roi","ROI","num"],
+    ["breakeven","Breakeven","num ac-breakeven"],["amount","Amount","num ac-amount"],["note","Note","ac-note"]];
+
+  el.innerHTML = `<div class="ui-ph">
+      <div><h2>All items</h2><p>${rows.length} ASIN${rows.length===1?"":"s"} from ${items.length} O2I row${items.length===1?"":"s"}.
+        Typed values win; grey placeholders are the O2I figures.</p></div>
+      <div class="ui-acts">
+        <button class="btn" id="all-csv">Download this view as CSV</button>
+        <button class="btn" id="rem-out" title="Everything with no client yet, in the results layout">Remaining to reallocate</button>
+        <button class="btn" id="bulk-pick">Import research file</button>
+        <input type="file" id="bulk-file" accept=".xlsx,.xlsm,.xls,.csv" hidden>
+        <button class="btn go" id="bulk-out" title="Amazon offer-sheet rows with no 90d average">Export for research</button>
       </div>
-      <input type="search" id="allq" placeholder="Filter ID, brand, product or tracking" value="${esc(allQuery)}" style="min-width:230px">
-      <span style="margin-left:auto;font-size:12.5px;color:var(--ink3)">Typed values win; grey placeholders are the O2I figures</span>
     </div>
-    <div class="gridwrap" style="max-height:66vh">
+    <div class="ui-stats">
+      <div class="ui-stat"><i>Offer sheet</i><b>${tally["Offer sheet"]||0}</b>${tally["Walmart offer"]
+        ? `<small>+ ${tally["Walmart offer"]} on a Walmart offer</small>` : ""}</div>
+      <div class="ui-stat"><i>Walmart</i><b>${tally["Walmart"]||0}</b>${tally["Dom"]
+        ? `<small>${tally["Dom"]} for liquidation</small>` : ""}</div>
+      <div class="ui-stat${toCheck ? " hot" : ""}"><i>Still to check</i><b>${toCheck}</b>${tally["Accumulating"]
+        ? `<small>${tally["Accumulating"]} accumulating</small>` : ""}</div>
+      <div class="ui-stat"><i>Still unplaced</i><b>${money(openTotal)}</b></div>
+    </div>
+    <div class="ui-card all-card">
+    <div class="ui-tools">
+      <input type="search" class="ui-search" id="allq" placeholder="Filter ID, brand, product or tracking"
+        aria-label="Filter ID, brand, product or tracking" value="${esc(allQuery)}">
+      <div class="ui-chips" id="allmode">
+        ${ALL_TABS.map(k=>`<button class="ui-chip" data-af="${esc(k)}" aria-pressed="${allFilter===k}">${
+          k==="all"?"All":esc(liqLabel(k))}<em>${k==="all" ? rows.length : (tally[k]||0)}</em></button>`).join("")}
+      </div>
+      <span class="ui-spacer"></span>
+      <div class="ui-colwrap">
+        <button class="btn ui-cols" id="all-cols" aria-expanded="${allColsOpen}" aria-controls="all-colmenu">Columns</button>
+        <div class="ui-colmenu" id="all-colmenu"${allColsOpen ? "" : " hidden"}>
+          ${ALL_HIDEABLE.map(([k,label])=>`<label><input type="checkbox" data-acol="${k}"${
+            allHidden.has(k) ? "" : " checked"}>${esc(label)}</label>`).join("")}
+        </div>
+      </div>
+    </div>
+    <div class="gridwrap ui-light" style="max-height:66vh">
       <table class="grid alli"><thead><tr>
-        ${[["tracking","Tracking",""],["brand","Brand",""],["title","Product",""],
-           ["listing","Listing",""],["where","Where",""],["client","Client",""],["id","ASIN / WM #",""],
-           ["bsz","Bundle","num"],["sellable","Qty","num"],["unit","Unit cost","num"],
-           ["target","90d average","num"],["profit","Profit","num"],["roi","ROI","num"],
-           ["breakeven","Breakeven","num"],["amount","Amount","num"],["note","Note",""]]
-          .map(([k,label,cls])=>`<th class="${cls} sortable" data-sort="${k}">${esc(label)}${
+        ${HEAD.map(([k,label,cls])=>`<th class="${cls} sortable" data-sort="${k}">${esc(label)}${
             allSort.key === k ? `<span class="arr">${allSort.dir > 0 ? "\u2191" : "\u2193"}</span>` : ""}</th>`).join("")}
       </tr></thead><tbody>
       ${shown.length ? shown.map(r=>{ const {it,w,v} = r; return `<tr>
-        <td class="tight">${esc(it.tracking)}</td>
-        <td>${esc(it.brand)}</td>
-        <td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(v.title)}">${esc(v.title)}</td>
-        <td>${v.listing ? `<span class="chip ${/^no error$/i.test(v.listing)?"az":"flag"}">${esc(v.listing)}</span>` : `<span class="chip">not set</span>`}</td>
-        <td><span class="chip ${w.c}">${esc(w.k)}</span></td>
-        <td class="tight">${esc(w.client || "")}</td>
+        <td class="tight ac-tracking">${esc(it.tracking)}</td>
+        <td class="ui-prod" title="${esc(v.title)}">${it.brand ? `<b>${esc(it.brand)}</b>` : ""}<span>${esc(v.title)}</span></td>
+        <td>${listingPill(v.listing)}</td>
+        <td>${wherePill(w)}</td>
+        <td class="tight ac-client">${esc(w.client || "")}</td>
         <td class="tight">${esc(v.id)}${r.n > 1
-          ? ` <span class="chip" title="${r.n} O2I rows folded together">&times;${r.n}</span>` : ""}</td>
+          ? ` <span class="ui-pill gray" title="${r.n} O2I rows folded together">&times;${r.n}</span>` : ""}</td>
         <td class="num"><input class="win num aw" data-ed="bsize" data-ids="${r.ids.join(",")}"
           value="${esc(v.rec.bsize)}" placeholder="${esc(it.bsize)}"></td>
         <td class="num" id="aq_${r.ids[0]}">${esc(v.sellable)}</td>
         <td class="num"><input class="win num aw" data-ed="uprice" data-ids="${r.ids.join(",")}"
           value="${esc(v.rec.uprice == null ? "" : v.rec.uprice)}" placeholder="${(it.uprice||0).toFixed(2)}"></td>
-        <td class="num"><input class="win num aw" data-ed="target" data-ids="${r.ids.join(",")}"
+        <td class="num ac-target"><input class="win num aw" data-ed="target" data-ids="${r.ids.join(",")}"
           value="${esc(v.rec.target)}" placeholder="${(it.target||0).toFixed(2)}"></td>
-        <td class="num"><input class="win num aw" data-ed="profit" data-ids="${r.ids.join(",")}"
+        <td class="num ac-profit"><input class="win num aw" data-ed="profit" data-ids="${r.ids.join(",")}"
           value="${esc(v.rec.profit)}" placeholder="${(it.profit||0).toFixed(2)}"></td>
         <td class="num"><span class="pcnt"><input class="win num aw" data-ed="roi" data-ids="${r.ids.join(",")}"
           value="${esc(v.rec.roi)}" placeholder="${(it.roi||0).toFixed(2)}"><i>%</i></span></td>
-        <td class="num"><input class="win num aw" data-ed="breakeven" data-ids="${r.ids.join(",")}"
+        <td class="num ac-breakeven"><input class="win num aw" data-ed="breakeven" data-ids="${r.ids.join(",")}"
           value="${esc(v.rec.breakeven)}" placeholder="${(it.breakeven||0).toFixed(2)}"></td>
-        <td class="num" id="aa_${r.ids[0]}">${money(v.amount)}</td>
-        <td style="color:var(--ink2);font-size:12.5px" id="an_${r.ids[0]}">${esc(w.d || "")}</td>
-      </tr>`; }).join("") : `<tr><td colspan="16" class="empty">Nothing matches that filter.</td></tr>`}
+        <td class="num ac-amount" id="aa_${r.ids[0]}">${money(v.amount)}</td>
+        <td class="ac-note" id="an_${r.ids[0]}">${esc(liqLabel(w.d))}${w.back ? " " + w.back : ""}</td>
+      </tr>`; }).join("") : `<tr><td colspan="${HEAD.length}" class="empty">Nothing matches that filter.</td></tr>`}
       </tbody></table></div>
-    <div class="toolbar">
-      <button class="btn" id="rem-out" title="Everything with no client yet, in the results layout">Remaining to reallocate</button>
-      <button class="btn go" id="bulk-out" title="Amazon offer-sheet rows with no 90d average">Export for research</button>
-      <button class="btn" id="bulk-pick">Import research file</button>
-      <input type="file" id="bulk-file" accept=".xlsx,.xlsm,.xls,.csv" hidden>
-      <button class="btn" id="all-csv">Download this view as CSV</button>
-      <span style="font-size:13px;color:var(--ink2)">Showing ${shown.length} of ${rows.length}</span>
-    </div></div>`;
+    <div class="ui-foot"><span id="all-hidden">${esc(hiddenLine())}</span>
+      <span>Showing ${shown.length} of ${rows.length}</span></div>
+    </div>`;
   restoreScroll("#view-all", keep);
 }
 
@@ -2277,13 +3082,14 @@ function renderAll(){
 const count = st => items.filter(i=>i.stage===st).length;
 function renderLedger(){
   const el = document.getElementById("ledger");
-  if(!items.length){ el.innerHTML = `<div class="stat"><span class="n">0</span><span class="k">Rows loaded</span></div>`; return; }
+  /* label above the number; "To check" turns amber while anything is waiting there */
+  if(!items.length){ el.innerHTML = `<div class="stat"><span class="k">Rows loaded</span><span class="n">0</span></div>`; return; }
   const cells = [["To check", count("unchecked")],["Accumulating", count("basket")],
-    ["Walmart", count("walmart")],["Dom", domRows().length]];
-  el.innerHTML = `<div class="stat"><span class="n">${items.length}</span><span class="k">O2I rows</span></div><span class="sep">&rsaquo;</span>`
-    + cells.map(([k,n],i)=>`<div class="stat"><span class="n">${n}</span><span class="k">${k}</span></div>`
+    ["Walmart", count("walmart")],["For Liquidation", domRows().length]];
+  el.innerHTML = `<div class="stat"><span class="k">O2I rows</span><span class="n">${items.length}</span></div><span class="sep">&rsaquo;</span>`
+    + cells.map(([k,n],i)=>`<div class="stat${i===0 && n ? " hot" : ""}"><span class="k">${k}</span><span class="n">${n}</span></div>`
        + (i<cells.length-1?`<span class="sep">&rsaquo;</span>`:"")).join("")
-    + `<div class="stat done"><span class="n">${sheets.length}</span><span class="k">Offer sheets</span></div>`;
+    + `<div class="stat done"><span class="k">Offer sheets</span><span class="n">${sheets.length}</span></div>`;
 }
 function renderBatchChip(){
   const el = document.getElementById("batchchip");
@@ -2299,41 +3105,43 @@ function renderWalmart(){
   const goneToDom = onWm.filter(i=>wmResult(i).dom).length;
   const rows = showDoneWm ? onWm : onWm.filter(i=>!wmResult(i).dom);
   if(!onWm.length){
-    el.innerHTML = `<div class="panel"><h2>Walmart</h2><div class="body"><p class="note" style="margin:0">
-      Nothing routed here yet. Items arrive when the listing status is anything other than No Error,
-      or when the sample of ten clients comes back all gated.</p></div></div>`;
+    el.innerHTML = `<div class="ui-ph"><div><h2>Walmart</h2><p>Items with no home on Amazon, looked up on Walmart.</p></div></div>
+      <div class="ui-card ui-empty"><h3>Nothing routed here yet</h3><p>Items arrive when the listing status is anything
+      other than No Error, or when the sample of ten clients comes back all gated.</p></div>`;
     return;
   }
   const resolved = onWm.filter(i=>{ const r=wmResult(i); return r.sheet || r.dom; }).length;
-  el.innerHTML = `<div class="panel">
-    <h2>Walmart &mdash; ${rows.length} row${rows.length===1?"":"s"}${
-      goneToDom && !showDoneWm ? "" : ", " + resolved + " resolved"}</h2>
-    <div class="gridbar">
-      ${goneToDom ? `<button class="btn sm" id="showdonewm">${showDoneWm
-        ? "Hide the " + goneToDom + " on Dom" : "Show " + goneToDom + " on Dom"}</button>` : ""}
-      <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink2)">Add a client column
-        <input class="win" id="wm-cadd" list="store-opts" placeholder="store code" style="width:150px"></label>
-      <button class="btn sm" id="wm-cadd-btn">Add</button>
-      ${wmClients.length?`<span class="chip az">${wmClients.length} client column${wmClients.length===1?"":"s"}</span>`:""}
-      <span style="font-size:13px;color:var(--ink2);margin-left:auto;max-width:520px">
-        Each client you add becomes a column across every row. A row goes straight to Dom if the WM # is
-        <strong>${esc(NO_WM)}</strong> or if the listing status is anything other than No Error.
-        Listing status here is separate from the Amazon tab.</span>
+  /* same fields as before, in lookup order: what it is, then what you find on Walmart */
+  el.innerHTML = `<div class="ui-ph">
+      <div><h2>Walmart</h2><p>${rows.length} row${rows.length===1?"":"s"}${
+        goneToDom && !showDoneWm ? "" : ", " + resolved + " resolved"}. A row goes to For Liquidation if the WM # is
+        <strong>${esc(NO_WM)}</strong>, its listing status isn't No Error, or every client column comes back Gated.</p></div>
+      <div class="ui-acts"><button class="btn go" id="wm-csv" title="walmart-sheet.csv">Download Walmart sheet</button></div>
     </div>
-    <div class="gridwrap"><table class="grid"><thead><tr>
+    <div class="ui-card">
+    <div class="ui-tools">
+      <label class="ui-meta" for="wm-cadd">Add a client column</label>
+      <input class="ui-search" id="wm-cadd" list="store-opts" placeholder="Store code">
+      <button class="btn" id="wm-cadd-btn">Add</button>
+      ${wmClients.length?`<span class="ui-pill gray">${wmClients.length} client column${wmClients.length===1?"":"s"}</span>`:""}
+      <span class="ui-spacer"></span>
+      ${goneToDom ? `<button class="btn" id="showdonewm">${showDoneWm
+        ? "Hide the " + goneToDom + " in For Liquidation" : "Show the " + goneToDom + " in For Liquidation"}</button>` : ""}
+      <span class="ui-meta">Listing status here is separate from the Amazon tab</span>
+    </div>
+    <div class="gridwrap ui-light"><table class="grid"><thead><tr>
       <th class="stick c0"></th>
-      <th class="w1">WM #</th>
+      <th class="wname">Product</th>
       <th class="w1">UPC</th>
-      <th class="w3">Unit_price</th>
-      <th class="w2">Brand</th>
-      <th class="wname">Product name</th>
-      <th class="wlink">Walmart Link</th>
-      <th class="w3">Bundle_size</th>
+      <th class="w3">Unit price</th>
+      <th class="w1">WM #</th>
+      <th class="wlink">Walmart link</th>
+      <th class="w3">Bundle size</th>
       <th class="w3">ROI</th>
       <th class="w3">Profit</th>
-      <th class="w4">Target_sell_price</th>
+      <th class="w4">Target sell price</th>
       <th class="w4">Breakeven</th>
-      <th class="w5"># Ung</th>
+      <th class="w5"># Ungated</th>
       <th class="w6">Listing status</th>
       <th class="w7">Result</th>
       ${wmClients.map(c=>{ const st = storeBy(c);
@@ -2349,13 +3157,13 @@ function renderWalmart(){
       const lsc = !r.listing ? "none" : (/^no error$/i.test(r.listing) ? "" : "bad");
       return `<tr>
         <td class="stick c0">${n+2}</td>
-        <td class="w1"><input class="win" list="wm-opts" data-w="wmnum" data-id="${it.id}"
-          value="${esc(r.wmnum)}" placeholder="WM #"></td>
+        <td class="wname ui-prod">${it.brand ? `<b title="${esc(it.brand)}">${esc(it.brand)}</b>` : ""}<input class="win"
+          data-w="title" data-id="${it.id}" value="${esc(r.title == null ? "" : r.title)}" placeholder="${esc(it.title || "")}"
+          aria-label="Product name"></td>
         <td class="w1"><input class="win" data-w="upc" data-id="${it.id}" value="${esc(r.upc)}" placeholder="UPC"></td>
         <td class="w3"><input class="win num" data-w="uprice" data-id="${it.id}" value="${esc(r.uprice)}" placeholder="$"></td>
-        <td class="w2" title="${esc(it.brand)}">${esc(it.brand)}</td>
-        <td class="wname"><input class="win" data-w="title" data-id="${it.id}"
-          value="${esc(r.title == null ? "" : r.title)}" placeholder="${esc(it.title || "")}"></td>
+        <td class="w1"><input class="win" list="wm-opts" data-w="wmnum" data-id="${it.id}"
+          value="${esc(r.wmnum)}" placeholder="WM #"></td>
         <td class="wlink"><input class="win" data-w="link" data-id="${it.id}" value="${esc(r.link)}"
           placeholder="https://www.walmart.com/ip/..."></td>
         <td class="w3"><input class="win num" data-w="bsize" data-id="${it.id}" value="${esc(r.bsize)}" placeholder="qty"></td>
@@ -2368,7 +3176,7 @@ function renderWalmart(){
           <option value=""${r.listing?"":" selected"}>&mdash; not set &mdash;</option>
           ${LS_OPTIONS.map(o=>`<option value="${esc(o)}"${r.listing===o?" selected":""}>${esc(o)}</option>`).join("")}
           </select></td>
-        <td class="w7" id="wr_${it.id}"><span class="res ${res.c}">${esc(res.t)}</span></td>
+        <td class="w7" id="wr_${it.id}"><span class="res ${res.c}">${esc(liqLabel(res.t))}</span></td>
         ${wmClients.map(c=>{
           const v = r.st[c] || "";
           return `<td class="wc"><select class="cell ${v==="Ungated"?"u":v==="Gated"?"g":"e"}"
@@ -2380,7 +3188,8 @@ function renderWalmart(){
       </tr>`;
     }).join("")}
     </tbody></table></div>
-    <div class="toolbar"><button class="btn" id="wm-csv">Download Walmart sheet as CSV</button></div>
+    <div class="ui-foot"><span>Each client you add becomes a column across every row. Typed fields save as you go.</span>
+      <span>${rows.length} row${rows.length===1?"":"s"}${rows.length < onWm.length ? " of " + onWm.length : ""}</span></div>
   </div>`;
   restoreScroll("#view-walmart", keep);
 }
@@ -2390,7 +3199,7 @@ function afterWmEdit(id){
   const it = items.find(i=>i.id===id); if(!it) return;
   const nEl = document.getElementById("wn_"+id); if(nEl) nEl.textContent = wmUngCount(it);
   const rEl = document.getElementById("wr_"+id);
-  if(rEl){ const r = wmResult(it); rEl.innerHTML = `<span class="res ${r.c}">${esc(r.t)}</span>`; }
+  if(rEl){ const r = wmResult(it); rEl.innerHTML = `<span class="res ${r.c}">${esc(liqLabel(r.t))}</span>`; }
 }
 function domRows(){
   return items.filter(i=>i.stage==="walmart").map(i=>({it:i, r:wmResult(i)})).filter(x=>x.r.dom);
@@ -2422,19 +3231,22 @@ function renderDom(){
   const keep = gridScroll("#view-dom");
   const rows = domOsRows();
   const el = document.getElementById("dom-table");
-  if(!rows.length){ el.innerHTML = `<p class="empty">Empty, which is the good outcome.</p>`; return; }
+  if(!rows.length){
+    el.innerHTML = `<div class="ui-card ui-empty"><div class="ic">&#10003;</div>
+      <h3>Nothing for liquidation</h3><p>Every item found a home.</p></div>`;
+    return;
+  }
   const sm = domSummary(rows);
-  el.innerHTML = `<div style="padding:18px 16px">
-    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;margin-bottom:12px">
-      <h3 style="font:600 18px var(--disp);margin:0">Dom list &mdash; ${rows.length} item${rows.length===1?"":"s"}</h3>
-      <span style="font-size:13px;color:var(--ink2)">Real tracking codes from the O2I upload</span>
-      <span style="margin-left:auto;display:flex;gap:18px;align-items:baseline">
-        <span><span class="k2">Total</span> <span class="money" style="font-size:17px">${money(sm.total)}</span></span>
-        <span><span class="k2">ROI</span> <span class="money">${sm.wroi.toFixed(2)}%</span></span>
-        <span><span class="k2">Profit</span> <span class="money">${money(sm.tprofit)}</span></span>
-      </span>
+  el.innerHTML = `<div class="ui-stats">
+      <div class="ui-stat"><i>Items</i><b>${rows.length}</b></div>
+      <div class="ui-stat"><i>Total price</i><b>${money(sm.total)}</b></div>
+      <div class="ui-stat"><i>ROI</i><b>${sm.wroi.toFixed(2)}%</b></div>
+      <div class="ui-stat"><i>Profit</i><b>${money(sm.tprofit)}</b></div>
     </div>
-    <div class="gridwrap">
+    <div class="ui-card">
+    <div class="ui-tools"><span class="ui-title">For Liquidation list &mdash; ${rows.length} item${rows.length===1?"":"s"}</span>
+      <span class="ui-meta">Real tracking codes from the O2I upload. Status and Notes save as you type.</span></div>
+    <div class="gridwrap ui-light">
       <table class="grid os-t"><thead><tr>
         ${OS_HEAD.map((h,i)=>`<th class="${i===10||i===11?"osw":""}">${esc(h)}</th>`).join("")}
       </tr></thead><tbody>
@@ -2458,7 +3270,8 @@ function renderDom(){
         <td>${esc(r.brand)}</td>
         <td>${esc(r.dist)}</td>
       </tr>`).join("")}
-      </tbody></table></div></div>`;
+      </tbody></table></div>
+    </div>`;
   restoreScroll("#view-dom", keep);
 }
 /* exactly the header row from Offer Sheet Format.xlsx */
@@ -2611,12 +3424,18 @@ function downloadWorkbook(books, filename){
   XLSX.writeFile(wb, filename);
 }
 
-function osBlock(b, label, channel){
+/* rows on a sheet that are only held until the newer clients are checked */
+function osHeld(b){
+  return b.rows.filter(r=>(r.ids || [r.id]).some(id=>{
+    const it = items.find(i=>i.id===id); return it && it.sweep; })).length;
+}
+function osBlock(b, label, channel, held){
   const key = channel + ":" + b.code;
+  const q = held == null ? osHeld(b) : held;
   return `<section class="os-doc" data-doc="${esc(key)}">
     <div class="os-doc-head">
       <div>
-        <div class="os-eyebrow">Offer sheet &middot; ${esc(channel)}</div>
+        <div class="os-eyebrow">Offer sheet &middot; ${esc(channelLabel(channel))}</div>
         <div class="os-who">${esc(b.code)}</div>
         ${b.store?`<div class="os-sub"><b>${esc(b.store.name)}</b> &nbsp;&middot;&nbsp; G&amp;G ${esc(b.store.end)}
           &nbsp;&middot;&nbsp; ${allocCount(b.code)} allocated to Amazon</div>`:""}
@@ -2630,11 +3449,9 @@ function osBlock(b, label, channel){
     </div>
     ${channel==="amazon" && b.total < MIN_SHEET ? `<div class="warnbar">Total is under the ${money(MIN_SHEET)}
       minimum &mdash; this is a preview, not a sheet to send yet.</div>` : ""}
-    ${(()=>{ const q = b.rows.filter(r=>(r.ids || [r.id]).some(id=>{
-        const it = items.find(i=>i.id===id); return it && it.sweep; })).length;
-      return q ? `<div class="warnbar">${q} row${q===1?"":"s"} held provisionally &mdash; a newer client could
-        still turn up ungated and take ${q===1?"it":"them"}. Finish the sweep on the Amazon tab first.</div>` : ""; })()}
-    <div class="gridwrap">
+    ${q ? `<div class="warnbar held">${q} row${q===1?"":"s"} held provisionally &mdash; a newer client could
+        still turn up ungated and take ${q===1?"it":"them"}. Finish the sweep on the Amazon tab first.</div>` : ""}
+    <div class="gridwrap ui-light">
       <table class="grid os-t"><thead><tr>
         ${OS_HEAD.map((h,i)=>`<th class="${i===10||i===11?"osw":""}">${esc(h)}</th>`).join("")}<th class="rmcol"></th>
       </tr></thead><tbody>
@@ -2671,12 +3488,12 @@ function osBlock(b, label, channel){
     <div class="os-foot">
       ${(()=>{ const ids = b.rows.flatMap(r=>r.ids || [r.id]);
         const locked = ids.length && ids.every(id=>(wm[id]||{}).locked);
-        return `<button class="btn ${locked?"":"go"} sm" data-oslock="${esc(key)}">${
+        return `<button class="btn${locked?"":" os-final"}" data-oslock="${esc(key)}">${
           locked ? "Unlock this sheet" : "Finalise this sheet"}</button>`; })()}
-      <button class="btn sm" data-oscopy="${esc(key)}">Copy for Google Sheets</button>
-      <button class="btn sm" data-oscsv="${esc(key)}">Download .csv</button>
-      <button class="btn sm" data-osdl="${esc(key)}">Download .xlsx</button>
-      <button class="btn sm" data-osprint="${esc(key)}">Print / PDF</button>
+      <button class="btn" data-oscopy="${esc(key)}">Copy for Google Sheets</button>
+      <button class="btn" data-oscsv="${esc(key)}">Download .csv</button>
+      <button class="btn" data-osdl="${esc(key)}">Download .xlsx</button>
+      <button class="btn" data-osprint="${esc(key)}">Print / PDF</button>
       <span class="os-note">Prints on its own page, landscape</span>
     </div>
   </section>`;
@@ -2737,21 +3554,29 @@ function strandedBar(){
 function renderSheets(){
   const keep = gridScroll("#view-sheets");
   const el = document.getElementById("sheet-table");
+  const sum = document.getElementById("os-sum");
   const books = allBooks();
   if(!books.length){
-    el.innerHTML = strandedBar() + `<p class="empty">No offer sheet yet. An Amazon sheet appears once a store picks up items;
-      a Walmart sheet appears once a row has a WM # and an ungated client.</p>`;
+    if(sum) sum.textContent = "One sheet per client and channel, ready to send.";
+    el.innerHTML = strandedBar() + `<div class="ui-card ui-empty"><h3>No offer sheet yet</h3>
+      <p>An Amazon sheet appears once a store picks up items;
+      a Walmart sheet appears once a row has a WM # and an ungated client.</p></div>`;
     restoreScroll("#view-sheets", keep);
     return;
   }
-  el.innerHTML = strandedBar() + `<div class="gridbar">
-    <span style="font-size:13px;color:var(--ink2)">On Walmart sheets the typed fields are editable here &mdash;
+  /* the page header's one line: how many sheets, what they add up to, what is still held */
+  const held = books.map(({b})=>osHeld(b));
+  const heldAll = held.reduce((n,x)=>n + x, 0);
+  const total = books.reduce((n,{b})=>n + b.total, 0);
+  if(sum) sum.textContent = books.length + " sheet" + (books.length===1?"":"s") + " · " + money(total)
+    + " total · " + (heldAll ? heldAll + " row" + (heldAll===1?"":"s") + " still held provisionally"
+    : "nothing held provisionally");
+  el.innerHTML = strandedBar() + `<p class="os-help ui-noprint">On Walmart sheets the typed fields are editable here;
       leave a box empty to fall back to the O2I value shown in grey.
-      Status and Notes are driven off Total profit &mdash;
+      Status and Notes are driven off Total profit:
       under $0 is Not Profitable / Negative ROI, under $50 is Low Profit, $50 and over is
-      Profitable / Good to Order. Both stay editable per row.</span>
-  </div>`
-  + books.map(({b,ch})=>osBlock(b, "Offer Sheet for " + b.code, ch)).join("");
+      Profitable / Good to Order. Both stay editable per row.</p>`
+  + books.map(({b,ch},i)=>osBlock(b, "Offer Sheet for " + b.code, ch, held[i])).join("");
   restoreScroll("#view-sheets", keep);
 }
 
@@ -2946,6 +3771,27 @@ const tabsEl = document.getElementById("tabs");
 if(tabsEl) tabsEl.addEventListener("click", e=>{
   const b = e.target.closest("button[data-view]"); if(!b || b.disabled) return; view = b.dataset.view; render();
 });
+/* the roster card is static, so its search box keeps focus while the table redraws */
+const rosterQ = document.getElementById("roster-q");
+if(rosterQ) rosterQ.addEventListener("input", ()=>{ rosterQuery = rosterQ.value; renderRoster(); });
+const rosterEl = document.getElementById("roster");
+if(rosterEl) rosterEl.addEventListener("click", e=>{
+  if(!e.target.closest("#roster-more")) return;
+  rosterAll = !rosterAll; renderRoster();
+});
+/* All items: the Columns menu opens from its button and closes on any click outside it */
+document.addEventListener("click", e=>{
+  if(!e.target.closest) return;
+  if(e.target.closest("#all-cols")){ allColsOpen = !allColsOpen; return paintAllCols(); }
+  if(allColsOpen && !e.target.closest("#all-colmenu")){ allColsOpen = false; paintAllCols(); }
+});
+document.addEventListener("change", e=>{
+  const k = e.target.dataset && e.target.dataset.acol;
+  if(!k) return;
+  if(e.target.checked) allHidden.delete(k); else allHidden.add(k);
+  try{ localStorage.setItem(ALL_COLS_KEY, JSON.stringify([...allHidden])); }catch(err){}
+  paintAllCols();
+});
 document.addEventListener("click", e=>{
   const t = e.target;
   const sh = t.closest("#allitems th[data-sort]");
@@ -3112,10 +3958,10 @@ document.addEventListener("click", e=>{
   }
   if(t.id==="dom-csv"){
     const rows = domOsRows();
-    if(!rows.length) return toast("Nothing on the Dom list yet");
+    if(!rows.length) return toast("Nothing for liquidation yet");
     const sm = domSummary(rows), blank = new Array(18).fill(""), summary = blank.slice();
     summary[0] = "DOM"; summary[5] = sm.total.toFixed(2); summary[13] = sm.wroi.toFixed(2) + "%";
-    return csv("Dom list.csv", blank, [summary, OS_SRC_HEAD, ...rows.map(osCells)]);
+    return csv("For Liquidation list.csv", blank, [summary, OS_SRC_HEAD, ...rows.map(osCells)]);
   }
   if(t.id==="wm-csv") return csv("walmart-sheet.csv",
     ["WM #","UPC","Unit_price","Brand","Walmart Link","Bundle_size","ROI","Profit","Target_sell_price",
@@ -3184,7 +4030,7 @@ document.addEventListener("input", e=>{
     if(g){
       const q = document.getElementById("aq_"+ids[0]); if(q) q.textContent = g.v.sellable;
       const a = document.getElementById("aa_"+ids[0]); if(a) a.textContent = money(g.v.amount);
-      const n = document.getElementById("an_"+ids[0]); if(n) n.textContent = g.w.d || "";
+      const n = document.getElementById("an_"+ids[0]); if(n) n.innerHTML = esc(liqLabel(g.w.d)) + (g.w.back ? " " + g.w.back : "");
     }
     return;
   }
@@ -3447,6 +4293,8 @@ async function loadAll(){
     sales30:r.sales_30d||0, active:r.active!==false,
   }));
   M.pool=M.all.filter(r=>r.active);
+  /* For the header of Good to Order ASINs: when the list was last written. */
+  M.asinsAt=asins.reduce((t,r)=>(r.updated_at||"")>t ? r.updated_at : t, "");
 
   /* An answer must never become invisible just because its ASIN left the
      list. Anything with gating on record but no row of its own is added back
@@ -4240,56 +5088,163 @@ function _ungEdit(td){
   sel.addEventListener('blur',function(){ done(false); });
   sel.addEventListener('keydown',function(ev){ if(ev.key==='Escape'){ done(false); } });
 }
-/* The matrix is mostly answered, so the work left is easier to read as a
-   column per client: the ASINs that client still has to check, busiest client
-   on the left. Clients with nothing left drop out. */
+/* The work left, one client at a time. On the left, every client that still
+   has ASINs to check, busiest first; the caught-up ones fold away under the
+   list. On the right, the picked client's ASINs with an answer per row, 400 at
+   a time. renderUngate draws this twice (before and after the seed), so what
+   is picked lives in M and a second draw changes nothing. */
 function _ungPaintList(){
   ungWire();
-  var q=((el('ung-search')&&el('ung-search').value)||'').trim().toUpperCase();
-  var cols=[];
-  ungCols().forEach(function(c){
-    var list=[];
-    (M.pool||[]).forEach(function(r){
-      if(!ungCellOpen(key(r.asin,c))) return;
-      if(q && r.asin.toUpperCase().indexOf(q)<0) return;
-      list.push(r.asin);
+  var cols=ungCols(), open=Object.create(null);
+  cols.forEach(function(c){ open[c]=ungWork(c); });
+  M.ungOpen=open;
+  if(!M.ungClient || cols.indexOf(M.ungClient)<0){
+    /* Nobody picked yet, or the pick left the roster: the busiest client. */
+    M.ungClient=null;
+    cols.forEach(function(c){
+      if(open[c] && (!M.ungClient || open[c]>open[M.ungClient] ||
+         (open[c]===open[M.ungClient] && c.localeCompare(M.ungClient)<0))) M.ungClient=c;
     });
-    cols.push({code:c, list:list});      /* a client with nothing left keeps an empty column */
-  });
-  cols.sort(function(a,b){ return b.list.length-a.list.length || a.code.localeCompare(b.code); });
+  }
+  _ungDrawClients();
+  _ungDrawWork();
+  ungTally(true);
+}
 
-  var box=el('ung-grid');
-  var working=cols.filter(function(c){ return c.list.length; }).length;
-  if(!working){
-    box.innerHTML='<div class="mos-empty" style="padding:22px">'+
-      (q ? 'No ASIN matches that filter.' : 'Nothing left to check. Every client has an answer on every ASIN.')+
-      '</div>';
-    el('ung-count').textContent='';
+function _ungDrawClients(){
+  var box=el('ung-clients'); if(!box) return;
+  var open=M.ungOpen||{}, all=(M.pool||[]).length, sel=M.ungClient;
+  var q=((el('ung-cfind')&&el('ung-cfind').value)||'').trim().toUpperCase();
+  var cols=ungCols().slice().sort(function(a,b){ return (open[b]||0)-(open[a]||0) || a.localeCompare(b); });
+  var clear=cols.filter(function(c){ return !open[c]; }).length;
+  /* A search finds a caught-up client too; otherwise they wait behind Show. */
+  var shown=cols.filter(function(c){
+    return q ? c.toUpperCase().indexOf(q)>=0 : (open[c] || M.ungShowDone || c===sel);
+  });
+  box.innerHTML = shown.map(function(c){
+    var n=open[c]||0, done=all? (all-n)/all*100 : 0;
+    return '<button type="button" class="ung-crow'+(n?'':' clear')+'" data-uc="'+esc(c)+'" aria-pressed="'+(c===sel)+'"'+
+      ' title="'+(all-n).toLocaleString()+' of '+all.toLocaleString()+' answered">'+
+      '<span class="ui-code">'+esc(c)+'</span>'+
+      '<span class="ui-bar"><span style="width:'+done.toFixed(1)+'%"></span></span>'+
+      '<span class="n">'+(n?n.toLocaleString():'clear')+'</span></button>';
+  }).join('') || '<div class="ung-cnone">'+(q ? 'No client matches that.' : 'Nobody has anything left to check.')+'</div>';
+  _ungCfoot(clear);
+}
+function _ungCfoot(clear){
+  var f=el('ung-cfoot'); if(!f) return;
+  if(clear==null){ var open=M.ungOpen||{}; clear=ungCols().filter(function(c){ return !open[c]; }).length; }
+  f.innerHTML = clear
+    ? '<span>'+clear+' client'+(clear===1?' is':'s are')+' all caught up</span>'+
+      '<button class="ui-link" type="button" data-ungdone>'+(M.ungShowDone?'Hide':'Show')+'</button>'
+    : '<span>Every client has something to check</span>';
+}
+/* An answer changes only the picked client's count: update its row where it
+   stands, so the list does not re-sort under the user. The order catches up
+   on the next full draw. False when the row is not on screen. */
+function _ungTouchClient(c){
+  var box=el('ung-clients'), b=null; if(!box) return false;
+  box.querySelectorAll('button[data-uc]').forEach(function(x){ if(x.dataset.uc===c) b=x; });
+  if(!b) return false;
+  var all=(M.pool||[]).length, n=(M.ungOpen||{})[c]||0;
+  b.classList.toggle('clear', !n);
+  b.title=(all-n).toLocaleString()+' of '+all.toLocaleString()+' answered';
+  var bar=b.querySelector('.ui-bar span'), cnt=b.querySelector('.n');
+  if(bar) bar.style.width=(all? (all-n)/all*100 : 0).toFixed(1)+'%';
+  if(cnt) cnt.textContent=n?n.toLocaleString():'clear';
+  _ungCfoot();
+  return true;
+}
+
+/* One pass over the list for one client: how many ASINs sit in each state. */
+function _ungCounts(c){
+  var n={open:0, pending:0, ungated:0, gated:0}, pool=M.pool||[];
+  for(var i=0;i<pool.length;i++){
+    var s=ungCellState(key(pool[i].asin,c))[2];
+    if(s==='blank' || s==='pending') n.open++;
+    if(s!=='blank') n[s]++;
+  }
+  return n;
+}
+function _ungDrawHead(c, n){
+  var t=el('ung-title'), sub=el('ung-sub'), chips=el('ung-chips'), f=M.ungChip||'open';
+  if(t) t.textContent=c||'';
+  if(sub) sub.textContent = !c ? '' : n.open
+    ? n.open.toLocaleString()+' to check'+(n.pending?' \u00b7 '+n.pending.toLocaleString()+' pending':'')
+    : 'all caught up';
+  if(chips) chips.innerHTML = !c ? '' :
+    [['open','To check',n.open],['ungated','Ungated',n.ungated],['gated','Gated',n.gated],['pending','Pending',n.pending]]
+    .map(function(o){ return '<button class="ui-chip" type="button" data-uf="'+o[0]+'" aria-pressed="'+(f===o[0])+'">'+
+      o[1]+'<em>'+o[2].toLocaleString()+'</em></button>'; }).join('');
+}
+/* Every answer the ASIN database knows, with blank as "Not checked", so a
+   slip can always be put back the way it was. */
+var UNG_ANSWERS=[['ungated','Ungated'],['gated','Gated'],['pending','Pending'],['blank','Not checked']];
+function _ungSeg(s){
+  return '<span class="ung-seg">'+UNG_ANSWERS.map(function(o){
+    return '<button type="button" data-v="'+o[0]+'" aria-pressed="'+(o[0]===s)+'">'+o[1]+'</button>'; }).join('')+'</span>';
+}
+function _ungDrawWork(){
+  var box=el('ung-grid'); if(!box) return;
+  var c=M.ungClient, pool=M.pool||[], f=M.ungChip||'open';
+  var q=((el('ung-search')&&el('ung-search').value)||'').trim().toUpperCase();
+  /* Another client, chip or search starts again from the first page. */
+  var sig=c+'|'+f+'|'+q;
+  if(M.ungSig!==sig){ M.ungSig=sig; M.ungPage=400; }
+  var cnt=el('ung-count'), more=el('ung-more');
+  if(!c){
+    _ungDrawHead(null);
+    box.innerHTML = pool.length
+      ? '<div class="ui-empty"><div class="ic">&#10003;</div><h3>Nothing left to check</h3>'+
+        '<p>Every client has an answer on every ASIN. Pick a caught-up client under Show to look at its answers.</p></div>'
+      : '<div class="ui-empty"><h3>No ASINs yet</h3><p>Load the list on Good to Order ASINs first.</p></div>';
+    if(cnt) cnt.textContent=''; if(more) more.hidden=true;
     return;
   }
-  var MAXR=400;
-  var deep=Math.min(MAXR, Math.max.apply(null, cols.map(function(c){return c.list.length;})));
-  var head='<tr>'+cols.map(function(c){
-    return '<th'+(c.list.length?'':' class="done"')+'><span class="wc">'+c.code+'</span>'+
-      '<span class="wn">'+(c.list.length?c.list.length.toLocaleString():'clear')+'</span></th>';
-  }).join('')+'</tr>';
-  var rows=[];
-  for(var i=0;i<deep;i++){
-    var tds='';
-    for(var j=0;j<cols.length;j++){
-      var a=cols[j].list[i];
-      if(a){
-        var st=M.pending.has(key(a,cols[j].code))?'pending':'blank';
-        tds += '<td class="wcell" data-a="'+a+'" data-c="'+cols[j].code+
-               '" data-s="'+st+'">'+a+'</td>';
-      } else tds += '<td class="wcell empty"></td>';
-    }
-    rows.push('<tr>'+tds+'</tr>');
+  var n=_ungCounts(c), list=[];
+  for(var i=0;i<pool.length;i++){
+    var r=pool[i], s=ungCellState(key(r.asin,c))[2];
+    if(f==='open' ? !(s==='blank' || s==='pending') : s!==f) continue;
+    if(q && (r.asin+' '+r.upc+' '+r.brand).toUpperCase().indexOf(q)<0) continue;
+    list.push([r,s]);
   }
-  box.innerHTML='<table class="ungtbl worklist"><thead>'+head+'</thead><tbody>'+rows.join('')+'</tbody></table>';
-  var total=cols.reduce(function(s,c){return s+c.list.length;},0);
-  el('ung-count').textContent=working+' of '+cols.length+' clients have work \u00b7 '+
-    total.toLocaleString()+' to check'+(deep>=MAXR?' \u00b7 first '+MAXR+' each':'');
+  _ungDrawHead(c, n);
+  var lim=Math.min(list.length, M.ungPage||400), rows=[];
+  for(var k=0;k<lim;k++){
+    var row=list[k][0];
+    rows.push('<tr data-a="'+esc(row.asin)+'" data-s="'+list[k][1]+'"><td class="ui-code">'+esc(row.asin)+'</td>'+
+      '<td class="ub">'+esc(row.brand||'')+'</td>'+
+      '<td class="num">'+(row.unitCost?cash(row.unitCost):'')+'</td>'+
+      '<td class="num">'+mosRoiPill(row.roi||0)+'</td>'+
+      '<td>'+_ungSeg(list[k][1])+'</td></tr>');
+  }
+  var word={open:'left to check', ungated:'marked Ungated', gated:'marked Gated', pending:'marked Pending'}[f];
+  box.innerHTML = list.length
+    ? '<table class="ui-tbl ung-wtbl" data-c="'+esc(c)+'"><thead><tr><th>ASIN</th><th>Brand</th><th class="num">Unit cost</th>'+
+      '<th class="num">ROI</th><th>Answer</th></tr></thead><tbody>'+rows.join('')+'</tbody></table>'
+    : q ? '<div class="ui-empty"><h3>Nothing matches</h3><p>No ASIN '+word+' for '+esc(c)+' matches that filter.</p></div>'
+    : f==='open' ? '<div class="ui-empty"><div class="ic">&#10003;</div><h3>'+esc(c)+' is all caught up</h3>'+
+        '<p>Every ASIN on the list has an answer for this client.</p></div>'
+    : '<div class="ui-empty"><h3>Nothing '+word+'</h3><p>'+esc(c)+' has no ASIN '+word+'.</p></div>';
+  if(cnt) cnt.textContent = list.length ? 'Showing '+lim.toLocaleString()+' of '+list.length.toLocaleString() : '';
+  if(more){
+    more.hidden = lim>=list.length;
+    more.textContent='Show '+Math.min(400, list.length-lim).toLocaleString()+' more';
+  }
+}
+/* One answer from the table, written by _ungApply exactly as the ASIN
+   database writes it. The row keeps its place and shows the new answer, so a
+   slip can be put right at once; it leaves the list on the next draw. The
+   counts beside it are brought up to date in place. */
+function _ungAnswer(tr, c, ns){
+  var a=tr.getAttribute('data-a'), cur=tr.getAttribute('data-s');
+  if(!a || !c || ns===cur) return;
+  _ungApply(a, c, ns);
+  tr.setAttribute('data-s', ns);
+  tr.querySelectorAll('button[data-v]').forEach(function(b){ b.setAttribute('aria-pressed', String(b.dataset.v===ns)); });
+  var n=_ungCounts(c);
+  if(M.ungOpen && M.ungOpen[c]!==n.open){ M.ungOpen[c]=n.open; _ungTouchClient(c) || _ungDrawClients(); }
+  _ungDrawHead(c, n);
   ungTally(true);
 }
 
@@ -4336,29 +5291,28 @@ function ungWire(){
 function _ungPaintGrid(){ _ungPaint2("ungate"); }
 function ungTally(open){
   var clients=ungCols(), rows=ungRowsFor(open);
-  var u=0,p=0,b=0,g=0;
+  var u=0,p=0,b=0,g=0, busy=Object.create(null);
   for(var i=0;i<rows.length;i++) for(var j=0;j<clients.length;j++){
     var k=key(rows[i].asin,clients[j]);
-    if(M.ungated.has(k)) u++; else if(M.pending.has(k)) p++;
-    else if(M.blank.has(k)) b++; else g++;
+    if(M.ungated.has(k)) u++; else if(M.pending.has(k)){ p++; busy[clients[j]]=1; }
+    else if(M.blank.has(k)){ b++; busy[clients[j]]=1; } else g++;
   }
   var total=u+p+b+g, settled=u+g, left=p+b;
   var box=el(open?'ung-tally':'db-tally'); if(!box) return;
   var pct=function(n){ return total? (n/total*100).toFixed(1)+'%' : '0%'; };
+  var nb=Object.keys(busy).length;
   box.innerHTML = open
-    ? '<div class="cell"><b>'+left.toLocaleString()+'</b><span>still to check</span>'+
-        '<div class="bar"><i style="width:'+(total?left/total*100:0)+'%;background:#c9971f"></i>'+
-        '<i style="flex:1;background:#eef1ef"></i></div></div>'+
-      '<div class="cell p"><b>'+p.toLocaleString()+'</b><span>pending</span></div>'+
-      '<div class="cell b"><b>'+b.toLocaleString()+'</b><span>never checked</span></div>'+
-      '<div class="cell"><b>'+settled.toLocaleString()+'</b><span>already answered</span></div>'
-    : '<div class="cell"><b>'+settled.toLocaleString()+'</b><span>settled cells</span>'+
-        '<div class="bar"><i style="width:'+(total?u/total*100:0)+'%;background:#2f8a63"></i>'+
-        '<i style="width:'+(total?g/total*100:0)+'%;background:#e8cbc5"></i>'+
-        '<i style="flex:1;background:#eef1ef"></i></div></div>'+
-      '<div class="cell u"><b>'+u.toLocaleString()+'</b><span>ungated</span></div>'+
-      '<div class="cell"><b>'+g.toLocaleString()+'</b><span>gated</span></div>'+
-      '<div class="cell"><b>'+pct(u)+'</b><span>of the grid ungated</span></div>';
+    ? '<div class="ui-stat'+(left?' hot':'')+'"><i>Still to check</i><b>'+left.toLocaleString()+'</b>'+
+        '<small>'+nb+' of '+clients.length+' client'+(clients.length===1?'':'s')+'</small></div>'+
+      '<div class="ui-stat"><i>Pending</i><b>'+p.toLocaleString()+'</b></div>'+
+      '<div class="ui-stat"><i>Never checked</i><b>'+b.toLocaleString()+'</b></div>'+
+      '<div class="ui-stat"><i>Already answered</i><b>'+settled.toLocaleString()+'</b><small>'+pct(settled)+' of the list</small>'+
+        '<div class="ui-bar"><span style="width:'+(total?settled/total*100:0)+'%"></span></div></div>'
+    :'<div class="ui-stat good"><i>Ungated</i><b>'+u.toLocaleString()+'</b><small>'+pct(u)+' of the grid</small>'+
+        '<div class="ui-bar"><span style="width:'+(total?u/total*100:0)+'%"></span></div></div>'+
+      '<div class="ui-stat"><i>Gated</i><b>'+g.toLocaleString()+'</b><small>'+settled.toLocaleString()+' answered in all</small></div>'+
+      '<div class="ui-stat"><i>Pending</i><b>'+p.toLocaleString()+'</b></div>'+
+      '<div class="ui-stat"><i>Not checked yet</i><b>'+b.toLocaleString()+'</b></div>';
 }
 
 function _ungPaint2(which){
@@ -4755,38 +5709,106 @@ function renderMos(){
   else                       renderClientReport();
 }
 
-function renderGoods(){
-  var showGone = el("goods-retired") && el("goods-retired").checked;
-  var rows=(M.all||[]).filter(function(r){ return showGone || r.active; });
+/* The Asins tab's columns in its own order, with shorter names (the sheet's own
+   name is the header's tooltip). UPC sits under the ASIN and Notes shares the
+   Status pill. The less-read columns wait behind the Columns menu and are not
+   drawn while hidden, which keeps two thousand rows light. */
+const GOODS_COLS=[
+  ['asin','ASIN','k','ASIN, UPC under it'], ['status','Status','s','Status and Notes'],
+  ['qty','Sellable qty','n','Recommended Sellable Qty'], ['unitCost','Unit cost','m','Unit Cost'],
+  ['avg90','90-day avg','m','90Days Average'], ['bundle','Bundle','n','Bundle Size'],
+  ['ppu','Profit / unit','m','Profit Per Unit'], ['roi','ROI','p','ROI %'], ['be','Break even','m','Break Even'],
+  ['total','Total price','m','Total Price'], ['p30','30-day profit','m','30D Profit'], ['link','Amazon','l','Amazon Link'],
+  ['brand','Brand','s','Brand'], ['dist','Distributor','s','Distributor'],
+  ['reviewed','Last reviewed','s','Date Last Reviewed'], ['prBy','PR by','s','PR BY:'],
+  ['prDate','PR date','s','PR DATE'], ['sales30','30-day sales','n','30d Sales']
+];
+const GOODS_COLS_KEY="mos.goodscols.v1";
+M.goodsHide=(()=>{
+  try{ const v=JSON.parse(localStorage.getItem(GOODS_COLS_KEY)||"null"); if(Array.isArray(v)) return new Set(v); }catch(e){}
+  return new Set(['bundle','be','p30','dist','reviewed','prBy','prDate','sales30']);
+})();
 
-  /* The Asins tab, column for column and in its own order. */
-  var C=[
-    ['asin','ASIN','k'], ['upc','UPC','k'], ['status','Status','s'], ['notes','Notes','s'],
-    ['qty','Recommended Sellable Qty','n'], ['unitCost','Unit Cost','m'],
-    ['avg90','90Days Average','m'], ['bundle','Bundle Size','n'],
-    ['ppu','Profit Per Unit','m'], ['roi','ROI %','p'], ['be','Break Even','m'],
-    ['total','Total Price','m'], ['p30','30D Profit','m'], ['link','Amazon Link','l'],
-    ['brand','Brand','s'], ['dist','Distributor','s'],
-    ['reviewed','Date Last Reviewed','s'], ['prBy','PR BY:','s'],
-    ['prDate','PR DATE','s'], ['sales30','30d Sales','n']
-  ];
+/* Status (Profitable / Low Profit / Not Profitable) and Notes (Good to Order /
+   Low Profit / Negative ROI) say the same thing in different words, so they share
+   one pill when they agree and show both when they do not. The colour comes
+   from the words, never from the ROI, which does not follow them. */
+function goodsTone(t){
+  t=String(t||"").toLowerCase();
+  if(!t) return "";
+  if(/not profitable|negative/.test(t)) return "bad";
+  if(/low/.test(t)) return "thin";
+  if(/good|profitable/.test(t)) return "good";
+  return "gray";
+}
+function goodsPill(r){
+  var a=goodsTone(r.status), b=goodsTone(r.notes);
+  var p=function(t,x,tip){
+    return '<span class="ui-pill '+(t||'gray')+'"'+(tip?' title="'+esc(tip)+'"':'')+'>'+esc(x)+'</span>'; };
+  if(!a && !b) return '';
+  if(!a || !b) return p(a||b, r.status||r.notes);
+  if(r.status.toLowerCase()===r.notes.toLowerCase()) return p(a, r.notes);
+  if(a===b && a!=="gray") return p(b, r.notes, 'Status: '+r.status+' \u00b7 Notes: '+r.notes);
+  return p(a, r.status)+' '+p(b, r.notes);
+}
+function goodsRowTone(r){ return goodsTone(r.notes)||goodsTone(r.status); }
+
+function renderGoods(){
+  var all=M.all||[];
+  var showGone = el("goods-retired") && el("goods-retired").checked;
+  var q=((el("goods-search")&&el("goods-search").value)||"").trim().toUpperCase();
+  var tone=M.goodsTone||"all";
+
+  /* The cards count the whole list; search and chips only narrow the table. */
+  var live=0, n={good:0, thin:0, bad:0};
+  all.forEach(function(r){ if(!r.active) return; live++; var t=goodsRowTone(r); if(t in n) n[t]++; });
+  var tally=el("goods-tally");
+  if(tally) tally.innerHTML = all.length
+    ? '<div class="ui-stat"><i>On the list</i><b>'+live.toLocaleString()+'</b></div>'+
+      '<div class="ui-stat good"><i>Good to order</i><b>'+n.good.toLocaleString()+'</b></div>'+
+      '<div class="ui-stat"><i>Low profit</i><b>'+n.thin.toLocaleString()+'</b></div>'+
+      '<div class="ui-stat"><i>Not profitable</i><b>'+n.bad.toLocaleString()+'</b></div>'+
+      '<div class="ui-stat"><i>Retired</i><b>'+(all.length-live).toLocaleString()+'</b><small>kept for their answers</small></div>'
+    : '';
+  var chips=el("goods-chips");
+  if(chips) chips.innerHTML=[["all","All"],["good","Good to order"],["thin","Low profit"],["bad","Not profitable"]]
+    .map(function(c){ return '<button class="ui-chip" type="button" data-gf="'+c[0]+'" aria-pressed="'+(tone===c[0])+'">'+c[1]+'</button>'; })
+    .join('');
+  var s=el("goods-synced");
+  if(s) s.textContent = M.asinsAt
+    ? ' Last updated '+new Date(M.asinsAt).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+'.'
+    : '';
+
+  var rows=all.filter(function(r){
+    if(!showGone && !r.active) return false;
+    if(tone!=="all" && goodsRowTone(r)!==tone) return false;
+    if(q && (r.asin+" "+r.upc+" "+r.brand).toUpperCase().indexOf(q)<0) return false;
+    return true;
+  });
+  var C=GOODS_COLS.filter(function(c){ return !M.goodsHide.has(c[0]); });
   var MAXR=2000, lim=Math.min(rows.length,MAXR);
   var head='<tr><th class="num">#</th>'+C.map(function(c){
-    return '<th class="g'+c[2]+'">'+esc(c[1])+'</th>'; }).join('')+'</tr>';
+    return '<th class="g'+c[2]+(c[0]==='asin'?' gasin':'')+'" title="'+esc(c[3])+'">'+esc(c[1])+'</th>'; }).join('')+'</tr>';
 
   var parts=[];
   for(var i=0;i<lim;i++){
     var r=rows[i], tds='';
     for(var j=0;j<C.length;j++){
-      var f=C[j][0], kind=C[j][2], v=r[f];
+      var f=C[j][0], kind=C[j][2], v=r[f], cls='g'+kind;
       var out;
-      if(kind==='m')      out=cash(v);
-      else if(kind==='p') out=((v||0)*100).toFixed(2)+'%';
+      if(f==='asin'){
+        cls+=' gasin';
+        out=esc(v)+(r.upc?'<span class="gupc">'+esc(r.upc)+'</span>':'')+
+            (r.active?'':'<span class="gone">retired</span>');
+      }
+      else if(f==='status') out=goodsPill(r);
+      else if(kind==='m'){ out=cash(v); if(v<0) cls+=' neg'; }
+      else if(kind==='p') out=r.orphan ? '\u2014'
+        : '<span class="ui-pill '+(v<0?'bad':v<0.10?'thin':'good')+'">'+((v||0)*100).toFixed(2)+'%</span>';
       else if(kind==='n') out=(v||0).toLocaleString();
       else if(kind==='l') out=v ? '<a href="'+esc(v)+'" target="_blank" rel="noopener">open</a>' : '';
       else                out=esc(v||'');
-      tds += '<td class="g'+kind+(f==='asin'?' gasin':'')+'">'+out+
-             (f==='asin'&&!r.active?'<span class="gone">retired</span>':'')+'</td>';
+      tds += '<td class="'+cls+'">'+out+'</td>';
     }
     parts.push('<tr'+(r.active?'':' class="retired"')+'><th class="num">'+r.n+'</th>'+tds+'</tr>');
   }
@@ -4794,15 +5816,21 @@ function renderGoods(){
   var g=el("goods-grid");
   if(g) g.innerHTML = rows.length
     ? '<table class="ungtbl goods"><thead>'+head+'</thead><tbody>'+parts.join('')+'</tbody></table>'
-    : '<div class="mos-empty" style="padding:22px">No ASINs yet. Press Upload the Asins tab.</div>';
+    : all.length
+      ? '<div class="ui-empty"><h3>Nothing matches</h3><p>No ASIN matches that search or filter.</p></div>'
+      : '<div class="ui-empty"><h3>No ASINs yet</h3><p>Press Refresh from Ungate List 3.0 to read the list.</p></div>';
 
-  var live=(M.all||[]).filter(function(r){ return r.active; }).length;
   var c=el("goods-count");
   if(c) c.textContent = rows.length
-    ? 'showing '+lim.toLocaleString()+' of '+rows.length.toLocaleString()+
-      ' \u00b7 '+live.toLocaleString()+' on the list'+
-      ((M.all||[]).length-live ? ' \u00b7 '+((M.all||[]).length-live)+' retired' : '')
+    ? 'Showing '+lim.toLocaleString()+' of '+rows.length.toLocaleString()+(lim<rows.length?' \u00b7 search to narrow it':'')
     : '';
+  var menu=el("goods-colmenu");
+  if(menu && !menu.children.length) menu.innerHTML=GOODS_COLS.filter(function(c){ return c[0]!=='asin'; })
+    .map(function(c){ return '<label><input type="checkbox" data-gcol="'+c[0]+'">'+esc(c[1])+'</label>'; }).join('');
+  if(menu) menu.querySelectorAll('input[data-gcol]').forEach(function(x){ x.checked=!M.goodsHide.has(x.dataset.gcol); });
+  var off=GOODS_COLS.filter(function(c){ return M.goodsHide.has(c[0]); }).map(function(c){ return c[1]; });
+  var h=el("goods-hidden");
+  if(h) h.textContent = off.length ? 'Hidden columns: '+off.join(', ') : 'All columns shown';
 }
 
 /* One row per client: what they have had, what they still have room for, and
@@ -4847,6 +5875,29 @@ function clientReport(month){
   return rows;
 }
 
+/* Columns of the Clients table that repeat another figure (Value is always
+   Spent) or are rarely read. Hidden by default behind the Columns menu, not
+   drawn while hidden, and remembered per browser. */
+const CL_OPT=[["value","Value"],["everValue","All time"],["holding","Holding"],["todo","To check"],["runs","Sheets this month"]];
+const CL_COLS_KEY="mos.clcols.v1";
+M.clHide=(()=>{
+  try{ const v=JSON.parse(localStorage.getItem(CL_COLS_KEY)||"null"); if(Array.isArray(v)) return new Set(v); }catch(e){}
+  return new Set(CL_OPT.map(c=>c[0]));
+})();
+/* Budget, Spent and Used as one cell: spent of budget, the share, and a bar
+   that turns amber past 85% and red past 95%. */
+function clBudgetCell(r){
+  if(r.budget===null) return '<div class="bu-t"><span><b>'+cash0(r.spent)+'</b> spent</span>'+
+    '<span class="mos-pill warn">no budget</span></div>';
+  const pct=r.budget ? r.used*100 : 0;
+  const tone=r.used>0.95 ? ' full' : r.used>0.85 ? ' warn' : '';
+  return '<div class="bu-t"><span><b>'+cash0(r.spent)+'</b> of '+cash0(r.budget)+'</span>'+
+    '<span>'+(r.budget ? pct.toFixed(1)+'%' : '—')+'</span></div>'+
+    '<div class="ui-bar'+tone+'"><span style="width:'+Math.min(100,pct).toFixed(1)+'%"></span></div>';
+}
+/* Same bands as the offer sheet: under 0 bad, under 10% thin. */
+const mosRoiPill=v=>'<span class="ui-pill '+(v<0?'bad':v<0.10?'thin':'good')+'">'+(v*100).toFixed(1)+'%</span>';
+
 function renderClientReport(){
   const months=monthsSeen();
   const sel=el("cl-month");
@@ -4864,16 +5915,39 @@ function renderClientReport(){
   const served=rows.filter(r=>r.items>0).length;
   const totVal=rows.reduce((s,r)=>s+r.value,0);
   const totBud=rows.reduce((s,r)=>s+(r.budget||0),0);
+  const lines=rows.reduce((s,r)=>s+r.items,0);
+  const nBud=rows.filter(r=>r.budget!==null).length;
+  const mLabel=monthName(month).split(" ")[0];
+  const bar=f=>'<div class="ui-bar"><span style="width:'+Math.min(100,f*100).toFixed(1)+'%"></span></div>';
   const tally=el("cl-tally");
   if(tally) tally.innerHTML=
-    '<div class="cell"><b>'+served+' of '+rows.length+'</b><span>served in '+monthName(month)+'</span></div>'+
-    '<div class="cell u"><b>'+cash0(totVal)+'</b><span>allocated this month</span></div>'+
-    '<div class="cell"><b>'+cash0(Math.max(0,totBud-totVal))+'</b><span>still to spend</span></div>'+
-    '<div class="cell b"><b>'+(totBud?((totVal/totBud)*100).toFixed(1)+'%':'0%')+'</b><span>of the month\u2019s budgets</span></div>';
+    '<div class="ui-stat"><i>Served in '+mLabel+'</i><b>'+served+' <small>of '+rows.length+'</small></b>'+
+      bar(rows.length?served/rows.length:0)+'</div>'+
+    '<div class="ui-stat"><i>Allocated in '+mLabel+'</i><b>'+cash0(totVal)+'</b>'+
+      '<small>'+lines.toLocaleString()+' line'+(lines===1?'':'s')+' held</small></div>'+
+    '<div class="ui-stat"><i>Still to spend</i><b>'+cash0(Math.max(0,totBud-totVal))+'</b>'+
+      '<small>across '+nBud+' budget'+(nBud===1?'':'s')+'</small></div>'+
+    '<div class="ui-stat"><i>Budget used</i><b>'+(totBud?((totVal/totBud)*100).toFixed(1)+'%':'0%')+'</b>'+
+      bar(totBud?totVal/totBud:0)+'</div>';
 
   if(q) rows=rows.filter(r=>r.code.indexOf(q)>=0);
+  /* The filter chips, counted over what the search leaves. */
+  const nOf={all:rows.length, some:0, none:0, near:0, nobudget:0};
+  for(const r of rows){
+    if(r.runs>0) nOf.some++; else nOf.none++;
+    if(r.budget && r.used>0.85) nOf.near++;
+    if(r.budget===null) nOf.nobudget++;
+  }
+  const chips=el("cl-chips");
+  if(chips) chips.innerHTML=[["all","All",""],["some","Served","Has a sheet in "+mLabel],
+      ["none","Not served","No sheet in "+mLabel],["near","Near limit","Over 85% of the budget used"],
+      ["nobudget","No budget","No budget on record"]]
+    .filter(c=>c[0]!=="nobudget" || nOf.nobudget || sheetFilter==="nobudget")
+    .map(c=>'<button class="ui-chip" type="button" data-clf="'+c[0]+'" aria-pressed="'+(sheetFilter===c[0])+'"'+
+      (c[2]?' title="'+c[2]+'"':'')+'>'+c[1]+'<em>'+nOf[c[0]]+'</em></button>').join('');
   if(sheetFilter==="none")     rows=rows.filter(r=>r.runs===0);
   if(sheetFilter==="some")     rows=rows.filter(r=>r.runs>0);
+  if(sheetFilter==="near")     rows=rows.filter(r=>r.budget && r.used>0.85);
   if(sheetFilter==="nobudget") rows=rows.filter(r=>r.budget===null);
 
   const S=M.clSort||{by:"value", dir:-1};
@@ -4885,41 +5959,37 @@ function renderClientReport(){
     return c!==0 ? c*S.dir : a.pos-b.pos;
   });
   const arrow=c=>S.by===c ? (S.dir<0?" \u2193":" \u2191") : "";
-  const C=[["code","Client"],["budget","Budget"],["spent","Spent"],["left","Left"],
-           ["used","Used"],["items","Items"],["value","Value"],["roi","ROI"],
-           ["everValue","All time"],["holding","Holding"],["ung","Ungated"],["todo","To check"],
-           ["last","Last sheet"]];
-  const mLabel=monthName(month).split(" ")[0];
-  /* The filter lives in the column it filters, so "who has no sheet in
-     September" is asked where September is shown. */
+  /* Every column the table can show, in order; the ones in M.clHide are left out.
+     The sheet filter that used to sit in the month column is the chips now. */
+  const ALLC=[["code","Client"],["used","Budget used"],["left","Left"],["items","Items"],["value","Value"],
+           ["roi","ROI"],["everValue","All time"],["holding","Holding"],["ung","Ungated"],["todo","To check"],
+           ["last","Last sheet"],["runs","Sheets in "+mLabel]];
+  const C=ALLC.filter(c=>!M.clHide.has(c[0]));
+  const LEFT={code:1, used:1, last:1};
   const head='<tr><th class="rank"><input type="checkbox" id="cl-all" '+
       (M.picked===null?'checked':'')+' title="Tick to cover every client"></th>'+
     '<th class="rank">#</th>'+
-    C.map(c=>'<th class="cs" data-cs="'+c[0]+'">'+c[1]+arrow(c[0])+'</th>').join('')+
-    '<th class="cs mfil" data-cs="runs">'+mLabel+arrow("runs")+
-      '<select id="cl-sheetfilter">'+
-        [["all","all"],["none","no sheet"],["some","has a sheet"],["nobudget","no budget"]]
-        .map(o=>'<option value="'+o[0]+'"'+(sheetFilter===o[0]?" selected":"")+'>'+o[1]+'</option>').join('')+
-      '</select></th></tr>';
+    C.map(c=>'<th class="cs'+(LEFT[c[0]]?' l':'')+'" data-cs="'+c[0]+'">'+c[1]+arrow(c[0])+'</th>').join('')+'</tr>';
 
+  const cell={
+    code:     r=>'<td class="c">'+r.code+'</td>',
+    used:     r=>'<td class="bu">'+clBudgetCell(r)+'</td>',
+    left:     r=>'<td class="n">'+(r.left===null?'\u2014':cash(r.left))+'</td>',
+    items:    r=>'<td class="n">'+r.items.toLocaleString()+'</td>',
+    value:    r=>'<td class="n">'+cash(r.value)+'</td>',
+    roi:      r=>'<td class="n">'+(r.items?mosRoiPill(r.roi):'<span class="dim">\u2014</span>')+'</td>',
+    everValue:r=>'<td class="n dim">'+cash(r.everValue)+'</td>',
+    holding:  r=>'<td class="n">'+r.holding.toLocaleString()+'</td>',
+    ung:      r=>'<td class="n">'+r.ung.toLocaleString()+'</td>',
+    todo:     r=>'<td class="n'+(r.todo?'':' dim')+'">'+r.todo.toLocaleString()+'</td>',
+    last:     r=>'<td class="d">'+(r.last?longDate(r.last):'\u2014')+'</td>',
+    runs:     r=>'<td class="n'+(r.runs?'':' dim')+'">'+r.runs+'</td>',
+  };
   const body=rows.map((r,n)=>'<tr data-cl="'+r.code+'"'+(inRun(r.code)?'':' class="mos-off"')+'>'+
     '<td class="rank"><input type="checkbox" data-client="'+r.code+'" '+
       (inRun(r.code)?'checked':'')+'></td>'+
     '<td class="n dim rank">'+(n+1)+'</td>'+
-    '<td class="c">'+r.code+'</td>'+
-    '<td class="n">'+(r.budget===null?'<span class="mos-pill warn">none</span>':cash(r.budget))+'</td>'+
-    '<td class="n">'+cash(r.spent)+'</td>'+
-    '<td class="n">'+(r.left===null?'\u2014':cash(r.left))+'</td>'+
-    '<td class="n">'+(r.budget?(r.used*100).toFixed(1)+'%':'\u2014')+'</td>'+
-    '<td class="n">'+r.items.toLocaleString()+'</td>'+
-    '<td class="n">'+cash(r.value)+'</td>'+
-    '<td class="n">'+(r.items?(r.roi*100).toFixed(1)+'%':'\u2014')+'</td>'+
-    '<td class="n dim">'+cash(r.everValue)+'</td>'+
-    '<td class="n">'+r.holding.toLocaleString()+'</td>'+
-    '<td class="n">'+r.ung.toLocaleString()+'</td>'+
-    '<td class="n'+(r.todo?'':' dim')+'">'+r.todo.toLocaleString()+'</td>'+
-    '<td class="n dim">'+(r.last||'\u2014')+'</td>'+
-    '<td class="n"'+(r.runs?'':' style="color:var(--ink3)"')+'>'+r.runs+'</td></tr>').join('');
+    C.map(c=>cell[c[0]](r)).join('')+'</tr>').join('');
 
   const g=el("cl-grid");
   /* Ticking a box redraws the table; without this the list jumps back to the
@@ -4927,11 +5997,23 @@ function renderClientReport(){
   const keepTop=g.scrollTop, keepLeft=g.scrollLeft;
   g.innerHTML = rows.length
     ? '<table class="ungtbl clients"><thead>'+head+'</thead><tbody>'+body+'</tbody></table>'
-    : '<div class="mos-empty" style="padding:22px">No client matches that.</div>';
+    : M.stores.length
+      ? '<div class="ui-empty"><h3>No client matches that</h3><p>Clear the search or pick another filter.</p></div>'
+      : '<div class="ui-empty"><h3>No clients yet</h3><p>The roster appears here once it has loaded.</p></div>';
   g.scrollTop=keepTop; g.scrollLeft=keepLeft;
 
   const c=el("cl-count");
   if(c) c.textContent=rows.length+' of '+M.stores.length+' shown';
+  const menu=el("cl-colmenu");
+  if(menu && !menu.children.length) menu.innerHTML=CL_OPT.map(o=>
+    '<label><input type="checkbox" data-clcol="'+o[0]+'">'+o[1]+'</label>').join('');
+  if(menu) menu.querySelectorAll("input[data-clcol]").forEach(x=>{ x.checked=!M.clHide.has(x.dataset.clcol); });
+  const off=CL_OPT.filter(o=>M.clHide.has(o[0])).map(o=>o[1]);
+  if(el("cl-hidden")) el("cl-hidden").textContent = off.length ? "Hidden columns: "+off.join(", ") : "All columns shown";
+  /* The default sort is Value, which is the Spent shown in Budget used. */
+  const sortBy = S.by==="value" && M.clHide.has("value") ? "Spent"
+    : (ALLC.find(x=>x[0]===S.by)||[S.by,S.by])[1]+(M.clHide.has(S.by)?" (hidden)":"");
+  if(el("cl-sorted")) el("cl-sorted").textContent="Sorted by "+sortBy+(S.dir<0?" \u2193":" \u2191");
 
   const chosen=M.stores.filter(inRun);
   el("mos-picked").innerHTML = M.stores.length
@@ -4946,9 +6028,6 @@ function renderClientReport(){
            `<button class="mos-mini" id="mos-pick-all">Cover everyone</button>`)
     : "";
   if(el("mos-pick-all")) el("mos-pick-all").onclick=()=>{ M.picked=null; M.result=null; renderMos(); };
-  if(el("cl-sheetfilter")) el("cl-sheetfilter").onchange=e=>{
-    M.clSheetFilter=e.target.value; renderClientReport();
-  };
   if(el("cl-pick-shown")) el("cl-pick-shown").onclick=()=>{
     const codes=rows.map(r=>r.code);
     M.picked = codes.length===M.stores.length ? null : new Set(codes);
@@ -5248,49 +6327,99 @@ function renderSheets(){
     const floor=(M.cfg&&M.cfg.minRoi)||0;
     const dist=[...new Set(lines.map(r=>r.distributor).filter(Boolean))];
 
-    head.innerHTML='<button class="ung-tool" id="sh-back" type="button">&larr; Back to all sheets</button>';
-    el("sh-back").onclick=()=>{ M.openClient=null; renderSheets(); };
+    /* The way back is the trail above the title: the run, or every run. */
+    head.innerHTML=
+      '<nav class="sh-crumb"><button class="ui-link" id="sh-crumb-all" type="button">Offer sheets</button><span>/</span>'+
+        '<button class="ui-link" id="sh-back" type="button">'+longDate(run.date)+'</button><span>/</span><b>'+esc(code)+'</b></nav>'+
+      '<div class="ui-ph"><div><h2>'+esc(code)+' \u00b7 '+longDate(run.date)+'</h2>'+
+        '<p>'+lines.length.toLocaleString()+' item'+(lines.length===1?'':'s')+' \u00b7 Amazon'+
+          (dist.length===1?' \u00b7 '+esc(dist[0]):'')+' \u00b7 '+
+          (floor ? (floor*100).toFixed(0)+'% ROI guaranteed, up to '+(roi*100).toFixed(1)+'% potential'
+                 : (roi*100).toFixed(1)+'% ROI')+'</p></div>'+
+        '<div class="ui-acts"><button class="ung-tool" id="sh-dl-one" type="button">Download</button></div></div>';
+    el("sh-back").onclick=()=>{ M.openClient=null; M.shView=null; renderSheets(); };
+    el("sh-crumb-all").onclick=()=>{ M.openRun=null; M.openClient=null; M.shView=null; renderSheets(); };
+
+    /* The line filter outlives the redraws (the sweep redraws every five
+       minutes); leaving the sheet, or opening another, shows every line again. */
+    const vk=run.id+"|"+code;
+    if(!M.shView || M.shView.key!==vk) M.shView={key:vk, f:"all", q:""};
+    const view=M.shView;
+    /* The redraw replaces #sh-q: if someone is typing in it, put focus and caret back after. */
+    const oq=el("sh-q"), caret=oq && oq.ownerDocument && oq.ownerDocument.activeElement===oq
+      ? [oq.selectionStart, oq.selectionEnd] : null;
 
     body.className="";
     body.innerHTML=
-      '<div class="sh-hero">'+
-        '<div class="sh-hero-top"><h2>'+longDate(run.date)+'</h2><span class="sh-tag">Amazon</span></div>'+
-        '<p>'+esc(code)+(dist.length===1?' \u00b7 '+esc(dist[0]):'')+
-          ' \u00b7 '+lines.length.toLocaleString()+' item'+(lines.length===1?'':'s')+'</p>'+
-        '<div class="sh-hero-stats">'+
-          '<div><i>ITEMS</i><b>'+lines.length.toLocaleString()+'</b></div>'+
-          '<div><i>TOTAL QTY</i><b>'+qty.toLocaleString()+'</b></div>'+
-          '<div><i>TOTAL COST</i><b>'+cash0(value)+'</b></div>'+
-          '<div><i>ROI</i><b>'+(floor?(floor*100).toFixed(0)+'% ROI guaranteed':(roi*100).toFixed(1)+'%')+'</b>'+
-            (floor?'<small>Up to '+(roi*100).toFixed(1)+'% potential</small>':'')+'</div>'+
-          '<div id="sh-oms"><i>IN OMS</i><b>\u2014</b><small></small></div>'+
-        '</div>'+
+      '<div class="ui-stats sh-tiles">'+
+        '<div class="ui-stat"><i>Items</i><b>'+lines.length.toLocaleString()+'</b></div>'+
+        '<div class="ui-stat"><i>Total qty</i><b>'+qty.toLocaleString()+'</b></div>'+
+        '<div class="ui-stat"><i>Total cost</i><b>'+cash0(value)+'</b></div>'+
+        '<div class="ui-stat"><i>ROI</i><b>'+(floor?(floor*100).toFixed(0):(roi*100).toFixed(1))+'%</b>'+
+          (floor?'<small>guaranteed \u00b7 up to '+(roi*100).toFixed(1)+'%</small>':'')+'</div>'+
+        '<div class="ui-stat" id="sh-oms"><i>IN OMS</i><b>\u2014</b><small></small></div>'+
       '</div>'+
       '<div id="sh-fix" class="sh-fix" hidden></div>'+
-      '<div class="sh-lines">'+
-        '<div class="sh-lines-top"><b>Line Items</b><span>'+lines.length.toLocaleString()+
-          ' product'+(lines.length===1?'':'s')+'</span>'+
-          '<button class="ung-tool" id="sh-dl-one" type="button">Download</button></div>'+
-        '<table class="sh-tbl"><thead><tr><th>ASIN</th><th>BRAND</th><th class="r">QTY</th>'+
-        '<th class="r">BUNDLE</th><th class="r">UNIT COST</th><th class="r">TOTAL COST</th>'+
-        '<th class="r">ROI</th><th class="r">PROFIT/UNIT</th>'+
-        '<th>FINAL RESULT</th></tr></thead><tbody>'+
+      '<div class="ui-card sh-lcard">'+
+        '<div class="ui-tools"><span class="ui-title">Line items</span>'+
+          '<span class="ui-meta">'+lines.length.toLocaleString()+' product'+(lines.length===1?'':'s')+'</span>'+
+          '<span class="ui-spacer"></span>'+
+          '<input id="sh-q" class="ui-search" placeholder="Find ASIN or brand" autocomplete="off" value="'+esc(view.q)+'">'+
+          '<div class="ui-chips" id="sh-chips"></div></div>'+
+        '<div class="ui-tw tall"><table class="ui-tbl sh-ltbl"><thead><tr><th>ASIN</th><th>Brand</th><th class="num">Qty</th>'+
+        '<th class="num">Bundle</th><th class="num">Unit cost</th><th class="num">Total cost</th>'+
+        '<th class="num">ROI</th><th class="num">Profit / unit</th>'+
+        '<th>Final result</th></tr></thead><tbody>'+
         lines.map(r=>{
           const m=meta.get(r.asin)||{};
           const rr=Number(m.roi)||0, pu=Number(m.ppu)||0;
           /* Green when it earns, amber when it is thin, red when it loses. */
           const band = rr<0 ? 'bad' : rr<0.10 ? 'thin' : 'good';
-          return '<tr><td class="k">'+esc(r.asin)+'</td>'+
-            '<td>'+esc(r.brand||m.brand||'')+'</td>'+
-            '<td class="r">'+(Number(r.qty)||0).toLocaleString()+'</td>'+
-            '<td class="r dim">\u00d7'+(m.bundle||1)+'</td>'+
-            '<td class="r">'+cash(r.unit_cost)+'</td>'+
-            '<td class="r b">'+cash(r.total_price)+'</td>'+
-            '<td class="r"><span class="pill '+band+'">'+(rr*100).toFixed(1)+'%</span></td>'+
-            '<td class="r '+(pu<0?'neg':'pos')+'">'+cash(pu)+'</td>'+
+          /* Final result stays the last cell: paint() rewrites it by position. */
+          return '<tr><td class="ui-code">'+esc(r.asin)+'</td>'+
+            '<td class="sh-brand">'+esc(r.brand||m.brand||'')+'</td>'+
+            '<td class="num">'+(Number(r.qty)||0).toLocaleString()+'</td>'+
+            '<td class="num dim">\u00d7'+(m.bundle||1)+'</td>'+
+            '<td class="num">'+cash(r.unit_cost)+'</td>'+
+            '<td class="num b">'+cash(r.total_price)+'</td>'+
+            '<td class="num"><span class="ui-pill '+band+'">'+(rr*100).toFixed(1)+'%</span></td>'+
+            '<td class="num '+(pu<0?'neg':'pos')+'">'+cash(pu)+'</td>'+
             '<td>'+omsBadge(r.tracking_code)+'</td></tr>';
         }).join('')+
-        '</tbody></table></div>';
+        '</tbody></table></div>'+
+        '<div class="ui-foot"><span>Final result is read from OMS every half minute while a line can still move.</span>'+
+          '<span id="sh-shown"></span></div>'+
+      '</div>';
+
+    /* Search and chips hide rows rather than remove them, because paint()
+       finds each line's row by its position. */
+    const shFilter=()=>{
+      const q=String(view.q||"").trim().toUpperCase(), trs=body.querySelectorAll("tbody tr");
+      let shown=0;
+      lines.forEach((r,i)=>{
+        const hit=(view.f==="all" || omsBand(r.tracking_code).band===view.f) &&
+          (!q || (r.asin+" "+(r.brand||(meta.get(r.asin)||{}).brand||"")).toUpperCase().indexOf(q)>=0);
+        if(hit) shown++;
+        if(trs[i]) trs[i].hidden=!hit;
+      });
+      const s=el("sh-shown");
+      if(s) s.textContent = shown===lines.length ? lines.length.toLocaleString()+' lines'
+        : 'Showing '+shown.toLocaleString()+' of '+lines.length.toLocaleString();
+    };
+    const shChips=()=>{
+      const n={all:lines.length, wait:0, good:0, bad:0};
+      for(const r of lines) n[omsBand(r.tracking_code).band]++;
+      const box=el("sh-chips");
+      if(box) box.innerHTML=[["all","All"],["wait","Waiting"],["good","Allocated"],["bad","Rejected"]]
+        .map(c=>'<button class="ui-chip" type="button" data-shf="'+c[0]+'" aria-pressed="'+(view.f===c[0])+'">'+
+          c[1]+'<em>'+n[c[0]].toLocaleString()+'</em></button>').join('');
+    };
+    el("sh-chips").onclick=(ev)=>{
+      const b=ev.target.closest && ev.target.closest("button[data-shf]"); if(!b) return;
+      view.f=b.dataset.shf; shChips(); shFilter();
+    };
+    el("sh-q").oninput=function(){ view.q=this.value; shFilter(); };
+    if(caret){ const nq=el("sh-q"); nq.focus({preventScroll:true}); nq.setSelectionRange(caret[0], caret[1]); }
 
     el("sh-dl-one").onclick=async function(){
       this.disabled=true; const was=this.textContent; this.textContent="Building\u2026";
@@ -5343,6 +6472,7 @@ function renderSheets(){
                (g===1?'it':'they')+' will not be offered to '+esc(code)+' again.'
              : ' They can be offered to '+esc(code)+' again on a later run.')+'</span>';
       }
+      shChips(); shFilter();
     };
 
     /* Anything Amazon refuses as Gated is corrected as soon as it is seen: the
@@ -5393,14 +6523,17 @@ function renderSheets(){
       byClient[b].reduce((s,x)=>s+(+x.total_price||0),0) -
       byClient[a].reduce((s,x)=>s+(+x.total_price||0),0));
 
+    const held=run.rows.filter(r=>!r.released_at).length;
     head.innerHTML=
-      '<div class="sh-head"><button class="ung-tool" id="sh-back" type="button">&larr; All runs</button>'+
-      '<h3>'+longDate(run.date)+'</h3>'+
-      '<span class="sh-sub">'+codes.length+' client'+(codes.length===1?'':'s')+' \u00b7 '+
-        run.rows.length.toLocaleString()+' items \u00b7 '+cash0(run.value)+
-        ' \u00b7 run '+esc(run.id)+'</span>'+
-      '<button class="ung-tool go" id="sh-dl-run" type="button">Download all</button>'+
-      '<button class="ung-tool warn" id="sh-cancel-run" type="button">Cancel the whole run</button></div>';
+      '<nav class="sh-crumb"><button class="ui-link" id="sh-back" type="button">Offer sheets</button><span>/</span>'+
+        '<b>'+longDate(run.date)+'</b></nav>'+
+      '<div class="ui-ph"><div><h2>'+longDate(run.date)+'</h2>'+
+        '<p>'+codes.length+' client'+(codes.length===1?'':'s')+' \u00b7 '+
+          run.rows.length.toLocaleString()+' items \u00b7 '+cash0(run.value)+' \u00b7 '+
+          held.toLocaleString()+' held, '+(run.rows.length-held).toLocaleString()+' released in OMS \u00b7 run '+esc(run.id)+'</p></div>'+
+        '<div class="ui-acts">'+
+          '<button class="ung-tool warn" id="sh-cancel-run" type="button">Cancel the whole run</button>'+
+          '<button class="ung-tool go" id="sh-dl-run" type="button">Download all</button></div></div>';
     el("sh-back").onclick=()=>{ M.openRun=null; M.openClient=null; renderSheets(); };
     el("sh-dl-run").onclick=async function(){
       const b=this, was=b.textContent;
@@ -5424,19 +6557,20 @@ function renderSheets(){
       const roi=roiOf(rows);
       const month=String(run.date).slice(0,7);
       const left=remainingFor(c, month);
-      return '<article class="sh-card open" data-sh-open="'+esc(c)+'"><div class="sh-bar"></div><div class="sh-in">'+
-        '<div class="sh-top"><div><b>'+esc(c)+'</b><span>'+longDate(run.date)+'</span></div>'+
-        '<span class="sh-tag">Amazon</span></div>'+
-        '<div class="sh-stats">'+
-          '<div><i>ITEMS</i><b>'+rows.length.toLocaleString()+'</b></div>'+
-          '<div><i>VALUE</i><b>'+cash0(val)+'</b></div>'+
-          '<div class="roi"><i>ROI</i><b>'+(roi*100).toFixed(1)+'%</b></div>'+
+      const hc=rows.filter(r=>!r.released_at).length;
+      return '<article class="sh-card sh-run open" data-sh-open="'+esc(c)+'">'+
+        '<div class="sh-rtop"><h3 class="ui-code">'+esc(c)+'</h3>'+
+          '<span class="ui-meta">'+hc.toLocaleString()+' held · '+(rows.length-hc).toLocaleString()+' released</span></div>'+
+        '<div class="sh-kv">'+
+          '<div><i>Items</i><b>'+rows.length.toLocaleString()+'</b></div>'+
+          '<div><i>Value</i><b>'+cash0(val)+'</b></div>'+
+          '<div><i>ROI</i><b>'+(roi*100).toFixed(1)+'%</b></div>'+
         '</div>'+
-        '<div class="sh-foot"><span>'+(left===null?'no budget on record'
+        '<div class="sh-rfoot"><span class="ui-meta">'+(left===null?'No budget on record'
             :cash0(left)+' left in '+monthName(month))+'</span>'+
-        '<span><button class="ung-tool" data-sh-dl="'+esc(c)+'">Download</button>'+
+        '<span class="sh-btns"><button class="ung-tool" data-sh-dl="'+esc(c)+'">Download</button>'+
         '<button class="ung-tool warn" data-sh-cancel="'+esc(c)+'">Cancel</button></span></div>'+
-      '</div></article>';
+      '</article>';
     }).join("");
 
     body.onclick=async (ev)=>{
@@ -5461,35 +6595,41 @@ function renderSheets(){
     return;
   }
 
-  head.innerHTML='<div class="sh-head"><h3>Previous offer sheets</h3>'+
-    '<span class="sh-sub">'+runs.length+' run'+(runs.length===1?'':'s')+' recorded'+
-    (M.sweptAt ? ' \u00b7 OMS checked '+M.sweptAt.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : '')+
-    '</span><button class="ung-tool" id="sh-sweep" type="button">Check OMS now</button></div>';
+  head.innerHTML='<div class="ui-ph"><div><h2>Offer sheets</h2>'+
+    '<p>'+(runs.length ? runs.length+' run'+(runs.length===1?'':'s')+' recorded, newest first.' : 'Nothing recorded yet.')+
+    (M.sweptAt ? ' OMS was last checked at '+M.sweptAt.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+'.'
+               : ' OMS has not been checked yet in this visit.')+'</p></div>'+
+    '<div class="ui-acts"><button class="ung-tool" id="sh-sweep" type="button">Check OMS now</button></div></div>';
   if(el("sh-sweep")) el("sh-sweep").onclick=async function(){
     this.disabled=true; this.textContent="Checking\u2026";
     M.sweepWarned=false;
     await sweepOms();
     renderSheets();
   };
-  body.className="sh-grid";
+  body.className = runs.length ? "sh-grid" : "";
   body.innerHTML = runs.length
     ? runs.map(run=>{
         const roi=roiOf(run.rows);
-        return '<article class="sh-card open" data-sh-run="'+esc(run.id)+'"><div class="sh-bar"></div><div class="sh-in">'+
-          '<div class="sh-top"><div><b>'+longDate(run.date)+'</b><span>'+
-            run.clients.size+' client'+(run.clients.size===1?'':'s')+'</span></div>'+
-          '<span class="sh-tag">Amazon</span></div>'+
-          '<div class="sh-stats">'+
-            '<div><i>ITEMS</i><b>'+run.rows.length.toLocaleString()+'</b></div>'+
-            '<div><i>VALUE</i><b>'+cash0(run.value)+'</b></div>'+
-            '<div class="roi"><i>ROI</i><b>'+(roi*100).toFixed(1)+'%</b></div>'+
+        /* Held: still on its slot and its budget. Released: OMS answered in a way that ended it. */
+        const held=run.rows.filter(r=>!r.released_at).length, n=run.rows.length;
+        const pct=n ? held/n*100 : 0;
+        return '<article class="sh-card sh-run open" data-sh-run="'+esc(run.id)+'">'+
+          '<div class="sh-rtop"><h3>'+longDate(run.date)+'</h3><span class="ui-pill thin">Amazon</span></div>'+
+          '<div class="ui-meta">'+run.clients.size+' client'+(run.clients.size===1?'':'s')+' · run '+esc(run.id)+'</div>'+
+          '<div class="sh-kv">'+
+            '<div><i>Items</i><b>'+n.toLocaleString()+'</b></div>'+
+            '<div><i>Value</i><b>'+cash0(run.value)+'</b></div>'+
+            '<div><i>ROI</i><b>'+(roi*100).toFixed(1)+'%</b></div>'+
           '</div>'+
-          '<div class="sh-foot"><span>run '+esc(run.id)+'</span>'+
-          '<span><button class="ung-tool" data-sh-all="'+esc(run.id)+'">Download all</button>'+
-          '<span class="sh-go">Open &rarr;</span></span></div>'+
-        '</div></article>';
+          '<div class="sh-held"><span>In OMS: '+held.toLocaleString()+' held · '+(n-held).toLocaleString()+' released</span>'+
+            '<span>'+Math.round(pct)+'% held</span></div>'+
+          '<div class="ui-bar"><span style="width:'+pct.toFixed(1)+'%"></span></div>'+
+          '<div class="sh-rfoot"><button class="ung-tool" data-sh-all="'+esc(run.id)+'" type="button">Download all</button>'+
+            '<span class="sh-go">Open &rarr;</span></div>'+
+        '</article>';
       }).join("")
-    : '<div class="mos-empty" style="padding:26px">No offer sheets yet. Generate one on the Manual offer sheet tab and it will appear here.</div>';
+    : '<div class="ui-card"><div class="ui-empty"><h3>No offer sheets yet</h3>'+
+      '<p>Generate a run on the Clients tab and it will appear here.</p></div></div>';
 
   body.onclick=async (ev)=>{
     const b=ev.target.closest("button[data-sh-all]");
@@ -5783,6 +6923,53 @@ function init(){
     clearTimeout(window._clT); window._clT=setTimeout(renderClientReport,180); });
   if(el("cl-month")) el("cl-month").addEventListener("change", renderClientReport);
 
+  /* Filter chips, Columns menus and the ASIN list search. The chips are redrawn
+     with the table, so their clicks are caught on the container. */
+  if(el("cl-chips")) el("cl-chips").addEventListener("click", function(e){
+    var b=e.target.closest("button[data-clf]"); if(!b) return;
+    M.clSheetFilter=b.dataset.clf; renderClientReport();
+  });
+  if(el("goods-chips")) el("goods-chips").addEventListener("click", function(e){
+    var b=e.target.closest("button[data-gf]"); if(!b) return;
+    M.goodsTone=b.dataset.gf; renderGoods();
+  });
+  if(el("goods-search")) el("goods-search").addEventListener("input", function(){
+    clearTimeout(window._goodsT); window._goodsT=setTimeout(renderGoods,180); });
+  /* A Columns menu opens from its button and closes on any click outside it. */
+  document.addEventListener("click", function(e){
+    if(!e.target.closest) return;
+    [["cl-cols","cl-colmenu"],["goods-cols","goods-colmenu"]].forEach(function(p){
+      var b=el(p[0]), m=el(p[1]); if(!b || !m) return;
+      if(e.target.closest("#"+p[0])) m.hidden=!m.hidden;
+      else if(!m.hidden && !e.target.closest("#"+p[1])) m.hidden=true;
+      b.setAttribute("aria-expanded", String(!m.hidden));
+    });
+  });
+  [["cl-colmenu","clcol",function(){ return M.clHide; },CL_COLS_KEY,function(){ renderClientReport(); }],
+   ["goods-colmenu","gcol",function(){ return M.goodsHide; },GOODS_COLS_KEY,function(){ renderGoods(); }]]
+  .forEach(function(p){
+    var m=el(p[0]); if(!m) return;
+    m.addEventListener("change", function(e){
+      var k=e.target.dataset && e.target.dataset[p[1]]; if(!k) return;
+      var set=p[2]();
+      if(e.target.checked) set.delete(k); else set.add(k);
+      try{ localStorage.setItem(p[3], JSON.stringify(Array.from(set))); }catch(err){}
+      p[4]();
+    });
+  });
+  /* The database squares carry no text, so hovering one names the client and
+     the answer, worked out from the row and the column rather than stored on
+     every cell. */
+  var _dbg=el("db-grid");
+  if(_dbg) _dbg.addEventListener("mouseover", function(e){
+    var td=e.target.closest && e.target.closest("td.ucell"); if(!td) return;
+    var tr=td.parentNode, ci=Array.prototype.indexOf.call(tr.children, td)-(_dbg._lead||3);
+    var c=(_dbg._cols||[])[ci]; if(!c || !tr.dataset.row) return;
+    var s=td.getAttribute("data-s")||"gated";
+    td.title=c+" · "+tr.dataset.row+" · "+
+      ({ungated:"Ungated", gated:"Gated", pending:"Pending", blank:"Not checked"}[s]||s);
+  });
+
   if(el("mos-batch-drop")) dropZone("mos-batch-drop", files=>{   /* only if the tab still has one */
     if(!M.pool.length){ note("Load the ASIN list on the ASINs tab first.", true); return; }
     readFiles(files, (txt,name,all)=>{
@@ -5799,6 +6986,32 @@ function init(){
   var _uex=el("ung-extract"); if(_uex) _uex.onclick=function(){ ungTogglePicker("ung"); };
   var _dex=el("db-extract");  if(_dex) _dex.onclick=function(){ ungTogglePicker("db"); };
   var _uad=el("ung-add"); if(_uad) _uad.onclick=ungAddClients;
+  /* Ungate Checking: the client list, the chips, the pages and the answer
+     buttons. Their markup is redrawn, so the clicks are caught on the static
+     containers. (ungWire's cell click on #ung-grid ignores these rows: they
+     carry no wcell/ucell cells.) */
+  var _ucl=el("ung-clients");
+  if(_ucl) _ucl.addEventListener("click", function(e){
+    var b=e.target.closest && e.target.closest("button[data-uc]"); if(!b) return;
+    M.ungClient=b.dataset.uc; _ungDrawClients(); _ungDrawWork();
+  });
+  var _ucf=el("ung-cfoot");
+  if(_ucf) _ucf.addEventListener("click", function(e){
+    if(!(e.target.closest && e.target.closest("button[data-ungdone]"))) return;
+    M.ungShowDone=!M.ungShowDone; _ungDrawClients();
+  });
+  if(el("ung-cfind")) el("ung-cfind").addEventListener("input", _ungDrawClients);
+  if(el("ung-chips")) el("ung-chips").addEventListener("click", function(e){
+    var b=e.target.closest && e.target.closest("button[data-uf]"); if(!b) return;
+    M.ungChip=b.dataset.uf; _ungDrawWork();
+  });
+  if(el("ung-more")) el("ung-more").onclick=function(){ M.ungPage=(M.ungPage||400)+400; _ungDrawWork(); };
+  var _ugr=el("ung-grid");
+  if(_ugr) _ugr.addEventListener("click", function(e){
+    var b=e.target.closest && e.target.closest(".ung-seg button[data-v]"); if(!b) return;
+    var tr=b.closest("tr[data-a]"), t=b.closest("table[data-c]");
+    if(tr && t) _ungAnswer(tr, t.dataset.c, b.dataset.v);
+  });
   [["ung-picker","ungate"],["db-picker","db"]].forEach(function(p){
     var box=el(p[0]); if(!box) return;
     box.addEventListener("click", function(ev){
