@@ -3737,6 +3737,10 @@ document.addEventListener("change", e=>{
       const r = wmRec(id);
       r.locked = code || "";
       r.lockedCh = code ? "amazon" : "";
+      /* Picking a client is an explicit "put it on this sheet", so it also
+         undoes an earlier "taken off the offer sheet"; otherwise the row shows
+         the client here but never reaches the sheet. */
+      if(code) r.excluded = false;
       touch("ovr", id);
     });
     recompute(); saveMarks(); renderGrid(); renderLedger();
