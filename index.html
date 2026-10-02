@@ -869,6 +869,20 @@
   #ung-grid .ung-seg button[data-v="gated"][aria-pressed="true"]{background:var(--ink2);color:#fff}
   #ung-grid .ung-seg button[data-v="pending"][aria-pressed="true"]{background:#C98A1A;color:#fff}
   #ung-grid .ung-seg button[data-v="blank"][aria-pressed="true"]{background:#EEF0EF;color:var(--ink)}
+  /* Add client form: a row per store code, each with an optional monthly budget */
+  #mos-ungate .ung-addform{margin-bottom:16px}
+  #mos-ungate .ung-add-rows{display:flex;flex-direction:column;gap:10px;padding:12px 14px}
+  #mos-ungate .ung-add-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+  #mos-ungate .ung-add-row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink2)}
+  #mos-ungate .ung-add-row .ui-search{flex:none;min-width:0}
+  #mos-ungate .ung-add-row input[data-ungadd-code]{width:110px;text-transform:uppercase}
+  #mos-ungate .ung-add-row input[data-ungadd-budget]{width:200px}
+  #mos-ungate .ung-add-hint{min-width:220px;padding-bottom:8px;font-size:12px;color:var(--ink3)}
+  #mos-ungate .ung-add-row .ui-link{padding-bottom:8px;color:var(--ink3)}
+  /* the error sits right after "+ Another client"; the spacer pushes Cancel/Add right */
+  #mos-ungate .ung-addform .ui-foot{justify-content:flex-start}
+  #mos-ungate .ung-addform .ui-foot > :first-child{flex:none}
+  #mos-ungate .ung-add-err{font-size:13px;color:var(--flag)}
 
   /* ---- MOS Offer sheets ---- */
   /* the trail back, above the title: Offer sheets / the run / the client */
@@ -1437,6 +1451,8 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
       </div>
     </div>
     <div id="ung-tally" class="ui-stats"></div>
+    <!-- Add client: store codes with an optional monthly budget each -->
+    <div id="ung-addform" class="ui-card ung-addform" hidden></div>
     <!-- the import preview and the Extract panel -->
     <div id="ung-picker" class="ung-picker" hidden></div>
     <!-- Left, the clients with work; right, the picked client's ASINs. The right table sits in
@@ -5542,17 +5558,93 @@ function ungColsFor(openTab){ return ungCols(); }
 function ungRowsFor(openTab){ return openTab ? (M.pool||[]) : (M.all||[]); }
 
 /* New clients go to the far left, because the leftmost column is the one
-   that gets first claim when two clients are otherwise level. */
-async function ungAddClients(){
-  const raw=prompt("Add client store codes. Separate several with commas or spaces.\nThey go to the far left.");
-  if(raw===null) return;
-  const codes=raw.split(/[\s,;]+/).map(x=>x.trim().toUpperCase()).filter(Boolean);
-  if(!codes.length) return;
+   that gets first claim when two clients are otherwise level. Add client opens
+   a small form: one row per store code, each with an optional monthly budget.
+   A code already on the roster can be given a budget, or a new one, here. */
+function ungAddClients(){
+  const box=el("ung-addform"); if(!box) return;
+  if(!box.hidden){ box.hidden=true; return; }
+  box.innerHTML=
+    '<div class="ui-tools"><b class="ui-title">Add clients</b><span class="ui-meta">New clients go to the far left. '+
+      'The budget is per month; leave it empty if you don’t have it yet.</span></div>'+
+    '<div class="ung-add-rows" id="ung-add-rows">'+_ungAddRow()+'</div>'+
+    '<div class="ui-foot"><button class="ui-link" type="button" data-ungadd="row">+ Another client</button>'+
+      '<span class="ung-add-err" id="ung-add-err" role="alert"></span><span class="ui-spacer"></span>'+
+      '<button class="ung-tool" type="button" data-ungadd="cancel">Cancel</button>'+
+      '<button class="ung-tool go" type="button" data-ungadd="save">Add</button></div>';
+  box.hidden=false;
+  if(!box._wired){
+    box._wired=1;
+    box.addEventListener("click", ev=>{
+      const b=ev.target.closest("button[data-ungadd]"); if(!b) return;
+      const what=b.dataset.ungadd;
+      if(what==="cancel"){ box.hidden=true; return; }
+      if(what==="row"){
+        el("ung-add-rows").insertAdjacentHTML("beforeend", _ungAddRow());
+        const ins=box.querySelectorAll("input[data-ungadd-code]"); ins[ins.length-1].focus();
+        return;
+      }
+      if(what==="del"){ if(box.querySelectorAll(".ung-add-row").length>1) b.closest(".ung-add-row").remove(); return; }
+      if(what==="save") _ungAddSubmit(b);
+    });
+    box.addEventListener("input", ev=>{
+      const r=ev.target.closest(".ung-add-row"); if(!r) return;
+      if(ev.target.matches("input[data-ungadd-code]")) r.querySelector(".ung-add-hint").textContent=_ungAddHint(ev.target.value);
+      el("ung-add-err").textContent="";
+    });
+    box.addEventListener("keydown", ev=>{
+      if(ev.key==="Enter" && ev.target.matches("input")){ ev.preventDefault(); _ungAddSubmit(box.querySelector('button[data-ungadd="save"]')); }
+      else if(ev.key==="Escape") box.hidden=true;
+    });
+  }
+  box.querySelector("input[data-ungadd-code]").focus();
+}
+function _ungAddRow(){
+  return '<div class="ung-add-row">'+
+    '<label><span>Store code</span><input class="ui-search" data-ungadd-code maxlength="6" placeholder="CFR" autocomplete="off"></label>'+
+    '<label><span>Monthly budget</span><input class="ui-search" data-ungadd-budget inputmode="decimal" placeholder="Optional, e.g. 5000" autocomplete="off"></label>'+
+    '<span class="ung-add-hint"></span>'+
+    '<button class="ui-link" type="button" data-ungadd="del">Remove</button></div>';
+}
+function _ungAddHint(raw){
+  const c=String(raw||"").trim().toUpperCase();
+  if(!c) return "";
+  if(!ungCols().includes(c)) return "New client";
+  return (c in M.budgets)
+    ? "Already on the list · budget "+cash(M.budgets[c])+" (a new amount replaces it)"
+    : "Already on the list · no budget yet";
+}
+/* "$5,000", "5000" and "5,000.50" all read as money; empty means no budget. */
+function ungParseBudget(raw){
+  const t=String(raw==null?"":raw).replace(/[$,\s]/g,"");
+  if(!t) return {ok:true, value:null};
+  if(!/^\d+(\.\d{1,2})?$/.test(t)) return {ok:false};
+  return {ok:true, value:Number(t)};
+}
+async function _ungAddSubmit(btn){
+  const box=el("ung-addform"), err=el("ung-add-err");
+  const entries=[], seen=new Set();
+  for(const r of box.querySelectorAll(".ung-add-row")){
+    const ci=r.querySelector("input[data-ungadd-code]"), bi=r.querySelector("input[data-ungadd-budget]");
+    const code=ci.value.trim().toUpperCase();
+    if(!code && !bi.value.trim()) continue;                       // a spare empty row
+    if(!/^[A-Z0-9]{2,6}$/.test(code)){ err.textContent="Enter a store code on every row, like CFR."; ci.focus(); return; }
+    const b=ungParseBudget(bi.value);
+    if(!b.ok){ err.textContent="The budget for "+code+" isn't a number. Use something like 5000 or 5,000.50."; bi.focus(); return; }
+    if(seen.has(code)) continue;
+    seen.add(code); entries.push({code, budget:b.value});
+  }
+  if(!entries.length){ err.textContent="Enter at least one store code."; return; }
+  btn.disabled=true; btn.textContent="Adding…";
+  try{ await ungSaveClients(entries); box.hidden=true; }
+  finally{ btn.disabled=false; btn.textContent="Add"; }
+}
+async function ungSaveClients(entries){
+  const codes=entries.map(e=>e.code);
   if(M.stores.length===0) M.stores=(window.UNGATE_CLIENTS||[]).slice();
   const fresh=codes.filter(c=>!M.stores.includes(c));
   const already=codes.filter(c=>M.stores.includes(c));
   if(fresh.length) M.stores=fresh.concat(M.stores);      // leftmost, in the order typed
-  const noBudget=fresh.filter(c=>!(c in M.budgets));
   renderMos();
   if(fresh.length) await saveClients();
   /* No row means Gated, so a client added with nothing behind it reads as
@@ -5573,15 +5665,29 @@ async function ungAddClients(){
       part.forEach(x=>M.blank.add(key(x.asin,x.store_code)));
       seeded+=part.length;
     }
-    renderMos();
   }
+  /* Budgets typed in the form, for new clients and for ones already listed. */
+  const withBudget=entries.filter(e=>e.budget!==null);
+  let budgetErr="";
+  if(withBudget.length){
+    const at=new Date().toISOString();
+    const {error}=await sb.from("mos_budgets").upsert(
+      withBudget.map(e=>({store_code:e.code, budget:e.budget, updated_at:at})), {onConflict:"store_code"});
+    if(error) budgetErr=error.message;
+    else withBudget.forEach(e=>{ M.budgets[e.code]=e.budget; });
+  }
+  const noBudget=fresh.filter(c=>!(c in M.budgets));
+  renderMos();
   note(
     (fresh.length ? `${fresh.join(", ")} added on the left` +
       (seeded ? `, ${seeded.toLocaleString()} ASINs to check. ` : ". ") : "")+
     (seedErr ? `Could not mark every ASIN as not checked (${seedErr}). ` : "")+
     (already.length ? `${already.join(", ")} ${already.length>1?"were":"was"} already there. ` : "")+
+    (withBudget.length && !budgetErr
+      ? `Monthly budget saved: ${withBudget.map(e=>e.code+" "+cash(e.budget)).join(", ")}. ` : "")+
+    (budgetErr ? `Could not save the budget (${budgetErr}). ` : "")+
     (noBudget.length ? `No budget on record for ${noBudget.join(", ")}.` : ""),
-    noBudget.length>0 || !!seedErr);
+    noBudget.length>0 || !!seedErr || !!budgetErr);
 }
 
 /* Which clients to put in the exported sheet. */
