@@ -5555,11 +5555,33 @@ async function ungAddClients(){
   const noBudget=fresh.filter(c=>!(c in M.budgets));
   renderMos();
   if(fresh.length) await saveClients();
+  /* No row means Gated, so a client added with nothing behind it reads as
+     Gated on every ASIN and shows as clear. Each new client gets a "not
+     checked" row on every ASIN in the list instead, so it shows up as work.
+     ignoreDuplicates keeps an answer someone saved in the meantime. */
+  let seeded=0, seedErr="";
+  if(fresh.length){
+    const rows=[];
+    for(const c of fresh) for(const r of (M.pool||[])){
+      const k=key(r.asin,c);
+      if(!M.ungated.has(k) && !M.pending.has(k) && !M.blank.has(k)) rows.push({asin:r.asin, store_code:c, state:"blank"});
+    }
+    for(let i=0;i<rows.length;i+=500){
+      const part=rows.slice(i,i+500);
+      const {error}=await sb.from("mos_gating").upsert(part,{onConflict:"asin,store_code", ignoreDuplicates:true});
+      if(error){ seedErr=error.message; break; }
+      part.forEach(x=>M.blank.add(key(x.asin,x.store_code)));
+      seeded+=part.length;
+    }
+    renderMos();
+  }
   note(
-    (fresh.length ? `${fresh.join(", ")} added on the left. ` : "")+
+    (fresh.length ? `${fresh.join(", ")} added on the left` +
+      (seeded ? `, ${seeded.toLocaleString()} ASINs to check. ` : ". ") : "")+
+    (seedErr ? `Could not mark every ASIN as not checked (${seedErr}). ` : "")+
     (already.length ? `${already.join(", ")} ${already.length>1?"were":"was"} already there. ` : "")+
     (noBudget.length ? `No budget on record for ${noBudget.join(", ")}.` : ""),
-    noBudget.length>0);
+    noBudget.length>0 || !!seedErr);
 }
 
 /* Which clients to put in the exported sheet. */
