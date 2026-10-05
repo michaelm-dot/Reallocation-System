@@ -825,10 +825,10 @@
   #mos-sheets .ung-tool.warn:hover{border-color:#D9A9A2;background:var(--wash-flag)}
 
   /* ---- MOS Ungate Checking ---- */
-  /* While the import preview or the Extract panel is open, its Apply / Extract is the green one. */
-  #mos-ungate:has(#ung-picker:not([hidden])) #ung-import{background:var(--panel);border-color:var(--rule);color:var(--ink)}
-  #mos-ungate #ung-picker{margin:0 0 16px;padding:14px 16px;border-radius:12px}
-  #mos-ungate #ung-picker .ung-pick-head b{font:500 14px var(--sans)}
+  /* The Extract panel is always open, so its Extract (or an import preview's Apply) is the green one. */
+  #mos-ungate #ung-import{background:var(--panel);border-color:var(--rule);color:var(--ink)}
+  #mos-ungate #ung-picker,#mos-ungate #ung-extractbox{margin:0 0 16px;padding:14px 16px;border-radius:12px}
+  #mos-ungate #ung-picker .ung-pick-head b,#mos-ungate #ung-extractbox .ung-pick-head b{font:500 14px var(--sans)}
   #mos-ungate #ung-picker .ung-pick-find{padding:7px 12px;border-radius:8px;background:#FAFBFA;font-size:13px}
   #mos-ungate #ung-picker .ungtbl.imp thead th{padding:8px 11px;background:#FAFBFA;border-right:0;border-bottom:1px solid var(--rule);
     font:500 12px/1.3 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink2)}
@@ -865,17 +865,17 @@
   .ung-cpickbar .ui-link{font-size:12px}
   #ung-grid .ung-wtbl td.ung-pos{width:1%;font:400 12px var(--mono);color:var(--ink3)}
   /* Extract: which slice of each client's to-check list goes in the file */
-  #ung-picker .ung-pick-range{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:10px;
+  #ung-extractbox .ung-pick-range{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:10px;
     border-top:1px solid var(--rule2);font-size:13px;color:var(--ink2)}
-  #ung-picker .ung-pick-range .lbl{font-weight:500;color:var(--ink)}
-  #ung-picker .ung-pick-range label{display:flex;align-items:center;gap:6px}
-  #ung-picker .ung-pick-range input{width:96px;padding:6px 10px;border:1px solid var(--rule);border-radius:8px;
+  #ung-extractbox .ung-pick-range .lbl{font-weight:500;color:var(--ink)}
+  #ung-extractbox .ung-pick-range label{display:flex;align-items:center;gap:6px}
+  #ung-extractbox .ung-pick-range input{width:96px;padding:6px 10px;border:1px solid var(--rule);border-radius:8px;
     background:#FAFBFA;font:400 13px var(--mono);color:var(--ink)}
-  #ung-picker .ung-pick-presets{display:flex;gap:6px;flex-wrap:wrap}
-  #ung-picker .ung-pick-help{flex-basis:100%;font-size:12px;color:var(--ink3)}
-  #ung-picker .ung-pick-note.bad{color:var(--flag)}
-  #ung-picker .ung-pick-who{margin:0;font-size:13px;color:var(--ink2)}
-  #ung-picker .ung-pick-who b{font:500 13px var(--mono);color:var(--ink)}
+  #ung-extractbox .ung-pick-presets{display:flex;gap:6px;flex-wrap:wrap}
+  #ung-extractbox .ung-pick-help{flex-basis:100%;font-size:12px;color:var(--ink3)}
+  #ung-extractbox .ung-pick-note.bad{color:var(--flag)}
+  #ung-extractbox .ung-pick-who{margin:0;font-size:13px;color:var(--ink2)}
+  #ung-extractbox .ung-pick-who b{font:500 13px var(--mono);color:var(--ink)}
   #mos-ungate .ung-clist .ui-foot > :first-child{flex:1 1 auto}
   #mos-ungate .ung-work > .ung-grid{max-height:66vh;border:0;border-radius:0;box-shadow:none;background:var(--panel)}
   #mos-ungate #ung-title{font-size:15px}
@@ -1470,7 +1470,6 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
       <div><h2>Ungate Checking</h2><p>Only clients with ASINs left to check. Pick one, then mark each ASIN.</p></div>
       <div class="ui-acts">
         <button class="ung-tool" id="ung-add" type="button">Add client</button>
-        <button class="ung-tool" id="ung-extract" type="button">Extract&hellip;</button>
         <button class="ung-tool go" id="ung-import" type="button">Import</button>
         <input type="file" id="ung-import-input" accept=".csv,.tsv,.xlsx,.xls,text/csv" hidden>
       </div>
@@ -1478,8 +1477,10 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
     <div id="ung-tally" class="ui-stats"></div>
     <!-- Add client: store codes with an optional monthly budget each -->
     <div id="ung-addform" class="ui-card ung-addform" hidden></div>
-    <!-- the import preview and the Extract panel -->
+    <!-- the import preview -->
     <div id="ung-picker" class="ung-picker" hidden></div>
+    <!-- Extract listing files: always open, for the clients ticked in the client list -->
+    <div id="ung-extractbox" class="ung-picker" data-tab="ung"></div>
     <!-- Left, the clients with work; right, the picked client's ASINs. The right table sits in
          #ung-grid, whose cells carry no wcell/ucell class, so ungWire's cell click ignores them. -->
     <div class="ung-split">
@@ -5182,6 +5183,8 @@ function _ungDrawClients(){
   }).join('') || '<div class="ung-cnone">'+(q ? 'No client matches that.' : 'Nobody has anything left to check.')+'</div>';
   _ungCpickbar();
   _ungCfoot(clear);
+  /* The Extract panel names the ticked clients and counts their ASINs. */
+  var xb=el('ung-extractbox'); if(xb) ungDrawPicker(xb);
 }
 /* "Extract 3 of 5 clients" (of those with work), with All and None. */
 function _ungCpickbar(){
@@ -5224,6 +5227,7 @@ function _ungTouchClient(c){
   if(cnt) cnt.textContent=n?n.toLocaleString():'clear';
   _ungCpickbar();
   _ungCfoot();
+  var xb=el('ung-extractbox'); if(xb) ungDrawPicker(xb);
   return true;
 }
 
@@ -5785,6 +5789,11 @@ function ungDrawPicker(box){
   /* On Ungate Checking the clients are ticked in the client list on the left,
      so the panel only names them; the ASIN database still ticks columns here. */
   const working=picked.filter(function(c){ return c.n>0; });
+  /* The Ungate panel stays open and is redrawn by live updates too, so someone
+     typing in From/To keeps their place. */
+  const act=typeof document!=="undefined" ? document.activeElement : null;
+  const keep=act && box.contains && box.contains(act) && act.dataset && act.dataset.ungrange
+    ? {k:act.dataset.ungrange, s:act.selectionStart, e:act.selectionEnd} : null;
   box.innerHTML=
     (listing
       ? '<div class="ung-pick-head"><b>Extract listing files</b></div>'+
@@ -5825,12 +5834,16 @@ function ungDrawPicker(box){
       '<span>'+
         '<button class="ung-tool go" data-ungpick="go" type="button"'+
           (listing && !files.length ? ' disabled' : '')+'>Extract</button>'+
-        '<button class="ung-tool" data-ungpick="close" type="button">Cancel</button>'+
+        (listing ? '' : '<button class="ung-tool" data-ungpick="close" type="button">Cancel</button>')+
       '</span>'+
     '</div>';
+  if(keep){
+    const back=box.querySelector('input[data-ungrange="'+keep.k+'"]');
+    if(back){ back.focus(); try{ back.setSelectionRange(keep.s, keep.e); }catch(e){} }
+  }
 }
 function ungPickNote(box){
-  if(!box) box = (el("db-picker") && !el("db-picker").hidden) ? el("db-picker") : el("ung-picker");
+  if(!box) box = (el("db-picker") && !el("db-picker").hidden) ? el("db-picker") : el("ung-extractbox");
   if(box && !box.hidden) ungDrawPicker(box);
 }
 
@@ -5877,7 +5890,6 @@ async function ungExtractListing(){
   var rg=ungRangeOf(); if(!rg.ok){ note(rg.msg, true); return; }
   var ranged=rg.from>1 || rg.to!==null;
   var stamp=new Date().toISOString().slice(0,10), made=0, empty=[], short=[];
-  el("ung-picker").hidden=true;
   for(var i=0;i<codes.length;i++){
     var c=codes[i];
     var open=(M.pool||[]).filter(function(r){ return ungCellOpen(key(r.asin,c)); });
@@ -7228,7 +7240,6 @@ function init(){
   var _uii=el("ung-import-input");
   if(_uii) _uii.onchange=function(e){ _ungImport(e.target.files); e.target.value=""; };
   var _uib=el("ung-import"); if(_uib) _uib.onclick=function(){ el("ung-import-input").click(); };
-  var _uex=el("ung-extract"); if(_uex) _uex.onclick=function(){ ungTogglePicker("ung"); };
   var _dex=el("db-extract");  if(_dex) _dex.onclick=function(){ ungTogglePicker("db"); };
   var _uad=el("ung-add"); if(_uad) _uad.onclick=ungAddClients;
   /* Ungate Checking: the client list, the chips, the pages and the answer
@@ -7244,13 +7255,13 @@ function init(){
   if(_ucl) _ucl.addEventListener("change", function(e){
     var x=e.target.closest && e.target.closest("input[data-ucpick]"); if(!x) return;
     ungSetPick(x.dataset.ucpick, x.checked);
-    _ungCpickbar(); ungPickNote(el("ung-picker"));
+    _ungCpickbar(); if(el("ung-extractbox")) ungDrawPicker(el("ung-extractbox"));
   });
   var _ucb=el("ung-cpickbar");
   if(_ucb) _ucb.addEventListener("click", function(e){
     var b=e.target.closest && e.target.closest("button[data-ucall]"); if(!b) return;
     ungPick = b.dataset.ucall==="all" ? null : new Set();
-    _ungDrawClients(); ungPickNote(el("ung-picker"));
+    _ungDrawClients();                    /* redraws the Extract panel too */
   });
   var _ucf=el("ung-cfoot");
   if(_ucf) _ucf.addEventListener("click", function(e){
@@ -7269,7 +7280,7 @@ function init(){
     var tr=b.closest("tr[data-a]"), t=b.closest("table[data-c]");
     if(tr && t) _ungAnswer(tr, t.dataset.c, b.dataset.v);
   });
-  [["ung-picker","ungate"],["db-picker","db"]].forEach(function(p){
+  [["ung-extractbox","ungate"],["db-picker","db"]].forEach(function(p){
     var box=el(p[0]); if(!box) return;
     box.addEventListener("click", function(ev){
       var rs=ev.target.closest("button[data-ungrangeset]");
