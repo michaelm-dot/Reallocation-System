@@ -851,6 +851,29 @@
   #ung-clients .ung-crow .n{flex:0 0 48px;text-align:right;font:400 12px var(--mono);color:var(--ink2)}
   #ung-clients .ung-crow.clear .ui-code,#ung-clients .ung-crow.clear .n{color:var(--ink3)}
   #ung-clients .ung-cnone{padding:14px;font-size:13px;color:var(--ink3)}
+  /* the tick beside each client: who Extract makes files for */
+  #ung-clients .ung-cpick{display:flex;align-items:center;border-bottom:1px solid var(--rule2);background:var(--panel)}
+  #ung-clients .ung-cpick:last-child{border-bottom:0}
+  #ung-clients .ung-cpick > input{flex:none;margin:0 0 0 14px;accent-color:var(--amazon);cursor:pointer}
+  #ung-clients .ung-cpick .ung-crow{flex:1;min-width:0;padding-left:10px;border-bottom:0;background:transparent}
+  #ung-clients .ung-cpick:hover{background:#F7F9F8}
+  #ung-clients .ung-cpick:has(> .ung-crow[aria-pressed="true"]){background:var(--wash-amazon);box-shadow:inset 3px 0 0 var(--amazon)}
+  #ung-clients .ung-cpick .ung-crow[aria-pressed="true"]{background:transparent;box-shadow:none}
+  .ung-cpickbar{display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--rule);
+    background:#FAFBFA;font-size:12px;color:var(--ink2)}
+  .ung-cpickbar b{font-weight:500;color:var(--ink)}
+  .ung-cpickbar .ui-link{font-size:12px}
+  #ung-grid .ung-wtbl td.ung-pos{width:1%;font:400 12px var(--mono);color:var(--ink3)}
+  /* Extract: which slice of each client's to-check list goes in the file */
+  #ung-picker .ung-pick-range{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:10px;
+    border-top:1px solid var(--rule2);font-size:13px;color:var(--ink2)}
+  #ung-picker .ung-pick-range .lbl{font-weight:500;color:var(--ink)}
+  #ung-picker .ung-pick-range label{display:flex;align-items:center;gap:6px}
+  #ung-picker .ung-pick-range input{width:96px;padding:6px 10px;border:1px solid var(--rule);border-radius:8px;
+    background:#FAFBFA;font:400 13px var(--mono);color:var(--ink)}
+  #ung-picker .ung-pick-presets{display:flex;gap:6px;flex-wrap:wrap}
+  #ung-picker .ung-pick-help{flex-basis:100%;font-size:12px;color:var(--ink3)}
+  #ung-picker .ung-pick-note.bad{color:var(--flag)}
   #mos-ungate .ung-clist .ui-foot > :first-child{flex:1 1 auto}
   #mos-ungate .ung-work > .ung-grid{max-height:66vh;border:0;border-radius:0;box-shadow:none;background:var(--panel)}
   #mos-ungate #ung-title{font-size:15px}
@@ -1460,6 +1483,8 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
     <div class="ung-split">
       <div class="ui-card ung-clist">
         <div class="ui-tools"><input id="ung-cfind" class="ui-search" placeholder="Find a client" autocomplete="off"></div>
+        <!-- the tick boxes choose who Extract makes files for (shared with the Extract panel) -->
+        <div class="ung-cpickbar" id="ung-cpickbar"></div>
         <div id="ung-clients"></div>
         <div class="ui-foot" id="ung-cfoot"></div>
       </div>
@@ -5141,15 +5166,38 @@ function _ungDrawClients(){
   var shown=cols.filter(function(c){
     return q ? c.toUpperCase().indexOf(q)>=0 : (open[c] || M.ungShowDone || c===sel);
   });
+  /* The tick beside each client is who Extract makes a file for; clicking the
+     row itself still just shows that client's ASINs. */
   box.innerHTML = shown.map(function(c){
     var n=open[c]||0, done=all? (all-n)/all*100 : 0;
-    return '<button type="button" class="ung-crow'+(n?'':' clear')+'" data-uc="'+esc(c)+'" aria-pressed="'+(c===sel)+'"'+
+    return '<div class="ung-cpick"><input type="checkbox" data-ucpick="'+esc(c)+'" aria-label="Extract '+esc(c)+'"'+
+      (ungIn(c)?' checked':'')+'>'+
+      '<button type="button" class="ung-crow'+(n?'':' clear')+'" data-uc="'+esc(c)+'" aria-pressed="'+(c===sel)+'"'+
       ' title="'+(all-n).toLocaleString()+' of '+all.toLocaleString()+' answered">'+
       '<span class="ui-code">'+esc(c)+'</span>'+
       '<span class="ui-bar"><span style="width:'+done.toFixed(1)+'%"></span></span>'+
-      '<span class="n">'+(n?n.toLocaleString():'clear')+'</span></button>';
+      '<span class="n">'+(n?n.toLocaleString():'clear')+'</span></button></div>';
   }).join('') || '<div class="ung-cnone">'+(q ? 'No client matches that.' : 'Nobody has anything left to check.')+'</div>';
+  _ungCpickbar();
   _ungCfoot(clear);
+}
+/* "Extract 3 of 5 clients" (of those with work), with All and None. */
+function _ungCpickbar(){
+  var bar=el('ung-cpickbar'); if(!bar) return;
+  var open=M.ungOpen||{}, work=ungCols().filter(function(c){ return open[c]; });
+  var ticked=work.filter(ungIn).length;
+  bar.innerHTML='<span title="Ticked clients with ASINs left to check get a file when you Extract">'+
+      'Extract <b>'+ticked+'</b> of '+work.length+' client'+(work.length===1?'':'s')+'</span>'+
+    '<span class="ui-spacer"></span>'+
+    '<button class="ui-link" type="button" data-ucall="all">All</button>'+
+    '<button class="ui-link" type="button" data-ucall="none">None</button>';
+}
+/* One tick changed, in the list or in the Extract panel: both show the same choice. */
+function ungSetPick(code, on){
+  var cols=ungColsFor(true);
+  if(ungPick===null) ungPick=new Set(cols);
+  if(on) ungPick.add(code); else ungPick.delete(code);
+  if(cols.every(ungIn)) ungPick=null;
 }
 function _ungCfoot(clear){
   var f=el('ung-cfoot'); if(!f) return;
@@ -5172,6 +5220,7 @@ function _ungTouchClient(c){
   var bar=b.querySelector('.ui-bar span'), cnt=b.querySelector('.n');
   if(bar) bar.style.width=(all? (all-n)/all*100 : 0).toFixed(1)+'%';
   if(cnt) cnt.textContent=n?n.toLocaleString():'clear';
+  _ungCpickbar();
   _ungCfoot();
   return true;
 }
@@ -5221,18 +5270,23 @@ function _ungDrawWork(){
     if(cnt) cnt.textContent=''; if(more) more.hidden=true;
     return;
   }
-  var n=_ungCounts(c), list=[];
+  var n=_ungCounts(c), list=[], pos=0;
   for(var i=0;i<pool.length;i++){
     var r=pool[i], s=ungCellState(key(r.asin,c))[2];
-    if(f==='open' ? !(s==='blank' || s==='pending') : s!==f) continue;
+    /* # is the place in this client's to-check list, the same numbering the
+       Extract range uses, so it is counted before the search narrows it. */
+    var open=(s==='blank' || s==='pending'); if(open) pos++;
+    if(f==='open' ? !open : s!==f) continue;
     if(q && (r.asin+' '+r.upc+' '+r.brand).toUpperCase().indexOf(q)<0) continue;
-    list.push([r,s]);
+    list.push([r,s,pos]);
   }
   _ungDrawHead(c, n);
-  var lim=Math.min(list.length, M.ungPage||400), rows=[];
+  var lim=Math.min(list.length, M.ungPage||400), rows=[], numbered=(f==='open');
   for(var k=0;k<lim;k++){
     var row=list[k][0];
-    rows.push('<tr data-a="'+esc(row.asin)+'" data-s="'+list[k][1]+'"><td class="ui-code">'+esc(row.asin)+'</td>'+
+    rows.push('<tr data-a="'+esc(row.asin)+'" data-s="'+list[k][1]+'">'+
+      (numbered ? '<td class="num ung-pos">'+list[k][2].toLocaleString()+'</td>' : '')+
+      '<td class="ui-code">'+esc(row.asin)+'</td>'+
       '<td class="ub">'+esc(row.brand||'')+'</td>'+
       '<td class="num">'+(row.unitCost?cash(row.unitCost):'')+'</td>'+
       '<td class="num">'+mosRoiPill(row.roi||0)+'</td>'+
@@ -5240,7 +5294,8 @@ function _ungDrawWork(){
   }
   var word={open:'left to check', ungated:'marked Ungated', gated:'marked Gated', pending:'marked Pending'}[f];
   box.innerHTML = list.length
-    ? '<table class="ui-tbl ung-wtbl" data-c="'+esc(c)+'"><thead><tr><th>ASIN</th><th>Brand</th><th class="num">Unit cost</th>'+
+    ? '<table class="ui-tbl ung-wtbl" data-c="'+esc(c)+'"><thead><tr>'+(numbered?'<th class="num">#</th>':'')+
+      '<th>ASIN</th><th>Brand</th><th class="num">Unit cost</th>'+
       '<th class="num">ROI</th><th>Answer</th></tr></thead><tbody>'+rows.join('')+'</tbody></table>'
     : q ? '<div class="ui-empty"><h3>Nothing matches</h3><p>No ASIN '+word+' for '+esc(c)+' matches that filter.</p></div>'
     : f==='open' ? '<div class="ui-empty"><div class="ic">&#10003;</div><h3>'+esc(c)+' is all caught up</h3>'+
@@ -5719,8 +5774,11 @@ function ungDrawPicker(box){
   const shown=q ? cols.filter(function(c){ return c.code.indexOf(q)>=0; }) : cols;
 
   const picked=cols.filter(function(c){ return ungIn(c.code); });
-  const files=listing ? picked.filter(function(c){ return c.n>0; }) : picked;
-  const asins=files.reduce(function(s,c){ return s+c.n; }, 0);
+  /* The range picks a slice of each client's to-check list, e.g. 1-1000. */
+  const rg=listing ? ungRangeOf() : {ok:true, from:1, to:null};
+  const take=function(n){ return rg.ok ? Math.max(0, Math.min(n, rg.to||n) - rg.from + 1) : 0; };
+  const files=listing ? picked.filter(function(c){ return take(c.n)>0; }) : picked;
+  const asins=files.reduce(function(s,c){ return s+take(c.n); }, 0);
 
   box.innerHTML=
     '<div class="ung-pick-head">'+
@@ -5742,12 +5800,17 @@ function ungDrawPicker(box){
       }).join('') +
       (shown.length?'':'<div class="mos-empty" style="padding:10px">No client matches that.</div>')+
     '</div>'+
+    (listing ? ungRangeHtml() : '')+
     '<div class="ung-pick-foot">'+
-      '<span class="ung-pick-note">'+
+      '<span class="ung-pick-note'+(rg.ok?'':' bad')+'">'+
         (listing
-          ? (files.length
-              ? files.length+' file'+(files.length>1?'s':'')+' \u00b7 '+asins.toLocaleString()+' ASIN'+(asins===1?'':'s')+' to check'
-              : 'Nothing to extract: every client ticked is already clear.')
+          ? (!rg.ok ? rg.msg
+            : files.length
+              ? files.length+' file'+(files.length>1?'s':'')+' \u00b7 '+asins.toLocaleString()+' ASIN'+(asins===1?'':'s')+' to check'+
+                (rg.from>1 || rg.to ? ' (#'+rg.from.toLocaleString()+'\u2013'+(rg.to?rg.to.toLocaleString():'end')+' of each list)' : '')
+              : picked.some(function(c){ return c.n>0; })
+                ? 'Nothing in that range: no ticked client has '+rg.from.toLocaleString()+' ASINs left to check.'
+                : 'Nothing to extract: every client ticked is already clear.')
           : picked.length+' of '+cols.length+' client'+(cols.length===1?'':'s')+' in the sheet')+
       '</span>'+
       '<span>'+
@@ -5762,6 +5825,37 @@ function ungPickNote(box){
   if(box && !box.hidden) ungDrawPicker(box);
 }
 
+/* Which slice of each client's to-check list Extract writes, as typed in the
+   panel: From 1 to 1000, From 1001 to 1500, or From 1 to the end (blank To). */
+M.ungRange = M.ungRange || {from:"", to:""};
+function ungRangeOf(){
+  var f=String(M.ungRange.from||"").replace(/[,\s]/g,""), t=String(M.ungRange.to||"").replace(/[,\s]/g,"");
+  if(f && !/^\d+$/.test(f)) return {ok:false, msg:"From has to be a whole number, like 1 or 1001."};
+  if(t && !/^\d+$/.test(t)) return {ok:false, msg:"To has to be a whole number, like 1000, or empty for the end."};
+  var from=f ? Number(f) : 1, to=t ? Number(t) : null;
+  if(from<1) return {ok:false, msg:"From starts at 1."};
+  if(to!==null && to<from) return {ok:false, msg:"To can't be smaller than From."};
+  return {ok:true, from:from, to:to};
+}
+function ungRangeHtml(){
+  var rg=ungRangeOf(), size=(rg.ok && rg.to) ? rg.to-rg.from+1 : 0;
+  var on=function(f,t){ return rg.ok && rg.from===f && rg.to===t ? ' on' : ''; };
+  return '<div class="ung-pick-range">'+
+    '<span class="lbl">ASINs per client</span>'+
+    '<label>From <input data-ungrange="from" inputmode="numeric" placeholder="1" value="'+esc(M.ungRange.from||"")+'"></label>'+
+    '<label>to <input data-ungrange="to" inputmode="numeric" placeholder="the end" value="'+esc(M.ungRange.to||"")+'"></label>'+
+    '<span class="ung-pick-presets">'+
+      '<button class="ui-chip'+on(1,null)+'" type="button" data-ungrangeset="all">All</button>'+
+      '<button class="ui-chip'+on(1,500)+'" type="button" data-ungrangeset="1-500">1–500</button>'+
+      '<button class="ui-chip'+on(1,1000)+'" type="button" data-ungrangeset="1-1000">1–1,000</button>'+
+      (size ? '<button class="ui-chip" type="button" data-ungrangeset="next">Next '+size.toLocaleString()+
+        ' (#'+(rg.to+1).toLocaleString()+'–'+(rg.to+size).toLocaleString()+')</button>' : '')+
+    '</span>'+
+    '<span class="ung-pick-help">The numbers follow the # column of each client’s to-check list. '+
+      'Once answers are imported they leave that list, so after importing, the next batch starts at 1 again.</span>'+
+  '</div>';
+}
+
 function _ungExtract(which){ _ungExtractRows(which==="db" ? "db" : "ungate"); }
 
 /* Ungate Checking hands you the file you upload to the listing tool: one row
@@ -5771,20 +5865,30 @@ async function ungExtractListing(){
   if(typeof ExcelJS==="undefined"){ note("Hindi na-load ang writer — i-reload ang page.", true); return; }
   var codes=ungColsFor(true).filter(ungIn);
   if(!codes.length){ note("No clients are ticked.", true); return; }
-  var stamp=new Date().toISOString().slice(0,10), made=0, empty=[];
+  var rg=ungRangeOf(); if(!rg.ok){ note(rg.msg, true); return; }
+  var ranged=rg.from>1 || rg.to!==null;
+  var stamp=new Date().toISOString().slice(0,10), made=0, empty=[], short=[];
   el("ung-picker").hidden=true;
   for(var i=0;i<codes.length;i++){
     var c=codes[i];
-    var rows=(M.pool||[]).filter(function(r){ return ungCellOpen(key(r.asin,c)); });
-    if(!rows.length){ empty.push(c); continue; }
+    var open=(M.pool||[]).filter(function(r){ return ungCellOpen(key(r.asin,c)); });
+    if(!open.length){ empty.push(c); continue; }
+    /* #1 is the first ASIN of the client's to-check list, as in the table. */
+    var rows=open.slice(rg.from-1, rg.to===null ? undefined : rg.to);
+    if(!rows.length){ short.push(c); continue; }
+    var last=rg.from+rows.length-1;
     var wb=new ExcelJS.Workbook();
     fillListing(wb.addWorksheet("Sheet1"), c, rows);
-    await saveBook(wb, c+"_To_Check_"+stamp+".xlsx");
+    await saveBook(wb, c+"_To_Check_"+(ranged ? rg.from+"-"+last+"_" : "")+stamp+".xlsx");
     made++;
     await new Promise(function(r){ setTimeout(r,350); });
   }
   note(made
-    ? made+" file"+(made>1?"s":"")+" saved"+(empty.length?" \u00b7 "+empty.join(", ")+" had nothing left to check":"")
+    ? made+" file"+(made>1?"s":"")+" saved"+
+      (ranged ? " (#"+rg.from.toLocaleString()+"\u2013"+(rg.to===null?"end":rg.to.toLocaleString())+" of each list)" : "")+
+      (short.length?" \u00b7 "+short.join(", ")+" had fewer than "+rg.from.toLocaleString()+" left to check":"")+
+      (empty.length?" \u00b7 "+empty.join(", ")+" had nothing left to check":"")
+    : short.length ? "No ticked client has "+rg.from.toLocaleString()+" ASINs left to check."
     : "Every client ticked has already been checked on every ASIN.", !made);
 }
 
@@ -7127,6 +7231,18 @@ function init(){
     var b=e.target.closest && e.target.closest("button[data-uc]"); if(!b) return;
     M.ungClient=b.dataset.uc; _ungDrawClients(); _ungDrawWork();
   });
+  /* The tick boxes in the client list choose who Extract makes files for. */
+  if(_ucl) _ucl.addEventListener("change", function(e){
+    var x=e.target.closest && e.target.closest("input[data-ucpick]"); if(!x) return;
+    ungSetPick(x.dataset.ucpick, x.checked);
+    _ungCpickbar(); ungPickNote(el("ung-picker"));
+  });
+  var _ucb=el("ung-cpickbar");
+  if(_ucb) _ucb.addEventListener("click", function(e){
+    var b=e.target.closest && e.target.closest("button[data-ucall]"); if(!b) return;
+    ungPick = b.dataset.ucall==="all" ? null : new Set();
+    _ungDrawClients(); ungPickNote(el("ung-picker"));
+  });
   var _ucf=el("ung-cfoot");
   if(_ucf) _ucf.addEventListener("click", function(e){
     if(!(e.target.closest && e.target.closest("button[data-ungdone]"))) return;
@@ -7147,6 +7263,15 @@ function init(){
   [["ung-picker","ungate"],["db-picker","db"]].forEach(function(p){
     var box=el(p[0]); if(!box) return;
     box.addEventListener("click", function(ev){
+      var rs=ev.target.closest("button[data-ungrangeset]");
+      if(rs){
+        var v=rs.dataset.ungrangeset, cur=ungRangeOf();
+        if(v==="all") M.ungRange={from:"", to:""};
+        else if(v==="next" && cur.ok && cur.to){
+          var size=cur.to-cur.from+1; M.ungRange={from:String(cur.to+1), to:String(cur.to+size)};
+        } else if(/^\d+-\d+$/.test(v)){ const ends=v.split("-"); M.ungRange={from:ends[0], to:ends[1]}; }
+        ungDrawPicker(box); return;
+      }
       var b=ev.target.closest("button[data-ungpick]"); if(!b) return;
       var a=b.dataset.ungpick;
       if(a==="close"){ box.hidden=true; return; }
@@ -7154,20 +7279,29 @@ function init(){
       if(a==="work"){
         /* Everyone who still has something outstanding, nobody who does not. */
         ungPick=new Set(ungColsFor(true).filter(function(c){ return ungWork(c)>0; }));
-        ungDrawPicker(box); return;
+        ungDrawPicker(box); if(p[1]==="ungate") _ungDrawClients(); return;
       }
       ungPick = a==="all" ? null : new Set();
       ungDrawPicker(box);
+      if(p[1]==="ungate") _ungDrawClients();
     });
     box.addEventListener("change", function(ev){
       var x=ev.target.closest("input[data-ungcol]"); if(!x) return;
-      var cols=ungColsFor(p[1]==="ungate");
-      if(ungPick===null) ungPick=new Set(cols);
-      if(x.checked) ungPick.add(x.dataset.ungcol); else ungPick.delete(x.dataset.ungcol);
-      if(cols.every(ungIn)) ungPick=null;
+      ungSetPick(x.dataset.ungcol, x.checked);
       ungDrawPicker(box);
+      if(p[1]==="ungate") _ungDrawClients();
     });
     box.addEventListener("input", function(ev){
+      var rgi=ev.target.closest("input[data-ungrange]");
+      if(rgi){
+        /* Redrawn on every key so the count follows; the caret is put back. */
+        var which=rgi.dataset.ungrange;
+        M.ungRange[which]=rgi.value;
+        ungDrawPicker(box);
+        var back=box.querySelector('input[data-ungrange="'+which+'"]');
+        if(back){ back.focus(); back.setSelectionRange(back.value.length, back.value.length); }
+        return;
+      }
       var f=ev.target.closest("input[data-ungfind]"); if(!f) return;
       box.dataset.q=f.value;
       ungDrawPicker(box);
