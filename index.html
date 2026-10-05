@@ -864,6 +864,7 @@
   .ung-cpickbar b{font-weight:500;color:var(--ink)}
   .ung-cpickbar .ui-link{font-size:12px}
   #ung-grid .ung-wtbl td.ung-pos{width:1%;font:400 12px var(--mono);color:var(--ink3)}
+  #ung-grid .ung-wtbl .ung-ret{margin-left:6px;font:500 11px var(--sans);vertical-align:1px}
   /* Extract: which slice of each client's to-check list goes in the file */
   #ung-extractbox .ung-pick-range{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:10px;
     border-top:1px solid var(--rule2);font-size:13px;color:var(--ink2)}
@@ -4300,11 +4301,14 @@ function hash01(str){
    Supabase. Every read pages, because PostgREST caps a response at 1000 rows
    and the gating table alone runs to five figures.
    --------------------------------------------------------------------------- */
+/* Pages of 1000 (the server's cap). The order must be unique, or a row can
+   fall between two pages or show up in both, so pass a tiebreaker too. */
 async function readAll(table, cols, order){
   const out=[]; const size=1000;
+  const orders=[].concat(order||[]);
   for(let from=0;;from+=size){
     let q=sb.from(table).select(cols).range(from, from+size-1);
-    if(order) q=q.order(order);
+    for(const o of orders) q=q.order(o);
     const {data,error}=await q;
     if(error) throw new Error(`${table}: ${error.message}`);
     out.push(...data);
@@ -4322,11 +4326,11 @@ async function writeChunks(table, rows, conflict){
 
 async function loadAll(){
   const [budgets, asins, clients, gating, ledger, settings] = await Promise.all([
-    readAll("mos_budgets","store_code,budget"),
-    readAll("mos_asins","*","pos"),
-    readAll("mos_clients","store_code,position","position"),
-    readAll("mos_gating","asin,store_code,state"),
-    readAll("mos_allocations","*"),
+    readAll("mos_budgets","store_code,budget","store_code"),
+    readAll("mos_asins","*",["pos","asin"]),
+    readAll("mos_clients","store_code,position",["position","store_code"]),
+    readAll("mos_gating","asin,store_code,state",["asin","store_code"]),
+    readAll("mos_allocations","*","id"),
     sb.from("mos_settings").select("*").eq("id",true).maybeSingle(),
   ]);
   M.budgets={};
@@ -4484,11 +4488,47 @@ function parseAsinCsv(text){
     };
   }).filter(r=>r.asin);
 }
+/* A brand-new ASIN has no answers yet, so every client gets a "not checked"
+   row on it; otherwise "no row means Gated" would hide it from Ungate
+   Checking. Only an ASIN the database has never seen is touched (not in
+   mos_asins, no gating row at all), read fresh rather than from this page,
+   because a missing row on anything else may be a real Gated. Each request
+   carries whole ASINs, so none is ever left half seeded. */
+async function seedNewAsins(list){
+  if(!list.length) return 0;
+  const taken=new Set();
+  for(let i=0;i<list.length;i+=100){
+    const part=list.slice(i,i+100);
+    for(const t of ["mos_asins","mos_gating"]){
+      for(let from=0;;from+=1000){
+        let q=sb.from(t).select("asin").in("asin",part).order("asin");
+        if(t==="mos_gating") q=q.order("store_code");
+        const {data,error}=await q.range(from, from+999);
+        if(error) throw new Error(t+": "+error.message);
+        data.forEach(r=>taken.add(r.asin));
+        if(data.length<1000) break;
+      }
+    }
+  }
+  const fresh=list.filter(a=>!taken.has(a)), codes=ungCols();
+  const per=Math.max(1, Math.floor(500/Math.max(1,codes.length)));
+  for(let i=0;i<fresh.length;i+=per){
+    const rows=[];
+    for(const a of fresh.slice(i,i+per)) for(const c of codes) rows.push({asin:a, store_code:c, state:"blank"});
+    const {error}=await sb.from("mos_gating").upsert(rows,{onConflict:"asin,store_code", ignoreDuplicates:true});
+    if(error) throw new Error("mos_gating: "+error.message);
+  }
+  return fresh.length;
+}
+
 /* Replacing the ASIN list never deletes anything. An ASIN missing from the
-   new CSV is retired: it leaves Ungate Checking and stops being offered, but
-   whatever was already answered about it stays in the ASIN database. One that
-   comes back later simply becomes active again. */
+   new CSV is retired: it stops being offered, but stays on Ungate Checking
+   (marked Retired) and keeps every answer, so one that comes back later is
+   already checked. */
 async function replaceAsins(raw){
+  /* Which ASINs are new is worked out against what is loaded, so nothing may
+     run before the list has loaded (a failed load would make all of them new). */
+  if(!M.ready){ note("The ASIN list has not loaded yet. Reload the page and try again.", true); return; }
   const {pool,dupes}=dedupe(raw);
   const coming=new Set(pool.map(r=>r.asin));
   const known=new Set((M.all||[]).map(r=>r.asin));
@@ -4498,6 +4538,9 @@ async function replaceAsins(raw){
 
   M.busy=true; renderMos();
   try{
+    /* New ASINs get their "not checked" rows first, so if anything below
+       fails the next try still sees them as new and seeds them then. */
+    const seeded=await seedNewAsins(pool.filter(r=>!known.has(r.asin)).map(r=>r.asin));
     await writeChunks("mos_asins", pool.map(r=>({
       asin:r.asin, pos:r.n, upc:r.upc, status:r.status, notes:r.notes, qty:r.qty,
       unit_cost:r.unitCost, avg90:r.avg90, bundle:r.bundle, ppu:r.ppu, roi:r.roi,
@@ -4513,7 +4556,7 @@ async function replaceAsins(raw){
     M.dupes=dupes;
     await loadAll();
     note(`${pool.length.toLocaleString()} ASINs in the list`+
-      (added          ? ` \u00b7 ${added} new` : "")+
+      (added          ? ` \u00b7 ${added} new` + (seeded ? `, ${seeded} to check for every client` : "") : "")+
       (retired.length ? ` \u00b7 ${retired.length} retired, their answers kept` : "")+
       (revived        ? ` \u00b7 ${revived} back` : "")+
       (raw.length-pool.length ? ` \u00b7 ${raw.length-pool.length} duplicate rows dropped` : ""));
@@ -4599,8 +4642,11 @@ function dbState(k){
   return "gated";
 }
 
+/* An import may answer any ASIN the app knows, retired ones included, so a
+   retired ASIN keeps getting checked and is ready if it comes back. */
+const knownAsins=()=>new Map((M.all||[]).map(r=>[r.asin.toUpperCase(),r.asin]));
 function summarise(rows){
-  const byUpper=new Map(M.pool.map(r=>[r.asin.toUpperCase(),r.asin]));
+  const byUpper=knownAsins();
   const by={};
   for(const r of rows){
     const g=(by[r.code] ||= {code:r.code, rows:0, ungated:0, gated:0, pending:0, unknown:0,
@@ -4624,55 +4670,54 @@ function summarise(rows){
   return Object.values(by).sort((a,b)=>b.rows-a.rows);
 }
 async function applyBatch(rows){
-  const byUpper=new Map(M.pool.map(r=>[r.asin.toUpperCase(),r.asin]));
-  const add=[], drop=[]; let added=0, missing=0;
+  const byUpper=knownAsins();
+  /* One answer per client and ASIN. When a file, or two files dropped
+     together, says it twice, the last one wins, so no pair is written twice
+     in one request. */
+  const want=new Map(); let added=0, missing=0;
   for(const r of rows){
     if(!r.code) continue;
     if(!M.stores.includes(r.code)){ M.stores.push(r.code); added++; }
     const asin=byUpper.get(r.asin.toUpperCase());
     if(!asin){ missing++; continue; }
-    const k=key(asin,r.code);
-    if(r.pending){
-      M.ungated.delete(k); M.blank.delete(k); M.pending.add(k);
-      add.push({asin, store_code:r.code, state:"pending"});
-    } else if(r.blank){
-      M.ungated.delete(k); M.pending.delete(k); M.blank.add(k);
-      add.push({asin, store_code:r.code, state:"blank"});
-    } else if(r.ungated){
-      M.pending.delete(k); M.blank.delete(k); M.ungated.add(k);
-      add.push({asin, store_code:r.code, state:"ungated"});
-    } else {
-      M.ungated.delete(k); M.pending.delete(k); M.blank.delete(k);
-      drop.push([asin, r.code]);
-    }
+    want.set(key(asin,r.code), {asin, code:r.code,
+      state: r.pending ? "pending" : r.blank ? "blank" : r.ungated ? "ungated" : "gated"});
+  }
+  const add=[], drop=[];
+  for(const w of want.values()){
+    const k=key(w.asin,w.code);
+    M.ungated.delete(k); M.pending.delete(k); M.blank.delete(k);
+    if(w.state==="gated"){ drop.push([w.asin, w.code]); continue; }
+    (w.state==="ungated" ? M.ungated : w.state==="pending" ? M.pending : M.blank).add(k);
+    add.push({asin:w.asin, store_code:w.code, state:w.state});
   }
   M.busy=true; renderMos();
   try{
     if(added) await saveClients();
-    /* A full sheet carries a quarter of a million Gated cells, and deleting
-       those two hundred at a time is thousands of round trips. When the file
-       covers the whole ASIN list it is a complete snapshot for the clients in
-       it, so each client's gating is cleared in one request and only the
-       Ungated and Pending rows are written back. A partial file still goes
-       cell by cell, because there the rest of the column must survive. */
-    const touched=[...new Set(rows.map(r=>r.code).filter(Boolean))];
-    const seenAsins=new Set(rows.map(r=>r.asin.toUpperCase()));
-    const poolSize=(M.pool||[]).length || 1;
-    const covered=(M.pool||[]).filter(r=>seenAsins.has(r.asin.toUpperCase())).length;
-    const wholeSheet = covered/poolSize >= 0.95;
-
-    if(wholeSheet){
-      for(const code of touched){
-        const {error}=await sb.from("mos_gating").delete().eq("store_code",code);
+    /* Gated is the absence of a row, so a Gated in the file only needs a
+       delete where a row exists right now. The touched clients' rows are read
+       fresh, not from this page's memory, which keeps the delete list short
+       even for a full sheet. Nothing is cleared wholesale, so every answer the
+       file does not carry stays: retired ASINs, ones the file left out, and
+       rows other people wrote since this page loaded. */
+    const touched=[...new Set(drop.map(d=>d[1]))], have=new Set();
+    for(let i=0;i<touched.length;i+=20){
+      const part=touched.slice(i,i+20);
+      for(let from=0;;from+=1000){
+        const {data,error}=await sb.from("mos_gating").select("asin,store_code").in("store_code",part)
+          .order("asin").order("store_code").range(from, from+999);
         if(error) throw error;
+        data.forEach(g=>have.add(key(g.asin,g.store_code)));
+        if(data.length<1000) break;
       }
-    } else {
-      const byCode={};
-      for(const [asin,code] of drop) (byCode[code] ||= []).push(asin);
-      for(const code in byCode){
-        const list=byCode[code];
-        for(let i=0;i<list.length;i+=200)
-          await sb.from("mos_gating").delete().eq("store_code",code).in("asin",list.slice(i,i+200));
+    }
+    const byCode={};
+    for(const [asin,code] of drop) if(have.has(key(asin,code))) (byCode[code] ||= []).push(asin);
+    for(const code in byCode){
+      const list=byCode[code];
+      for(let i=0;i<list.length;i+=200){
+        const {error}=await sb.from("mos_gating").delete().eq("store_code",code).in("asin",list.slice(i,i+200));
+        if(error) throw error;
       }
     }
     if(add.length) await writeChunks("mos_gating", add, "asin,store_code");
@@ -4682,7 +4727,11 @@ async function applyBatch(rows){
     note(`${nUng} Ungated${nPend?`, ${nPend} Pending`:""}${nBlank?`, ${nBlank} still to check`:""}, ${drop.length} Gated`+
       (added?`, ${added} new client${added>1?"s":""}`:"")+
       (missing?`, ${missing} not in the ASIN list`:""));
-  }catch(e){ note("Could not save the gating: "+e.message, true); }
+  }catch(e){
+    note("Could not save the gating: "+e.message, true);
+    /* Part of it may have been written: show what the database really holds. */
+    try{ await loadAll(); }catch(_){}
+  }
   finally{ M.busy=false; M.staged=null; renderMos(); }
 }
 
@@ -5161,7 +5210,7 @@ function _ungPaintList(){
 
 function _ungDrawClients(){
   var box=el('ung-clients'); if(!box) return;
-  var open=M.ungOpen||{}, all=(M.pool||[]).length, sel=M.ungClient;
+  var open=M.ungOpen||{}, all=ungList().length, sel=M.ungClient;
   var q=((el('ung-cfind')&&el('ung-cfind').value)||'').trim().toUpperCase();
   var cols=ungCols().slice().sort(function(a,b){ return (open[b]||0)-(open[a]||0) || a.localeCompare(b); });
   var clear=cols.filter(function(c){ return !open[c]; }).length;
@@ -5219,7 +5268,7 @@ function _ungTouchClient(c){
   var box=el('ung-clients'), b=null; if(!box) return false;
   box.querySelectorAll('button[data-uc]').forEach(function(x){ if(x.dataset.uc===c) b=x; });
   if(!b) return false;
-  var all=(M.pool||[]).length, n=(M.ungOpen||{})[c]||0;
+  var all=ungList().length, n=(M.ungOpen||{})[c]||0;
   b.classList.toggle('clear', !n);
   b.title=(all-n).toLocaleString()+' of '+all.toLocaleString()+' answered';
   var bar=b.querySelector('.ui-bar span'), cnt=b.querySelector('.n');
@@ -5233,7 +5282,7 @@ function _ungTouchClient(c){
 
 /* One pass over the list for one client: how many ASINs sit in each state. */
 function _ungCounts(c){
-  var n={open:0, pending:0, ungated:0, gated:0}, pool=M.pool||[];
+  var n={open:0, pending:0, ungated:0, gated:0}, pool=ungList();
   for(var i=0;i<pool.length;i++){
     var s=ungCellState(key(pool[i].asin,c))[2];
     if(s==='blank' || s==='pending') n.open++;
@@ -5261,7 +5310,7 @@ function _ungSeg(s){
 }
 function _ungDrawWork(){
   var box=el('ung-grid'); if(!box) return;
-  var c=M.ungClient, pool=M.pool||[], f=M.ungChip||'open';
+  var c=M.ungClient, pool=ungList(), f=M.ungChip||'open';
   var q=((el('ung-search')&&el('ung-search').value)||'').trim().toUpperCase();
   /* Another client, chip or search starts again from the first page. */
   var sig=c+'|'+f+'|'+q;
@@ -5292,7 +5341,8 @@ function _ungDrawWork(){
     var row=list[k][0];
     rows.push('<tr data-a="'+esc(row.asin)+'" data-s="'+list[k][1]+'">'+
       (numbered ? '<td class="num ung-pos">'+list[k][2].toLocaleString()+'</td>' : '')+
-      '<td class="ui-code">'+esc(row.asin)+'</td>'+
+      '<td class="ui-code">'+esc(row.asin)+(row.active===false
+        ? ' <span class="ui-pill gray ung-ret">'+(row.orphan?'Not in list':'Retired')+'</span>' : '')+'</td>'+
       '<td class="ub">'+esc(row.brand||'')+'</td>'+
       '<td class="num">'+(row.unitCost?cash(row.unitCost):'')+'</td>'+
       '<td class="num">'+mosRoiPill(row.roi||0)+'</td>'+
@@ -5615,8 +5665,21 @@ function ungCols(){
    see it is still being checked, and it fills in on its own as answers come
    back on Ungate Checking. */
 function ungColsFor(openTab){ return ungCols(); }
-/* Open work only exists on ASINs still in the list; the database keeps all. */
-function ungRowsFor(openTab){ return openTab ? (M.pool||[]) : (M.all||[]); }
+/* Ungate Checking works the whole list: active ASINs first, then retired ones
+   (off the Asins tab), then ASINs known only from old gating rows (orphans),
+   so an ASIN that comes back to the list already has its answers. Allocation
+   still offers M.pool only (active). A listing file needs only the ASIN, so
+   orphans can be extracted like the rest. */
+function ungList(){
+  var all=M.all||[], pool=M.pool||[];
+  if(M._ungListAll!==all || M._ungListPool!==pool){
+    M._ungListAll=all; M._ungListPool=pool;
+    M._ungList=pool.concat(all.filter(function(r){ return !r.active && !r.orphan; }),
+                           all.filter(function(r){ return r.orphan; }));
+  }
+  return M._ungList;
+}
+function ungRowsFor(openTab){ return openTab ? ungList() : (M.all||[]); }
 
 /* New clients go to the far left, because the leftmost column is the one
    that gets first claim when two clients are otherwise level. Add client opens
@@ -5715,7 +5778,7 @@ async function ungSaveClients(entries){
   let seeded=0, seedErr="";
   if(fresh.length){
     const rows=[];
-    for(const c of fresh) for(const r of (M.pool||[])){
+    for(const c of fresh) for(const r of ungList()){        // retired ones too
       const k=key(r.asin,c);
       if(!M.ungated.has(k) && !M.pending.has(k) && !M.blank.has(k)) rows.push({asin:r.asin, store_code:c, state:"blank"});
     }
@@ -5756,7 +5819,7 @@ let ungPick=null;                      // null means every client
 const ungIn = c => ungPick===null || ungPick.has(c);
 
 function ungWork(c){
-  var n=0, rows=(M.pool||[]);
+  var n=0, rows=ungList();
   for(var i=0;i<rows.length;i++) if(ungCellOpen(key(rows[i].asin,c))) n++;
   return n;
 }
@@ -5892,7 +5955,7 @@ async function ungExtractListing(){
   var stamp=new Date().toISOString().slice(0,10), made=0, empty=[], short=[];
   for(var i=0;i<codes.length;i++){
     var c=codes[i];
-    var open=(M.pool||[]).filter(function(r){ return ungCellOpen(key(r.asin,c)); });
+    var open=ungList().filter(function(r){ return ungCellOpen(key(r.asin,c)); });
     if(!open.length){ empty.push(c); continue; }
     /* #1 is the first ASIN of the client's to-check list, as in the table. */
     var rows=open.slice(rg.from-1, rg.to===null ? undefined : rg.to);
@@ -6113,12 +6176,11 @@ function clientReport(month){
     const value=mine.reduce((s,r)=>s+(Number(r.total_price)||0),0);
     const live=all.filter(slotLive);
     const dates=all.map(r=>r.sheet_date).filter(Boolean).sort();
+    /* Ungated counts what can be offered (active ASINs); To check counts the
+       same list Ungate Checking works, retired ASINs included. */
     let ung=0, todo=0;
-    for(const r of (M.pool||[])){
-      const k=key(r.asin,code);
-      if(M.ungated.has(k)) ung++;
-      if(ungCellOpen(k)) todo++;
-    }
+    for(const r of (M.pool||[])) if(M.ungated.has(key(r.asin,code))) ung++;
+    for(const r of ungList()) if(ungCellOpen(key(r.asin,code))) todo++;
     const budget=(code in M.budgets) ? M.budgets[code] : null;
     const spent=spentIn(code, month);
     const left=remainingFor(code, month);
