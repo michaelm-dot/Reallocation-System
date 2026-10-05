@@ -874,6 +874,8 @@
   #ung-picker .ung-pick-presets{display:flex;gap:6px;flex-wrap:wrap}
   #ung-picker .ung-pick-help{flex-basis:100%;font-size:12px;color:var(--ink3)}
   #ung-picker .ung-pick-note.bad{color:var(--flag)}
+  #ung-picker .ung-pick-who{margin:0;font-size:13px;color:var(--ink2)}
+  #ung-picker .ung-pick-who b{font:500 13px var(--mono);color:var(--ink)}
   #mos-ungate .ung-clist .ui-foot > :first-child{flex:1 1 auto}
   #mos-ungate .ung-work > .ung-grid{max-height:66vh;border:0;border-radius:0;box-shadow:none;background:var(--panel)}
   #mos-ungate #ung-title{font-size:15px}
@@ -5780,27 +5782,34 @@ function ungDrawPicker(box){
   const files=listing ? picked.filter(function(c){ return take(c.n)>0; }) : picked;
   const asins=files.reduce(function(s,c){ return s+take(c.n); }, 0);
 
+  /* On Ungate Checking the clients are ticked in the client list on the left,
+     so the panel only names them; the ASIN database still ticks columns here. */
+  const working=picked.filter(function(c){ return c.n>0; });
   box.innerHTML=
-    '<div class="ung-pick-head">'+
-      '<b>'+(listing ? "Clients to make a listing file for" : "Columns to extract")+'</b>'+
-      '<span>'+
-        (listing ? '<button class="ung-tool" data-ungpick="work" type="button">Only those with work</button>' : '')+
-        '<button class="ung-tool" data-ungpick="all" type="button">All</button>'+
-        '<button class="ung-tool" data-ungpick="none" type="button">None</button>'+
-      '</span>'+
-    '</div>'+
-    '<input class="ung-pick-find" data-ungfind placeholder="Find a client\u2026" value="'+esc(box.dataset.q||"")+'">'+
-    '<div class="ung-pick-list">'+
-      shown.map(function(c){
-        return '<label class="'+(listing&&!c.n?"spent":"")+'">'+
-          '<input type="checkbox" data-ungcol="'+c.code+'" '+(ungIn(c.code)?"checked":"")+'>'+
-          '<span class="pc">'+c.code+'</span>'+
-          (listing ? '<span class="pn">'+(c.n?c.n.toLocaleString():"clear")+'</span>' : '')+
-        '</label>';
-      }).join('') +
-      (shown.length?'':'<div class="mos-empty" style="padding:10px">No client matches that.</div>')+
-    '</div>'+
-    (listing ? ungRangeHtml() : '')+
+    (listing
+      ? '<div class="ung-pick-head"><b>Extract listing files</b></div>'+
+        '<p class="ung-pick-who">'+(working.length
+          ? 'One file for each client ticked in the client list: '+
+            working.map(function(c){ return '<b>'+esc(c.code)+'</b> '+c.n.toLocaleString(); }).join(' \u00b7 ')
+          : 'No client with ASINs to check is ticked. Tick them in the client list.')+'</p>'+
+        ungRangeHtml()
+      : '<div class="ung-pick-head">'+
+          '<b>Columns to extract</b>'+
+          '<span>'+
+            '<button class="ung-tool" data-ungpick="all" type="button">All</button>'+
+            '<button class="ung-tool" data-ungpick="none" type="button">None</button>'+
+          '</span>'+
+        '</div>'+
+        '<input class="ung-pick-find" data-ungfind placeholder="Find a client\u2026" value="'+esc(box.dataset.q||"")+'">'+
+        '<div class="ung-pick-list">'+
+          shown.map(function(c){
+            return '<label>'+
+              '<input type="checkbox" data-ungcol="'+c.code+'" '+(ungIn(c.code)?"checked":"")+'>'+
+              '<span class="pc">'+c.code+'</span>'+
+            '</label>';
+          }).join('') +
+          (shown.length?'':'<div class="mos-empty" style="padding:10px">No client matches that.</div>')+
+        '</div>')+
     '<div class="ung-pick-foot">'+
       '<span class="ung-pick-note'+(rg.ok?'':' bad')+'">'+
         (listing
@@ -5808,9 +5817,9 @@ function ungDrawPicker(box){
             : files.length
               ? files.length+' file'+(files.length>1?'s':'')+' \u00b7 '+asins.toLocaleString()+' ASIN'+(asins===1?'':'s')+' to check'+
                 (rg.from>1 || rg.to ? ' (#'+rg.from.toLocaleString()+'\u2013'+(rg.to?rg.to.toLocaleString():'end')+' of each list)' : '')
-              : picked.some(function(c){ return c.n>0; })
+              : working.length
                 ? 'Nothing in that range: no ticked client has '+rg.from.toLocaleString()+' ASINs left to check.'
-                : 'Nothing to extract: every client ticked is already clear.')
+                : 'Nothing to extract yet.')
           : picked.length+' of '+cols.length+' client'+(cols.length===1?'':'s')+' in the sheet')+
       '</span>'+
       '<span>'+
