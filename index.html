@@ -6075,7 +6075,8 @@ function ungDrawPicker(box){
       '</span>'+
       '<span>'+
         '<button class="ung-tool go" data-ungpick="go" type="button"'+
-          (listing && !files.length ? ' disabled' : '')+'>Extract</button>'+
+          (listing && (!files.length || ungExtracting) ? ' disabled' : '')+'>'+
+          (listing && ungExtracting ? 'Extracting…' : 'Extract')+'</button>'+
         (listing ? '' : '<button class="ung-tool" data-ungpick="close" type="button">Cancel</button>')+
       '</span>'+
     '</div>';
@@ -6116,7 +6117,8 @@ function ungRangeHtml(){
         ' (#'+(rg.to+1).toLocaleString()+'–'+(rg.to+size).toLocaleString()+')</button>' : '')+
     '</span>'+
     '<span class="ung-pick-help">The numbers follow the # column of each client’s to-check list. '+
-      'Once answers are imported they leave that list, so after importing, the next batch starts at 1 again.</span>'+
+      'Once answers are imported they leave that list, so after importing, the next batch starts at 1 again. '+
+      'Extracting marks the file’s Not checked ASINs as Pending for that client.</span>'+
   '</div>';
 }
 
@@ -6125,13 +6127,21 @@ function _ungExtract(which){ _ungExtractRows(which==="db" ? "db" : "ungate"); }
 /* Ungate Checking hands you the file you upload to the listing tool: one row
    per ASIN still to check for that client, in the Test_Listing layout. What
    comes back is the Batch Details export, which Import reads straight in. */
+let ungExtracting=false;
 async function ungExtractListing(){
+  if(ungExtracting) return;                          // one run at a time
   if(typeof ExcelJS==="undefined"){ note("Hindi na-load ang writer — i-reload ang page.", true); return; }
   var codes=ungColsFor(true).filter(ungIn);
   if(!codes.length){ note("No clients are ticked.", true); return; }
   var rg=ungRangeOf(); if(!rg.ok){ note(rg.msg, true); return; }
+  /* The Ungate panel by name: the ASIN database picker may still be open. */
+  ungExtracting=true; ungPickNote(el("ung-extractbox"));
+  try{ await _ungExtractRun(codes, rg); }
+  finally{ ungExtracting=false; renderMos(); ungPickNote(el("ung-extractbox")); }
+}
+async function _ungExtractRun(codes, rg){
   var ranged=rg.from>1 || rg.to!==null;
-  var stamp=new Date().toISOString().slice(0,10), made=0, empty=[], short=[];
+  var stamp=new Date().toISOString().slice(0,10), made=0, empty=[], short=[], sent=[];
   for(var i=0;i<codes.length;i++){
     var c=codes[i];
     var open=ungList().filter(function(r){ return ungCellOpen(key(r.asin,c)); });
@@ -6144,15 +6154,48 @@ async function ungExtractListing(){
     fillListing(wb.addWorksheet("Sheet1"), c, rows);
     await saveBook(wb, c+"_To_Check_"+(ranged ? rg.from+"-"+last+"_" : "")+stamp+".xlsx");
     made++;
+    sent.push({code:c, asins:rows.map(function(r){ return r.asin; })});
     await new Promise(function(r){ setTimeout(r,350); });
   }
+  var mk=sent.length ? await ungMarkPending(sent) : {done:0, wanted:0, failed:0, err:""};
   note(made
     ? made+" file"+(made>1?"s":"")+" saved"+
       (ranged ? " (#"+rg.from.toLocaleString()+"\u2013"+(rg.to===null?"end":rg.to.toLocaleString())+" of each list)" : "")+
+      (mk.done ? " \u00b7 "+mk.done.toLocaleString()+" Not checked \u2192 Pending" : "")+
+      (mk.err ? " \u00b7 could not mark "+mk.failed.toLocaleString()+" as Pending ("+mk.err+"); they stay Not checked" : "")+
       (short.length?" \u00b7 "+short.join(", ")+" had fewer than "+rg.from.toLocaleString()+" left to check":"")+
       (empty.length?" \u00b7 "+empty.join(", ")+" had nothing left to check":"")
     : short.length ? "No ticked client has "+rg.from.toLocaleString()+" ASINs left to check."
-    : "Every client ticked has already been checked on every ASIN.", !made);
+    : "Every client ticked has already been checked on every ASIN.", !made || !!mk.err);
+}
+/* A listing file is out for checking, so the Not checked ASINs in it become
+   Pending for that client (owner, 2026-10-07): the list then shows what has
+   been sent and what never has. Pending still counts as to check, so the #
+   numbers and the From/To ranges stay the same. Only a row that is still
+   blank in the database changes: an answer saved meanwhile is never
+   overwritten, and memory follows only the rows the database confirms. */
+async function ungMarkPending(sent){
+  var tasks=[], wanted=0, done=0, failed=0, err="", next=0, at=new Date().toISOString();
+  sent.forEach(function(s){
+    var want=s.asins.filter(function(a){ return M.blank.has(key(a,s.code)); });
+    wanted+=want.length;
+    for(var i=0;i<want.length;i+=200) tasks.push({code:s.code, part:want.slice(i,i+200)});
+  });
+  await Promise.all(Array.from({length:Math.min(6,tasks.length)}, async function(){
+    while(next<tasks.length){
+      var t=tasks[next++];
+      try{
+        var r=await sb.from("mos_gating").update({state:"pending", updated_at:at})
+          .eq("store_code",t.code).eq("state","blank").in("asin",t.part).select("asin");
+        if(r.error){ err=r.error.message; failed+=t.part.length; continue; }
+        /* Only a cell this page still has as Not checked: one answered here
+           while the update was on its way keeps that answer. */
+        (r.data||[]).forEach(function(x){ var k=key(x.asin,t.code); if(M.blank.delete(k)) M.pending.add(k); });
+        done+=(r.data||[]).length;
+      }catch(e){ err=e.message||String(e); failed+=t.part.length; }
+    }
+  }));
+  return {done:done, wanted:wanted, failed:failed, err:err};
 }
 
 /* Writes whichever half of the grid the tab is showing: the open rows on
