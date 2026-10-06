@@ -896,13 +896,15 @@
   #ung-grid .ung-seg button[data-v="blank"][aria-pressed="true"]{background:#EEF0EF;color:var(--ink)}
   /* Add client form: a row per store code, each with an optional monthly budget */
   #mos-ungate .ung-addform{margin-bottom:16px}
-  #mos-ungate .ung-add-rows{display:flex;flex-direction:column;gap:10px;padding:12px 14px}
+  #mos-ungate .ung-add-rows{display:flex;flex-direction:column;gap:10px;padding:12px 14px;max-height:60vh;overflow-y:auto}
   #mos-ungate .ung-add-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
   #mos-ungate .ung-add-row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink2)}
   #mos-ungate .ung-add-row .ui-search{flex:none;min-width:0}
   #mos-ungate .ung-add-row input[data-ungadd-code]{width:110px;text-transform:uppercase}
   #mos-ungate .ung-add-row input[data-ungadd-budget]{width:200px}
-  #mos-ungate .ung-add-hint{min-width:220px;padding-bottom:8px;font-size:12px;color:var(--ink3)}
+  #mos-ungate .ung-add-hint{min-width:320px;padding-bottom:8px;font-size:12px;color:var(--ink3)}
+  /* a pasted list is many rows: the column labels only on the first one */
+  #mos-ungate .ung-add-row + .ung-add-row label > span{display:none}
   #mos-ungate .ung-add-row .ui-link{padding-bottom:8px;color:var(--ink3)}
   /* the error sits right after "+ Another client"; the spacer pushes Cancel/Add right */
   #mos-ungate .ung-addform .ui-foot{justify-content:flex-start}
@@ -4343,9 +4345,31 @@ async function readAll(table, cols, keys, split){
   for(let i=0;i<=at.length;i++) parts.push(range(i?at[i-1]:null, i<at.length?at[i]:null));
   return (await Promise.all(parts)).flat();
 }
-/* Store codes are a few capitals or digits; nine ranges read the gating
-   table in about a second instead of fourteen. */
-const GATING_SPLIT={col:"store_code", at:["C","E","H","K","M","P","S","V"]};
+/* For the row-by-row read (readGating's fallback). Split by ASIN, not by
+   client: a new client brings a "not
+   checked" row for every ASIN, so rows per client vary from a few dozen to
+   four thousand while rows per ASIN stay even. Twenty-four ranges cut at
+   equal counts of the ASINs known on 2026-10-07; the boundaries only balance
+   the work, every ASIN still falls in exactly one range. */
+const GATING_SPLIT={col:"asin", at:["B0009","B000O","B0011","B001H","B002U","B004F","B005M","B0087",
+  "B00BK","B00EX","B00J8","B00PN","B0156","B01JS","B071K","B078K","B07GV","B07TD","B08JP","B09MQ",
+  "B0BRB","B0CS1","B0DR9"]};
+/* Gating comes packed: the mos_gating_packed view (read-only, the reader's own
+   rights) gives one row per client and state with its ASINs in an array, a
+   few hundred rows however many "not checked" rows new clients bring, so it
+   is one request and one consistent snapshot. Should the view be missing or
+   refused, the table is read row by row instead. */
+async function readGating(){
+  let packed;
+  try{ packed=await readAll("mos_gating_packed","store_code,state,asins",["store_code","state"]); }
+  catch(e){
+    console.warn("Gating view unavailable, reading rows:", e.message);
+    return readAll("mos_gating","asin,store_code,state",["asin","store_code"],GATING_SPLIT);
+  }
+  const out=[];
+  for(const p of packed) for(const a of (p.asins||[])) out.push({asin:a, store_code:p.store_code, state:p.state});
+  return out;
+}
 const byNum=(a,b)=>(a==null?Infinity:a)-(b==null?Infinity:b);
 const byText=(a,b)=>a<b?-1:a>b?1:0;
 async function writeChunks(table, rows, conflict){
@@ -4364,7 +4388,7 @@ async function loadAll(){
       .then(rows=>rows.sort((a,b)=>byNum(a.pos,b.pos)||byText(a.asin,b.asin))),
     readAll("mos_clients","store_code,position","store_code")
       .then(rows=>rows.sort((a,b)=>byNum(a.position,b.position)||byText(a.store_code,b.store_code))),
-    readAll("mos_gating","asin,store_code,state",["asin","store_code"],GATING_SPLIT),
+    readGating(),
     readAll("mos_allocations","*","id"),
     sb.from("mos_settings").select("*").eq("id",true).maybeSingle(),
   ]);
@@ -4460,10 +4484,17 @@ async function saveSettings(){
   });
   if(error) note("Could not save the settings: "+error.message, true);
 }
-async function saveClients(){
-  await sb.from("mos_clients").delete().neq("store_code","\u0000");
-  if(M.stores.length)
-    await writeChunks("mos_clients", M.stores.map((c,i)=>({store_code:c, position:i})), "store_code");
+/* Puts codes on the roster, at the far left or at the end, and rewrites the
+   positions. The roster is read fresh and merged, never wiped: wiping it and
+   writing back this page's copy dropped any client another tab had added
+   since this page loaded. Nothing here takes a client off. */
+async function saveClients(codes, atLeft){
+  const now=(await readAll("mos_clients","store_code,position","store_code"))
+    .sort((a,b)=>byNum(a.position,b.position)||byText(a.store_code,b.store_code)).map(r=>r.store_code);
+  const add=[].concat(codes||[]);
+  const roster=[...new Set(atLeft ? add.concat(now, M.stores) : now.concat(M.stores, add))];
+  await writeChunks("mos_clients", roster.map((c,i)=>({store_code:c, position:i})), "store_code");
+  M.stores=roster;
 }
 
 /* ---------------------------------------------------------------------------
@@ -5716,12 +5747,15 @@ function ungRowsFor(openTab){ return openTab ? ungList() : (M.all||[]); }
    A code already on the roster can be given a budget, or a new one, here. */
 function ungAddClients(){
   const box=el("ung-addform"); if(!box) return;
+  if(box.dataset.busy){ box.hidden=false; return; }   // a save is running: keep it on screen
   if(!box.hidden){ box.hidden=true; return; }
   box.innerHTML=
     '<div class="ui-tools"><b class="ui-title">Add clients</b><span class="ui-meta">New clients go to the far left. '+
-      'The budget is per month; leave it empty if you don’t have it yet.</span></div>'+
+      'The budget is per month; leave it empty if you don’t have it yet. '+
+      'Many at once: copy the code and budget columns from a sheet and paste them into Store code.</span></div>'+
     '<div class="ung-add-rows" id="ung-add-rows">'+_ungAddRow()+'</div>'+
     '<div class="ui-foot"><button class="ui-link" type="button" data-ungadd="row">+ Another client</button>'+
+      '<span class="ui-meta" id="ung-add-sum"></span>'+
       '<span class="ung-add-err" id="ung-add-err" role="alert"></span><span class="ui-spacer"></span>'+
       '<button class="ung-tool" type="button" data-ungadd="cancel">Cancel</button>'+
       '<button class="ung-tool go" type="button" data-ungadd="save">Add</button></div>';
@@ -5737,35 +5771,101 @@ function ungAddClients(){
         const ins=box.querySelectorAll("input[data-ungadd-code]"); ins[ins.length-1].focus();
         return;
       }
-      if(what==="del"){ if(box.querySelectorAll(".ung-add-row").length>1) b.closest(".ung-add-row").remove(); return; }
+      if(what==="del"){ if(box.querySelectorAll(".ung-add-row").length>1) b.closest(".ung-add-row").remove(); _ungAddSum(); return; }
       if(what==="save") _ungAddSubmit(b);
     });
     box.addEventListener("input", ev=>{
       const r=ev.target.closest(".ung-add-row"); if(!r) return;
-      if(ev.target.matches("input[data-ungadd-code]")) r.querySelector(".ung-add-hint").textContent=_ungAddHint(ev.target.value);
+      _ungAddRowHint(r); _ungAddSum();
       el("ung-add-err").textContent="";
+    });
+    /* A list pasted into a Store code box (two columns copied from a sheet,
+       or lines typed elsewhere) fills one row per line. */
+    box.addEventListener("paste", ev=>{
+      if(!ev.target.matches("input[data-ungadd-code]")) return;
+      const text=(ev.clipboardData||window.clipboardData).getData("text")||"";
+      if(!/[\t\n]/.test(text.trim())) return;
+      ev.preventDefault();
+      _ungAddFill(ungParseList(text), ev.target.closest(".ung-add-row"));
     });
     box.addEventListener("keydown", ev=>{
       if(ev.key==="Enter" && ev.target.matches("input")){ ev.preventDefault(); _ungAddSubmit(box.querySelector('button[data-ungadd="save"]')); }
-      else if(ev.key==="Escape") box.hidden=true;
+      else if(ev.key==="Escape" && !box.dataset.busy) box.hidden=true;
     });
   }
   box.querySelector("input[data-ungadd-code]").focus();
 }
-function _ungAddRow(){
+function _ungAddRow(code, budget){
   return '<div class="ung-add-row">'+
-    '<label><span>Store code</span><input class="ui-search" data-ungadd-code maxlength="6" placeholder="CFR" autocomplete="off"></label>'+
-    '<label><span>Monthly budget</span><input class="ui-search" data-ungadd-budget inputmode="decimal" placeholder="Optional, e.g. 5000" autocomplete="off"></label>'+
-    '<span class="ung-add-hint"></span>'+
+    '<label><span>Store code</span><input class="ui-search" data-ungadd-code maxlength="6" placeholder="CFR" autocomplete="off" aria-label="Store code"'+
+      (code?' value="'+esc(code)+'"':'')+'></label>'+
+    '<label><span>Monthly budget</span><input class="ui-search" data-ungadd-budget inputmode="decimal" placeholder="Optional, e.g. 5000" autocomplete="off" aria-label="Monthly budget"'+
+      (budget?' value="'+esc(budget)+'"':'')+'></label>'+
+    '<span class="ung-add-hint">'+esc(_ungAddHint(code, budget))+'</span>'+
     '<button class="ui-link" type="button" data-ungadd="del">Remove</button></div>';
 }
-function _ungAddHint(raw){
+/* What saving this row would do: a new client or one already listed, and
+   what happens to the budget on record (most codes have one already). */
+function _ungAddHint(raw, budgetRaw){
   const c=String(raw||"").trim().toUpperCase();
   if(!c) return "";
-  if(!ungCols().includes(c)) return "New client";
-  return (c in M.budgets)
-    ? "Already on the list · budget "+cash(M.budgets[c])+" (a new amount replaces it)"
-    : "Already on the list · no budget yet";
+  const b=ungParseBudget(budgetRaw), was=(c in M.budgets) ? M.budgets[c] : null;
+  const head=ungCols().includes(c) ? "Already on the list" : "New client";
+  if(!b.ok) return head+" · the budget isn't a number";
+  if(was===null) return head+(b.value===null ? (head==="New client" ? "" : " · no budget yet") : " · budget "+cash(b.value));
+  if(b.value===null) return head+" · budget "+cash(was)+(head==="New client" ? " on record, kept" : " (a new amount replaces it)");
+  return head+" · budget "+(b.value===was ? cash(was)+", unchanged" : cash(was)+" → "+cash(b.value));
+}
+function _ungAddRowHint(r){
+  r.querySelector(".ung-add-hint").textContent=_ungAddHint(
+    r.querySelector("input[data-ungadd-code]").value, r.querySelector("input[data-ungadd-budget]").value);
+}
+/* Under the rows once there are several: how many are new, already listed,
+   and whose budget changes, so a pasted list can be checked before Add. */
+function _ungAddSum(){
+  const s=el("ung-add-sum"); if(!s) return;
+  const seen=new Set(); let fresh=0, old=0, change=0;
+  el("ung-addform").querySelectorAll(".ung-add-row").forEach(r=>{
+    const c=r.querySelector("input[data-ungadd-code]").value.trim().toUpperCase();
+    if(!c || seen.has(c)) return; seen.add(c);
+    if(ungCols().includes(c)) old++; else fresh++;
+    const b=ungParseBudget(r.querySelector("input[data-ungadd-budget]").value);
+    if(b.ok && b.value!==null && (c in M.budgets) && M.budgets[c]!==b.value) change++;
+  });
+  s.textContent = seen.size>1
+    ? seen.size+" clients · "+fresh+" new · "+old+" already on the list"+(change?" · "+change+" budget"+(change>1?"s":"")+" change":"")
+    : "";
+}
+/* One {code, budget} per non-empty line. Cells split on a tab (a sheet
+   copy), else on the first space, comma or semicolon; the budget keeps its
+   own commas ("5,000"). A first line that is not a code and an amount is a
+   header and is skipped. Anything else odd is kept, so Add points at it. */
+function ungParseList(text){
+  const out=[]; let first=true;
+  String(text||"").split(/\r?\n/).forEach(line=>{
+    /* Only the end is trimmed before a tab split: an empty code cell must stay
+       empty (so Add asks for it), not let the budget slide in as the code. */
+    const t=line.replace(/\s+$/,""); if(!t.trim()) return;
+    let cells=t.split("\t");
+    if(cells.length===1){ const s=t.trim(), m=s.match(/^(\S+?)[\s,;]+(.*)$/); cells=m ? [m[1], m[2]] : [s]; }
+    const code=cells[0].trim().toUpperCase(), budget=(cells[1]||"").trim();
+    const header=first && (!/^[A-Z0-9]{2,6}$/.test(code) || !ungParseBudget(budget).ok);
+    first=false;
+    if(header) return;
+    out.push({code, budget});
+  });
+  return out;
+}
+/* Pasted rows replace the row pasted into and any empty ones, in order. */
+function _ungAddFill(list, at){
+  const rows=el("ung-add-rows");
+  if(at) at.remove();
+  rows.querySelectorAll(".ung-add-row").forEach(r=>{
+    if(!r.querySelector("input[data-ungadd-code]").value.trim() && !r.querySelector("input[data-ungadd-budget]").value.trim()) r.remove();
+  });
+  rows.insertAdjacentHTML("beforeend", list.map(x=>_ungAddRow(x.code, x.budget)).join("") || _ungAddRow());
+  _ungAddSum();
+  el("ung-add-err").textContent = list.length ? "" : "Nothing in that paste looked like a store code.";
 }
 /* "$5,000", "5000" and "5,000.50" all read as money; empty means no budget. */
 function ungParseBudget(raw){
@@ -5776,6 +5876,7 @@ function ungParseBudget(raw){
 }
 async function _ungAddSubmit(btn){
   const box=el("ung-addform"), err=el("ung-add-err");
+  if(box.dataset.busy) return;                       // Enter while a save is running
   const entries=[], seen=new Set();
   for(const r of box.querySelectorAll(".ung-add-row")){
     const ci=r.querySelector("input[data-ungadd-code]"), bi=r.querySelector("input[data-ungadd-budget]");
@@ -5784,46 +5885,87 @@ async function _ungAddSubmit(btn){
     if(!/^[A-Z0-9]{2,6}$/.test(code)){ err.textContent="Enter a store code on every row, like CFR."; ci.focus(); return; }
     const b=ungParseBudget(bi.value);
     if(!b.ok){ err.textContent="The budget for "+code+" isn't a number. Use something like 5000 or 5,000.50."; bi.focus(); return; }
-    if(seen.has(code)) continue;
+    /* Two rows for one code would save only one of the two budgets shown. */
+    if(seen.has(code)){ err.textContent=code+" is on more than one row. Remove one."; ci.focus(); return; }
     seen.add(code); entries.push({code, budget:b.value});
   }
   if(!entries.length){ err.textContent="Enter at least one store code."; return; }
-  btn.disabled=true; btn.textContent="Adding…";
-  try{ await ungSaveClients(entries); box.hidden=true; }
-  finally{ btn.disabled=false; btn.textContent="Add"; }
+  /* A bulk add runs for a while: lock the form so nothing typed meanwhile is
+     lost and nothing starts a second run. */
+  const lock=on=>{
+    if(on) box.dataset.busy="1"; else delete box.dataset.busy;
+    box.querySelectorAll("input,button").forEach(x=>{ x.disabled=on; });
+  };
+  lock(true); btn.textContent="Adding…";
+  try{
+    const left=await ungSaveClients(entries, (d,n)=>{ if(n>1) btn.textContent="Adding… "+d+" of "+n; });
+    if(left && left.length){
+      /* Keep only what did not go in, ready for another try. */
+      box.querySelectorAll(".ung-add-row").forEach(r=>{
+        if(!left.includes(r.querySelector("input[data-ungadd-code]").value.trim().toUpperCase())) r.remove();
+      });
+      _ungAddSum();
+      err.textContent="Not added: "+left.join(", ")+". Press Add to try again.";
+    } else box.hidden=true;
+  }catch(e){ err.textContent="Could not add: "+(e.message||e); }
+  finally{ lock(false); btn.textContent="Add"; }
 }
-async function ungSaveClients(entries){
+/* Returns the codes that could not be added, so the form can keep them. */
+async function ungSaveClients(entries, onProgress){
   const codes=entries.map(e=>e.code);
   if(M.stores.length===0) M.stores=(window.UNGATE_CLIENTS||[]).slice();
   const fresh=codes.filter(c=>!M.stores.includes(c));
   const already=codes.filter(c=>M.stores.includes(c));
-  if(fresh.length) M.stores=fresh.concat(M.stores);      // leftmost, in the order typed
-  renderMos();
-  if(fresh.length) await saveClients();
   /* No row means Gated, so a client added with nothing behind it reads as
      Gated on every ASIN and shows as clear. Each new client gets a "not
      checked" row on every ASIN known instead, so it shows up as work. Retired
      and orphan ASINs get the row too: Ungate Checking does not show them, but
      if one comes back to Good to Order it is work for this client rather than
      a false Gated. ignoreDuplicates keeps an answer saved in the meantime.
-     Only the Good to Order ones are counted in the note. */
-  let seeded=0, seedErr="";
-  if(fresh.length){
-    const rows=[], every=(M.all&&M.all.length) ? M.all : (M.pool||[]);
-    const live=new Set((M.pool||[]).map(r=>r.asin));
-    for(const c of fresh) for(const r of every){
+     Only the Good to Order ones are counted in the note.
+     A client joins the roster only once all its rows are in, and a few are
+     marked side by side: one that fails part way stays off the list (its rows
+     are harmless and the next try fills in the rest), so no client is ever
+     left half marked, reading Gated on the ASINs it missed. */
+  const every=(M.all&&M.all.length) ? M.all : (M.pool||[]);
+  const live=new Set((M.pool||[]).map(r=>r.asin));
+  const failed={};
+  let seeded=0, done=0, next=0;
+  const seedOne=async c=>{
+    const rows=[];
+    for(const r of every){
       const k=key(r.asin,c);
       if(!M.ungated.has(k) && !M.pending.has(k) && !M.blank.has(k)) rows.push({asin:r.asin, store_code:c, state:"blank"});
     }
-    for(let i=0;i<rows.length;i+=500){
-      const part=rows.slice(i,i+500);
-      const {error}=await sb.from("mos_gating").upsert(part,{onConflict:"asin,store_code", ignoreDuplicates:true});
-      if(error){ seedErr=error.message; break; }
-      part.forEach(x=>{ M.blank.add(key(x.asin,x.store_code)); if(live.has(x.asin)) seeded++; });
+    let n=0;
+    try{
+      for(let i=0;i<rows.length;i+=500){
+        const part=rows.slice(i,i+500);
+        const {error}=await sb.from("mos_gating").upsert(part,{onConflict:"asin,store_code", ignoreDuplicates:true});
+        if(error){ failed[c]=error.message; return; }
+        part.forEach(x=>{ M.blank.add(key(x.asin,x.store_code)); if(live.has(x.asin)) n++; });
+      }
+    }catch(e){ failed[c]=e.message||String(e); return; }
+    seeded+=n;
+  };
+  await Promise.all(Array.from({length:Math.min(6,fresh.length)}, async()=>{
+    while(next<fresh.length){
+      const c=fresh[next++];
+      await seedOne(c);
+      done++; if(onProgress) onProgress(done, fresh.length);
     }
+  }));
+  const marked=fresh.filter(c=>!(c in failed));
+  let rosterErr="";
+  if(marked.length){
+    try{ await saveClients(marked, true); }       // leftmost, in the order typed
+    catch(e){ rosterErr=e.message||String(e); }
   }
-  /* Budgets typed in the form, for new clients and for ones already listed. */
-  const withBudget=entries.filter(e=>e.budget!==null);
+  const added=rosterErr ? [] : marked;
+  const notAdded=fresh.filter(c=>!added.includes(c));
+  /* Budgets typed in the form, for new clients and for ones already listed;
+     not for a client that did not make it onto the list. */
+  const withBudget=entries.filter(e=>e.budget!==null && !notAdded.includes(e.code));
   let budgetErr="";
   if(withBudget.length){
     const at=new Date().toISOString();
@@ -5832,18 +5974,23 @@ async function ungSaveClients(entries){
     if(error) budgetErr=error.message;
     else withBudget.forEach(e=>{ M.budgets[e.code]=e.budget; });
   }
-  const noBudget=fresh.filter(c=>!(c in M.budgets));
+  const noBudget=added.filter(c=>!(c in M.budgets));
+  const bad=Object.keys(failed);
+  const names=xs=>xs.length<=5 ? xs.join(", ") : xs.length+" clients";
   renderMos();
   note(
-    (fresh.length ? `${fresh.join(", ")} added on the left` +
+    (added.length ? `${names(added)} added on the left` +
       (seeded ? `, ${seeded.toLocaleString()} ASINs to check. ` : ". ") : "")+
-    (seedErr ? `Could not mark every ASIN as not checked (${seedErr}). ` : "")+
-    (already.length ? `${already.join(", ")} ${already.length>1?"were":"was"} already there. ` : "")+
+    (bad.length ? `Could not add ${bad.join(", ")} (${failed[bad[0]]}); try again. ` : "")+
+    (rosterErr ? `Could not save the client list (${rosterErr}); nobody new was added, try again. ` : "")+
+    (already.length ? `${names(already)} ${already.length>1?"were":"was"} already there. ` : "")+
     (withBudget.length && !budgetErr
-      ? `Monthly budget saved: ${withBudget.map(e=>e.code+" "+cash(e.budget)).join(", ")}. ` : "")+
+      ? `Monthly budget saved: ${withBudget.length<=5 ? withBudget.map(e=>e.code+" "+cash(e.budget)).join(", ")
+                                                    : "for "+withBudget.length+" clients"}. ` : "")+
     (budgetErr ? `Could not save the budget (${budgetErr}). ` : "")+
     (noBudget.length ? `No budget on record for ${noBudget.join(", ")}.` : ""),
-    noBudget.length>0 || !!seedErr || !!budgetErr);
+    noBudget.length>0 || notAdded.length>0 || !!budgetErr);
+  return notAdded;
 }
 
 /* Which clients to put in the exported sheet. */
