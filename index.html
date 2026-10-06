@@ -1646,6 +1646,11 @@ const SB_URL = "https://uwiwxxgrqpnaorwbsnkp.supabase.co";
 const SB_KEY = "sb_publishable_Sj8oCVoSz1Gq9zxA1OZb4Q_iTK4t9zz";
 const QUEUE_FN = SB_URL + "/functions/v1/realloc-queue";
 let sb = null, me = null, channel = null, presence = null;
+/* This browser tab, for the Manual offer sheet's live updates: every database
+   request carries it, the mos_change trigger records it, and the page skips
+   the changes it made itself. */
+const MOS_TAB_ID = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+  : Date.now().toString(36)+Math.random().toString(36).slice(2);
 let online = [];             /* who else is in the system right now */
 let lastAct = Date.now(), amActive = true;   /* actually at the screen, or just left the tab open */
 let allowedDomains = [];
@@ -1685,6 +1690,9 @@ async function initCloud(){
     return false;
   }
   sb = window.supabase.createClient(SB_URL, SB_KEY);
+  /* Only the database client gets the header: the Edge Functions list the
+     headers they accept and would refuse a request carrying an unknown one. */
+  try{ sb.rest.headers.set("x-mos-tab", MOS_TAB_ID); }catch(e){}
   const { data } = await sb.auth.getSession();
   me = data && data.session ? data.session.user : null;
   sb.auth.onAuthStateChange((_e, s)=>{
@@ -2025,6 +2033,9 @@ function subscribePresence(){
 }
 function subscribeLive(){
   subscribePresence();
+  /* The Manual offer sheet's own live channel, started now so it is already
+     listening when that app is opened. */
+  if(window.mosLiveStart) window.mosLiveStart();
   if(!sb || channel) return;
   channel = sb.channel("realloc-live")
     .on("postgres_changes", { event: "*", schema: "public", table: "realloc_marks_v2" }, p=>{
@@ -4381,7 +4392,27 @@ async function writeChunks(table, rows, conflict){
   }
 }
 
+/* Every load, live or not, replaces memory with what the database held when
+   it read. Two things follow. A preview built on the old data is marked stale,
+   so it cannot be recorded. And whatever this tab did while the load was
+   reading (someone clicked or typed, the OMS sweep, an extract still marking,
+   Add client still saving, an offer sheet being recorded or cancelled) may be
+   missing from the snapshot, and this tab's
+   own changes are not read back live, so another read is asked for once
+   things settle. Returns whether it asked. */
 async function loadAll(){
+  const start=Date.now();
+  M.loadsRunning=(M.loadsRunning||0)+1;
+  try{ await _loadAll(); }
+  finally{ M.loadsRunning--; M.loadEndAt=Date.now(); }
+  if(M.result) M.result.stale=true;
+  const f=el("ung-addform");
+  const again = M.acted>start || (M.sweptAt && M.sweptAt.getTime()>start) || (M.wroteAt||0)>start ||
+    !!M.writing || !!M.sweeping || !!M.gatedBusy || ungExtracting || !!(f && f.dataset.busy);
+  if(again) mosLiveSoon();
+  return again;
+}
+async function _loadAll(){
   const [budgets, asins, clients, gating, ledger, settings] = await Promise.all([
     readAll("mos_budgets","store_code,budget","store_code"),
     readAll("mos_asins","*","asin")
@@ -5012,7 +5043,13 @@ async function downloadListing(code){
   fillListing(wb.addWorksheet("Test_Listing"), code, R.assigned[code]);
   await saveBook(wb, `${code}_Listing_${R.date}.xlsx`);
 }
+/* Downloads count in M.downloading, which holds back a live redraw (it would
+   re-enable their buttons half way). */
 async function downloadAll(){
+  M.downloading=(M.downloading||0)+1;
+  try{ await _downloadAll(); }finally{ M.downloading--; }
+}
+async function _downloadAll(){
   const R=M.result; if(!R) return;
   const wb=new ExcelJS.Workbook();
   const sum=wb.addWorksheet("Summary");
@@ -5023,7 +5060,7 @@ async function downloadAll(){
   });
   let n=2;
   for(const code of M.stores){
-    const items=R.assigned[code]; if(!items.length) continue;
+    const items=R.assigned[code]||[]; if(!items.length) continue;
     sum.getCell(n,1).value=code;
     sum.getCell(n,2).value=items.length;
     sum.getCell(n,3).value=+(R.before[code]-R.after[code]).toFixed(2);
@@ -5037,21 +5074,24 @@ async function downloadAll(){
   }
   [12,11,15,15,15,10].forEach((w,i)=>sum.getColumn(i+1).width=w);
   for(const code of M.stores){
-    const items=R.assigned[code];
+    const items=R.assigned[code]||[];
     if(items.length) fillSheet(wb.addWorksheet(code.slice(0,31)), code, items, R.date, R.offset[code]);
   }
   await saveBook(wb, `Offer_Sheets_${R.date}.xlsx`);
 }
 async function downloadEach(kind){
   const R=M.result; if(!R) return;
-  const codes=M.stores.filter(c=>R.assigned[c].length);
+  const codes=M.stores.filter(c=>(R.assigned[c]||[]).length);
   const b=el(kind==="listing"?"mos-listings":"mos-separate");
   b.disabled=true;
-  for(let i=0;i<codes.length;i++){
-    b.textContent=`${i+1} of ${codes.length}`;
-    await (kind==="listing" ? downloadListing(codes[i]) : downloadOne(codes[i]));
-    await new Promise(r=>setTimeout(r,350));
-  }
+  M.downloading=(M.downloading||0)+1;
+  try{
+    for(let i=0;i<codes.length;i++){
+      b.textContent=`${i+1} of ${codes.length}`;
+      await (kind==="listing" ? downloadListing(codes[i]) : downloadOne(codes[i]));
+      await new Promise(r=>setTimeout(r,350));
+    }
+  }finally{ M.downloading--; }
   b.disabled=false;
   b.textContent = kind==="listing" ? "Listing extracts" : "One sheet per client";
   note(`${codes.length} file${codes.length===1?"":"s"} saved`);
@@ -5060,17 +5100,49 @@ async function downloadEach(kind){
 /* ---------------------------------------------------------------------------
    Commit
    --------------------------------------------------------------------------- */
+/* Two plans give the same sheets: the same ASINs to the same clients in the
+   same order, at the same prices. */
+function _samePlan(a, b){
+  const ka=Object.keys(a.assigned).filter(c=>a.assigned[c].length);
+  const kb=Object.keys(b.assigned).filter(c=>b.assigned[c].length);
+  if(ka.length!==kb.length) return false;
+  for(const c of ka){
+    const x=a.assigned[c], y=b.assigned[c];
+    if(!y || x.length!==y.length) return false;
+    for(let i=0;i<x.length;i++)
+      if(x[i].asin!==y[i].asin || Math.abs((x[i].total||0)-(y[i].total||0))>0.005) return false;
+  }
+  return true;
+}
 async function commit(){
-  const R=M.result; if(!R||!R.lines) return;
+  let R=M.result; if(!R||!R.lines) return;
+  /* Never record a plan made on older data: a teammate may have taken the
+     same slots or budget meanwhile. When something changed, read it, plan
+     again, and record only if the plan comes out the same (with the latest
+     tracking numbers); otherwise show the new plan to check first. */
+  if(R.stale || liveDue || liveRunning){
+    await mosLiveFlush();
+    if(liveDue || liveRunning){ note("The latest changes are still loading. Try again in a moment.", true); return; }
+    const fresh=allocateWithMinimum();
+    if(!_samePlan(R, fresh)){
+      M.result=fresh; renderMos();
+      note("The data changed and so did the plan. Check the new preview, then record.", true);
+      return;
+    }
+    M.result=R=fresh;
+  }
   const b=el("mos-commit"); b.disabled=true; b.textContent="Working";
   const batch=`${R.date}_${Math.random().toString(36).slice(2,10)}`;
+  /* A write in progress holds back live re-reads, and one that overlapped a
+     read is read back (see loadAll). */
+  M.writing=(M.writing||0)+1;
   try{
     /* Recording and handing the file over are separate jobs. Sheets are
        downloaded from the Offer sheets tab when they are actually needed, so
        nothing lands in Downloads unasked. */
     const rows=[];
     for(const code of M.stores){
-      R.assigned[code].forEach((r,i)=>rows.push({
+      (R.assigned[code]||[]).forEach((r,i)=>rows.push({
         batch_id:batch, asin:r.asin, store_code:code,
         tracking_code:trackCode(R.date, R.offset[code]+i+1),
         sheet_date:R.date, year:M.cfg.year, quarter:M.cfg.quarter, channel:M.cfg.channel,
@@ -5089,6 +5161,7 @@ async function commit(){
   }catch(e){
     note("Nothing was recorded: "+e.message, true);
   }finally{
+    M.writing--; M.wroteAt=Date.now();
     b.disabled=false; b.textContent="Generate and record"; renderMos();
   }
 }
@@ -5384,7 +5457,8 @@ function _ungDrawWork(){
   var q=((el('ung-search')&&el('ung-search').value)||'').trim().toUpperCase();
   /* Another client, chip or search starts again from the first page. */
   var sig=c+'|'+f+'|'+q;
-  if(M.ungSig!==sig){ M.ungSig=sig; M.ungPage=400; }
+  if(M.ungSig!==sig){ M.ungSig=sig; M.ungPage=400; M.ungKeep=new Set(); }
+  var keep=M.ungKeep||new Set();
   var cnt=el('ung-count'), more=el('ung-more');
   if(!c){
     _ungDrawHead(null);
@@ -5401,16 +5475,18 @@ function _ungDrawWork(){
     /* # is the place in this client's to-check list, the same numbering the
        Extract range uses, so it is counted before the search narrows it. */
     var open=(s==='blank' || s==='pending'); if(open) pos++;
-    if(f==='open' ? !open : s!==f) continue;
+    /* A row answered here stays put (no # once it has left the to-check list). */
+    var kept=keep.has(key(r.asin,c));
+    if((f==='open' ? !open : s!==f) && !kept) continue;
     if(q && (r.asin+' '+r.upc+' '+r.brand).toUpperCase().indexOf(q)<0) continue;
-    list.push([r,s,pos]);
+    list.push([r,s,(f==='open' && !open) ? null : pos]);
   }
   _ungDrawHead(c, n);
   var lim=Math.min(list.length, M.ungPage||400), rows=[], numbered=(f==='open');
   for(var k=0;k<lim;k++){
     var row=list[k][0];
     rows.push('<tr data-a="'+esc(row.asin)+'" data-s="'+list[k][1]+'">'+
-      (numbered ? '<td class="num ung-pos">'+list[k][2].toLocaleString()+'</td>' : '')+
+      (numbered ? '<td class="num ung-pos">'+(list[k][2]===null ? '' : list[k][2].toLocaleString())+'</td>' : '')+
       '<td class="ui-code">'+esc(row.asin)+'</td>'+
       '<td class="ub">'+esc(row.brand||'')+'</td>'+
       '<td class="num">'+(row.unitCost?cash(row.unitCost):'')+'</td>'+
@@ -5440,6 +5516,9 @@ function _ungAnswer(tr, c, ns){
   var a=tr.getAttribute('data-a'), cur=tr.getAttribute('data-s');
   if(!a || !c || ns===cur) return;
   _ungApply(a, c, ns);
+  /* Answered here: the row stays in the list (a live redraw would otherwise
+     pull it out from under the pointer) until another client, chip or search. */
+  (M.ungKeep ||= new Set()).add(key(a,c));
   tr.setAttribute('data-s', ns);
   tr.querySelectorAll('button[data-v]').forEach(function(b){ b.setAttribute('aria-pressed', String(b.dataset.v===ns)); });
   var n=_ungCounts(c);
@@ -5448,12 +5527,14 @@ function _ungAnswer(tr, c, ns){
   ungTally(true);
 }
 
+/* The second paint after the one-time seed is only needed the first time; a
+   repeat would redraw again after a live redraw has put the scroll back. */
 function renderUngate(){
-  _ungSeed().then(function(){ if(M.view==='ungate') _ungPaintList(); });
+  if(!window._ungSeedDone) _ungSeed().then(function(){ if(M.view==='ungate') _ungPaintList(); });
   _ungPaintList();
 }
 function renderDb(){
-  _ungSeed().then(function(){ if(M.view==='db') _ungPaint2("db"); });
+  if(!window._ungSeedDone) _ungSeed().then(function(){ if(M.view==='db') _ungPaint2("db"); });
   _ungPaint2("db");
 }
 /* Wired once, for both tabs and both layouts. Clicks are caught on the
@@ -6082,7 +6163,7 @@ function ungDrawPicker(box){
     '</div>';
   if(keep){
     const back=box.querySelector('input[data-ungrange="'+keep.k+'"]');
-    if(back){ back.focus(); try{ back.setSelectionRange(keep.s, keep.e); }catch(e){} }
+    if(back){ back.focus({preventScroll:true}); try{ back.setSelectionRange(keep.s, keep.e); }catch(e){} }
   }
 }
 function ungPickNote(box){
@@ -6460,7 +6541,10 @@ function renderClientReport(){
   const months=monthsSeen();
   const sel=el("cl-month");
   if(sel && sel.options.length!==months.length){
+    /* Rebuilt (a month came or went): keep the month that was picked. */
+    const was=sel.value || M.clMonth;
     sel.innerHTML=months.map(m=>'<option value="'+m+'">'+monthName(m)+'</option>').join("");
+    if(months.includes(was)) sel.value=was;
   }
   if(sel && !months.includes(sel.value)) sel.value=months[0];
   const month=(sel && sel.value) || curMonth();
@@ -6808,7 +6892,7 @@ async function applyGatedFixes(fixes, quiet){
   }catch(e){
     note("Could not apply the release: "+(e.message||e), true);
     return 0;
-  }finally{ M.gatedBusy=false; }
+  }finally{ M.gatedBusy=false; M.wroteAt=Date.now(); }   // a release that overlapped a read is read back
 }
 
 /* Every live line in every run, checked against OMS in one go. Opening each
@@ -7048,6 +7132,7 @@ function renderSheets(){
     const here=()=>M.view==="sheets" && M.openRun===run.id && M.openClient===code && M.sheetToken===token;
     const poll=async()=>{
       if(!here()) return;                                    /* stop when you leave */
+      M.omsPolledAt=Date.now();
       const ask=lines.filter(needsAsking).map(r=>r.tracking_code);
       try{
         if(ask.length) await omsFetch(ask);
@@ -7068,7 +7153,12 @@ function renderSheets(){
        browser has never had an answer for. */
     paint(codes.some(c=>!M.oms[c] && !M.omsSeen[c]) && lines.some(needsAsking) ? "checking\u2026" : "");
     clearTimeout(M.omsTimer);
-    poll();
+    /* Drawn again for the same sheet (a teammate's change came in): keep the
+       half-minute rhythm instead of asking OMS again straight away. */
+    const sheetKey=run.id+"|"+code, since=Date.now()-(M.omsPolledAt||0);
+    if(M.omsPollFor===sheetKey && since<30000) M.omsTimer=setTimeout(poll, 30000-since);
+    else poll();
+    M.omsPollFor=sheetKey;
     return;
   }
 
@@ -7223,6 +7313,7 @@ async function cancelSheets(rows, what){
       "Any workbook already sent out is not recalled.")) return;
 
   const ids=rows.map(r=>r.id).filter(x=>x!==undefined && x!==null);
+  M.writing=(M.writing||0)+1;          // held and read back like commit's write
   try{
     if(ids.length===rows.length){
       for(let i=0;i<ids.length;i+=200){
@@ -7249,12 +7340,17 @@ async function cancelSheets(rows, what){
       asins.size.toLocaleString()+" ASIN"+(asins.size===1?"":"s")+" back in the pool \u00b7 "+
       cash(value)+" back on budget");
   }catch(e){ note("Could not cancel: "+(e.message||e), true); }
+  finally{ M.writing--; M.wroteAt=Date.now(); }
 }
 
 /* One file per client, in the same order the run lists them. The browser
    asks once whether it may save several files and then they arrive one after
    another, so they can be forwarded without anyone splitting a workbook up. */
 async function rebuildRun(run, onProgress){
+  M.downloading=(M.downloading||0)+1;
+  try{ return await _rebuildRun(run, onProgress); }finally{ M.downloading--; }
+}
+async function _rebuildRun(run, onProgress){
   const meta=new Map((M.all||[]).map(r=>[r.asin,r]));
   const byClient={};
   for(const r of run.rows) (byClient[r.store_code] ||= []).push(r);
@@ -7289,6 +7385,10 @@ async function rebuildRun(run, onProgress){
 /* Rebuilt from the ledger, with the product detail read back out of the ASIN
    list, so a sheet can be handed over again months later. */
 async function rebuildSheet(run, code){
+  M.downloading=(M.downloading||0)+1;
+  try{ return await _rebuildSheet(run, code); }finally{ M.downloading--; }
+}
+async function _rebuildSheet(run, code){
   const meta=new Map((M.all||[]).map(r=>[r.asin,r]));
   const rows=run.rows.filter(r=>r.store_code===code)
     .sort((a,b)=>String(a.tracking_code).localeCompare(String(b.tracking_code),undefined,{numeric:true}));
@@ -7309,9 +7409,12 @@ async function rebuildSheet(run, code){
 function renderResult(){
   const R=M.result;
   el("mos-out").hidden = !R;
+  /* A preview the data has moved on from cannot be handed out; recording it
+     re-plans on the latest data first (see commit). */
+  const stale=!!(R && R.stale);
   el("mos-commit").disabled = !R || !R.lines;
-  el("mos-separate").disabled = !R || !R.lines;
-  el("mos-listings").disabled = !R || !R.lines;
+  el("mos-separate").disabled = !R || !R.lines || stale;
+  el("mos-listings").disabled = !R || !R.lines || stale;
   if(!R) return;
 
   el("mos-totals").innerHTML=
@@ -7325,12 +7428,15 @@ function renderResult(){
         ? `<p class="mos-warn"><b>${R.moved.toLocaleString()}</b> line${R.moved===1?"":"s"} moved off the client they first landed on, because that sheet averaged under ${(R.minRoi*100).toFixed(0)}% ROI. They went back to the pool for the clients after them.</p>`
         : `<p class="mos-ok">Every sheet cleared ${(R.minRoi*100).toFixed(0)}% ROI without anything being moved.</p>`)
     : "";
-  el("mos-dropped").innerHTML = roiLine + ((R.dropped && R.dropped.length)
+  el("mos-dropped").innerHTML = (stale
+      ? `<p class="mos-warn"><b>The data changed since this preview</b> (a teammate's change, or a refresh). Generate and record checks it against the latest data first and records only if the plan is unchanged; press Preview again to see the current plan or to download.</p>` : "")
+    + roiLine + ((R.dropped && R.dropped.length)
     ? `<p class="mos-warn">Dropped for falling under ${cash0(R.minOrder)}: <b>${R.dropped.map(esc).join(", ")}</b>.
        Their ASINs went back to the pool${R.passes>1?` over ${R.passes} passes`:""}, so no client slots were used on them.</p>`
     : (R.minOrder>0 ? `<p class="mos-ok">Every client served reached the ${cash0(R.minOrder)} minimum.</p>` : ""));
 
-  const rows=M.stores.map((c,i)=>{
+  /* A client added after the preview has no entry in it. */
+  const rows=M.stores.filter(c=>c in R.assigned).map((c,i)=>{
     const spend=R.before[c]-R.after[c];
     return {pos:i+1, code:c, lines:R.assigned[c].length, spend,
             budget:R.before[c], left:R.after[c],
@@ -7359,7 +7465,7 @@ function renderResult(){
       <td class="r">${cash(r.budget)}</td><td class="r">${cash(r.left)}</td>
       <td class="r">${(r.pct*100).toFixed(1)}%</td>
       <td class="r"${r.lines&&r.roi<(R.minRoi||0)?' style="color:#9b2c20;font-weight:600"':''}>${r.lines?(r.roi*100).toFixed(1)+"%":"\u2014"}</td>
-      <td class="nowrap">${r.lines?`<button class="mos-mini" data-dl="${esc(r.code)}">Offer sheet</button>
+      <td class="nowrap">${r.lines && !stale?`<button class="mos-mini" data-dl="${esc(r.code)}">Offer sheet</button>
         <button class="mos-mini" data-dlist="${esc(r.code)}">Listing</button>`:""}</td></tr>`).join("")+
     `</tbody></table>`;
 
@@ -7397,6 +7503,9 @@ function dropZone(id, onFiles){
 async function enterMos(){
   M.on=true;
   document.body.classList.add("mos-on");
+  /* Listening starts before the first load, so a change made while it reads
+     is picked up straight after it. */
+  mosLive();
   if(!M.ready){
     /* Leaving and coming back mid-load waits for the same load. */
     if(!M.loading){
@@ -7413,6 +7522,8 @@ async function enterMos(){
     }
   }
   renderMos();
+  /* Back from the desk with a teammate's change waiting: read it now. */
+  if(liveDue) mosLiveSoon();
   sweepOms();
   clearInterval(M.sweepTimer);
   M.sweepTimer=setInterval(()=>{ if(M.on && !document.hidden) sweepOms(); }, 5*60*1000);
@@ -7422,11 +7533,177 @@ function leaveMos(){
   document.body.classList.remove("mos-on");
 }
 
+/* ---------------------------------------------------------------------------
+   Live: a teammate's change shows here without a refresh. Every mos_ table
+   bumps a row of mos_change once per request that changes it (a database
+   trigger), and this page listens to that table from sign-in on, before the
+   first load, so nothing is missed while it loads; after a dropped connection
+   it simply reads again. A change this tab made carries its tab id and is
+   skipped (memory already has it; loadAll covers the case where a read may
+   have missed it). Any other change re-reads everything (one load, about two
+   seconds) once the burst is over, but not while someone is away (another
+   view or a hidden tab: done on return), and never in the middle of
+   something: a save, an extract, a download, an OMS release or sweep, an
+   import waiting to be applied, an answer menu open, or someone who clicked,
+   typed or scrolled in the last few seconds. An offer sheet preview is not a
+   reason to wait: the load marks it stale, and Preview and Generate and
+   record first take any read that is due. The view keeps its place: the work
+   list and the ASIN database by a row near their top that is still there,
+   other boxes by their offset.
+   --------------------------------------------------------------------------- */
+const LIVE_QUIET=1500, LIVE_MAX=8000, LIVE_IDLE=3000;
+let liveTimer=null, liveFirst=0, liveDue=false, liveRunning=false;
+M.touched=0; M.acted=0;
+function mosLive(){
+  if(M.liveCh || !sb || typeof sb.channel!=="function") return;
+  var joins=0, ch=sb.channel("mos-live");
+  M.liveCh=ch;
+  ch.on("postgres_changes", {event:"*", schema:"public", table:"mos_change"}, function(p){
+      var r=p.new||{};
+      if(r.tab && typeof MOS_TAB_ID!=="undefined" && r.tab===MOS_TAB_ID) return;
+      mosLiveSoon();
+    })
+    .subscribe(function(st){
+      if(st==="SUBSCRIBED"){
+        /* First join: a load that started before it may have missed something.
+           A rejoin after a dropped connection may have missed changes. */
+        if(joins++ || M.liveLost || M.loading || M.ready){ M.liveLost=false; mosLiveSoon(); }
+      }else if(st==="CLOSED" && M.liveCh===ch){
+        /* Closed for good: open a new channel shortly, and read once it is in. */
+        M.liveCh=null; M.liveLost=true;
+        try{ sb.removeChannel(ch); }catch(e){}
+        setTimeout(mosLive, 10000);
+      }
+    });
+}
+/* The desk calls this once signed in, so listening starts before the Manual
+   offer sheet is opened. */
+window.mosLiveStart=mosLive;
+function mosLiveSoon(){
+  liveDue=true;
+  var now=Date.now(); if(!liveFirst) liveFirst=now;
+  clearTimeout(liveTimer);
+  /* A bulk write sends one event per request: wait for a quiet moment, but
+     not more than a few seconds after the first. */
+  liveTimer=setTimeout(mosLiveRun, Math.max(0, Math.min(LIVE_QUIET, liveFirst+LIVE_MAX-now)));
+}
+/* Why a re-read has to wait, or "" when it need not. */
+function _mosLiveHold(){
+  if(!M.ready || M.loading) return "load";
+  if(!M.on || document.hidden) return "away";
+  if(M.busy || M.writing || ungExtracting || M.gatedBusy || M.sweeping || M.downloading || M.staged) return "busy";
+  var f=el("ung-addform"); if(f && f.dataset.busy) return "busy";
+  var imp=el("ung-picker");
+  if(M.view==="ungate" && imp && !imp.hidden && imp.querySelector('[data-ungimp="go"]')) return "import";
+  if(document.querySelector(".ung-menu, select.ung-pick")) return "menu";
+  return Date.now()-M.touched < LIVE_IDLE ? "active" : "";
+}
+/* force: go ahead even though someone is active (Preview and Generate and
+   record want the latest data now). */
+async function mosLiveRun(force){
+  liveTimer=null;
+  if(!liveDue || liveRunning) return;
+  var hold=_mosLiveHold();
+  /* Never loaded, or the first load failed: the next load reads fresh anyway. */
+  if(hold==="load" && !M.loading && !M.ready){ liveDue=false; liveFirst=0; return; }
+  /* Away: picked up on return (enterMos, or the tab showing again). */
+  if(hold==="away") return;
+  if(hold && !(force===true && hold==="active")){ liveTimer=setTimeout(mosLiveRun, 1000); return; }
+  liveDue=false; liveFirst=0; liveRunning=true;
+  var again=false, failed=false;
+  try{ again=await loadAll(); }
+  catch(e){ console.warn("Live update could not load:", e.message); failed=true; liveDue=true; }
+  finally{ liveRunning=false; }
+  /* More changes came in meanwhile, or the load failed: go again. */
+  if(liveDue){ clearTimeout(liveTimer); liveTimer=setTimeout(mosLiveRun, failed ? 15000 : LIVE_QUIET); }
+  if(failed) return;
+  if(M.pool.length) M.dupes=dedupe(M.pool).dupes;
+  /* When it asked for another read, someone was working: leave the screen to
+     that read. */
+  if(M.on && !again) _mosRedrawKeepScroll();
+}
+/* Before a preview or a recording: take a re-read that is due now, and wait
+   for one that is running. */
+async function mosLiveFlush(){
+  for(var i=0;i<300 && liveRunning;i++) await new Promise(function(r){ setTimeout(r,50); });
+  var h=_mosLiveHold();
+  if(liveDue && (h==="" || h==="active")){ clearTimeout(liveTimer); await mosLiveRun(true); }
+}
+/* Redraws the open tab and keeps the view where it was. The work list, the
+   ASIN database and the client list keep one row still on the SCREEN: the row
+   under the pointer if it is over one (that is the one about to be clicked),
+   else the first row on view that is still there after the redraw. Rows
+   answered elsewhere drop out and the panels above can change height, so
+   neither a pixel offset nor an offset inside the box would do. Any other
+   scrolled box is found again by its id, or by its nearest id and its class,
+   and keeps its offset. */
+function _mosRedrawKeepScroll(){
+  var main=el("mos-main"), se=document.scrollingElement||document.documentElement, keep=[], tops=[];
+  var at=function(n){ return n.id ? "#"+n.id : ((n.parentElement && n.parentElement.closest("[id]")) ? "#"+n.parentElement.closest("[id]").id : "")+" ."+String(n.className||"").trim().split(/\s+/)[0]; };
+  [["ung-grid","tr","data-a"],["db-grid","tr","data-row"],["ung-clients","button","data-uc"]].forEach(function(x){
+    var box=el(x[0]); if(!box) return;
+    var rect=box.getBoundingClientRect(), rows=box.querySelectorAll(x[1]+"["+x[2]+"]"), cand=[], ptr=false;
+    if(M.ptrY!=null && M.ptrY>=rect.top && M.ptrY<=rect.bottom){
+      for(var j=0;j<rows.length;j++){
+        var q=rows[j].getBoundingClientRect();
+        if(q.top<=M.ptrY && q.bottom>M.ptrY){ cand.push([rows[j].getAttribute(x[2]), q.top]); ptr=true; break; }
+      }
+    }
+    for(var i=0;i<rows.length && cand.length<40;i++){
+      var r=rows[i].getBoundingClientRect();
+      if(r.bottom>rect.top+1) cand.push([rows[i].getAttribute(x[2]), r.top]);
+    }
+    if(cand.length) tops.push([x[0], x[1], x[2], cand, ptr]);
+  });
+  if(main) main.querySelectorAll("*").forEach(function(n){
+    if((n.scrollTop||n.scrollLeft) && (n.id || n.className)) keep.push([at(n), n.scrollTop, n.scrollLeft]);
+  });
+  var wy=se.scrollTop;
+  renderMos();
+  keep.forEach(function(k){
+    var n=null; try{ n=document.querySelector(k[0]); }catch(e){}
+    if(n){ n.scrollTop=k[1]; n.scrollLeft=k[2]; }
+  });
+  /* The page first, then each box moves its row back to where it was on
+     screen. If the box cannot scroll far enough (it is at an end), the page
+     makes up the rest for the row under the pointer. */
+  se.scrollTop=wy;
+  tops.forEach(function(x){
+    var box=el(x[0]); if(!box) return;
+    for(var i=0;i<x[3].length;i++){
+      var v=(window.CSS && CSS.escape) ? CSS.escape(x[3][i][0]) : x[3][i][0], row=null;
+      try{ row=box.querySelector(x[1]+"["+x[2]+'="'+v+'"]'); }catch(e){}
+      if(!row) continue;
+      box.scrollTop += row.getBoundingClientRect().top - x[3][i][1];
+      var rest=row.getBoundingClientRect().top - x[3][i][1];
+      if(x[4] && i===0 && Math.abs(rest)>1) se.scrollTop += rest;
+      break;
+    }
+  });
+}
+
 document.addEventListener("DOMContentLoaded", init);
 if(document.readyState!=="loading") init();
 let started=false;
 function init(){
   if(started) return; started=true;
+  /* Someone working here holds back a live redraw for a few seconds: any
+     movement counts (M.touched). A click, key or tap may also be a write
+     (M.acted), which loadAll reads back if it happened while it was reading.
+     Where the pointer is lets the redraw keep that row still. */
+  if(el("mos-main")){
+    ["keydown","mousedown","touchstart"].forEach(ev=>
+      el("mos-main").addEventListener(ev, ()=>{ M.touched=M.acted=Date.now(); }, {passive:true}));
+    ["wheel","pointermove"].forEach(ev=>
+      el("mos-main").addEventListener(ev, e=>{ M.touched=Date.now(); if(e.clientY!=null) M.ptrY=e.clientY; }, {passive:true}));
+  }
+  /* A hidden tab leaves a teammate's change for later; read it on return, a
+     moment after, as someone coming back is about to click. */
+  document.addEventListener("visibilitychange", ()=>{
+    if(document.hidden) return;
+    M.touched=Date.now();
+    if(liveDue) mosLiveSoon();
+  });
 
   el("mos-switch").addEventListener("click", e=>{
     const b=e.target.closest("button[data-app]"); if(!b) return;
@@ -7637,7 +7914,9 @@ function init(){
   });
 
 
-  el("mos-preview").onclick = () => {
+  el("mos-preview").onclick = async () => {
+    /* A teammate's change that has not been read yet goes in first. */
+    await mosLiveFlush();
     if(!M.pool.length){ note("Load the ASIN list first.", true); return; }
     if(!M.stores.length){ note("Upload a Batch Details file so there are clients.", true); return; }
     if(!M.stores.some(inRun)){ note("No clients are ticked, so there is nobody to offer to.", true); return; }
