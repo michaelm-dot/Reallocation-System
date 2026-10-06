@@ -1429,6 +1429,8 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
   color:#fff;padding:9px 16px;border-radius:7px;font-size:13px;z-index:90;max-width:70ch}
 .mos-note.bad{background:var(--flag)}
 #mos-busy{font:500 12.5px/1.3 var(--sans);color:var(--ink2);margin:10px 0}
+#mos-busy.loading{font-size:14px;padding:40px 0;text-align:center}
+#mos-busy.loading .ung-tool{margin-left:8px}
 </style>
 
 
@@ -4202,6 +4204,7 @@ document.addEventListener("change", e=>{
 
 const M = {
   on:false, ready:false, view:"clients", busy:false, ungMode:"list",
+  loading:null, loadError:null,   // the first load in flight, and why it failed
   budgets:{},                 // code -> budget, starting again each month
   byMonth:{},                 // code -> { "2026-09": spent }
   all:[],                     // every ASIN ever loaded, retired ones included
@@ -4301,20 +4304,51 @@ function hash01(str){
    Supabase. Every read pages, because PostgREST caps a response at 1000 rows
    and the gating table alone runs to five figures.
    --------------------------------------------------------------------------- */
-/* Pages of 1000 (the server's cap). The order must be unique, or a row can
-   fall between two pages or show up in both, so pass a tiebreaker too. */
-async function readAll(table, cols, order){
-  const out=[]; const size=1000;
-  const orders=[].concat(order||[]);
-  for(let from=0;;from+=size){
-    let q=sb.from(table).select(cols).range(from, from+size-1);
-    for(const o of orders) q=q.order(o);
-    const {data,error}=await q;
-    if(error) throw new Error(`${table}: ${error.message}`);
-    out.push(...data);
-    if(data.length<size) return out;
-  }
+/* Pages of 1000 (the server's cap) that walk the primary key: each page asks
+   for the rows after the last key seen, never "skip the first n". Skipping
+   made the server count its way down the table on every page (the gating
+   table's twenty pages took fourteen seconds one after another), and a row
+   deleted or added mid-read by someone's import shifted everything after it,
+   so a row could be read twice or not at all. `keys` is the primary key (one
+   or two columns, and `cols` must include them). `split` cuts the table into
+   ranges of one column, {col, at:[...]}, read side by side; the ranges run
+   from nothing below at[0] to everything from the last one up, so a value
+   outside the boundaries is still read. Rows come back in key order within
+   each range only; sort afterwards when the order matters. */
+async function readAll(table, cols, keys, split){
+  keys=[].concat(keys);
+  const size=1000;
+  const lit=v=>'"'+String(v).replace(/[\\"]/g,"\\$&")+'"';
+  const range=async(lo,hi)=>{
+    const out=[]; let last=null;
+    for(;;){
+      let q=sb.from(table).select(cols);
+      if(lo!=null) q=q.gte(split.col, lo);
+      if(hi!=null) q=q.lt(split.col, hi);
+      if(last){
+        const [a,b]=keys;
+        q = keys.length===1 ? q.gt(a, last[a])
+          : q.or(`${a}.gt.${lit(last[a])},and(${a}.eq.${lit(last[a])},${b}.gt.${lit(last[b])})`);
+      }
+      for(const k of keys) q=q.order(k);
+      const {data,error}=await q.limit(size);
+      if(error) throw new Error(`${table}: ${error.message}`);
+      out.push(...data);
+      if(data.length<size) return out;
+      last=data[data.length-1];
+      if(keys.some(k=>last[k]==null)) throw new Error(`${table}: rows came back without their key`);
+    }
+  };
+  if(!split) return range(null,null);
+  const at=split.at, parts=[];
+  for(let i=0;i<=at.length;i++) parts.push(range(i?at[i-1]:null, i<at.length?at[i]:null));
+  return (await Promise.all(parts)).flat();
 }
+/* Store codes are a few capitals or digits; nine ranges read the gating
+   table in about a second instead of fourteen. */
+const GATING_SPLIT={col:"store_code", at:["C","E","H","K","M","P","S","V"]};
+const byNum=(a,b)=>(a==null?Infinity:a)-(b==null?Infinity:b);
+const byText=(a,b)=>a<b?-1:a>b?1:0;
 async function writeChunks(table, rows, conflict){
   for(let i=0;i<rows.length;i+=500){
     const {error}= conflict
@@ -4327,9 +4361,11 @@ async function writeChunks(table, rows, conflict){
 async function loadAll(){
   const [budgets, asins, clients, gating, ledger, settings] = await Promise.all([
     readAll("mos_budgets","store_code,budget","store_code"),
-    readAll("mos_asins","*",["pos","asin"]),
-    readAll("mos_clients","store_code,position",["position","store_code"]),
-    readAll("mos_gating","asin,store_code,state",["asin","store_code"]),
+    readAll("mos_asins","*","asin")
+      .then(rows=>rows.sort((a,b)=>byNum(a.pos,b.pos)||byText(a.asin,b.asin))),
+    readAll("mos_clients","store_code,position","store_code")
+      .then(rows=>rows.sort((a,b)=>byNum(a.position,b.position)||byText(a.store_code,b.store_code))),
+    readAll("mos_gating","asin,store_code,state",["asin","store_code"],GATING_SPLIT),
     readAll("mos_allocations","*","id"),
     sb.from("mos_settings").select("*").eq("id",true).maybeSingle(),
   ]);
@@ -4354,7 +4390,11 @@ async function loadAll(){
      nobody has to check it a second time. */
   const known=new Set(M.all.map(r=>r.asin));
   const orphans=new Set();
-  for(const g of gating) if(!known.has(g.asin)) orphans.add(g.asin);
+  /* Gating comes back range by range, so put these in ASIN order: their place
+     in the list is the # that Extract's From/To counts by. */
+  const fromGating=new Set();
+  for(const g of gating) if(!known.has(g.asin)) fromGating.add(g.asin);
+  [...fromGating].sort(byText).forEach(a=>orphans.add(a));
   for(const r of ledger) if(!known.has(r.asin)) orphans.add(r.asin);
   for(const a of orphans){
     M.all.push({asin:a, n:0, upc:"", status:"", notes:"", qty:0, unitCost:0, avg90:0,
@@ -6017,11 +6057,28 @@ function renderMos(){
   if(!M.on) return;
   document.querySelectorAll("#mos-tabs button").forEach(b=>
     b.setAttribute("aria-current", String(b.dataset.mv===M.view)));
-  el("mos-ungate").hidden = M.view!=="ungate";
-  el("mos-db").hidden     = M.view!=="db";
-  el("mos-goods").hidden  = M.view!=="goods";
-  el("mos-sheets").hidden = M.view!=="sheets";
-  el("mos-clients-rpt").hidden = M.view!=="clients";
+  /* Until the first load lands there is nothing true to show: every count
+     would read 0 and every list "No ASINs yet". Show the wait, or what went
+     wrong, in place of the tab. */
+  const waiting=!M.ready;
+  el("mos-ungate").hidden = waiting || M.view!=="ungate";
+  el("mos-db").hidden     = waiting || M.view!=="db";
+  el("mos-goods").hidden  = waiting || M.view!=="goods";
+  el("mos-sheets").hidden = waiting || M.view!=="sheets";
+  el("mos-clients-rpt").hidden = waiting || M.view!=="clients";
+  const busy=el("mos-busy");
+  busy.classList.toggle("loading", waiting);
+  if(waiting){
+    busy.hidden=false;
+    busy.innerHTML = M.loadError
+      ? '<b>Could not load the offer sheet data.</b> '+esc(M.loadError)+
+        ' <button class="ung-tool" id="mos-retry" type="button">Try again</button>'
+      : 'Loading the offer sheet data…';
+    if(el("mos-retry")) el("mos-retry").onclick=()=>enterMos();
+    return;
+  }
+  busy.textContent="Working…";
+  busy.hidden=!M.busy;
   if(M.view==="ungate")     renderUngate();
   else if(M.view==="db")    renderDb();
   else if(M.view==="goods")  renderGoods();
@@ -7159,10 +7216,15 @@ async function enterMos(){
   M.on=true;
   document.body.classList.add("mos-on");
   if(!M.ready){
-    M.busy=true; renderMos();
-    try{ await loadAll(); }
-    catch(e){ note("Could not load: "+e.message, true); }
-    finally{ M.busy=false; }
+    /* Leaving and coming back mid-load waits for the same load. */
+    if(!M.loading){
+      M.busy=true; M.loadError=null; renderMos();
+      M.loading=loadAll()
+        .catch(e=>{ M.loadError=e.message||String(e); note("Could not load: "+M.loadError, true); })
+        .finally(()=>{ M.busy=false; M.loading=null; });
+    }
+    await M.loading;
+    if(!M.on) return;
     if(M.pool.length){
       const {dupes}=dedupe(M.pool);   // for the duplicates panel only
       M.dupes=dupes;
