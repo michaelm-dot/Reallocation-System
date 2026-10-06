@@ -864,7 +864,6 @@
   .ung-cpickbar b{font-weight:500;color:var(--ink)}
   .ung-cpickbar .ui-link{font-size:12px}
   #ung-grid .ung-wtbl td.ung-pos{width:1%;font:400 12px var(--mono);color:var(--ink3)}
-  #ung-grid .ung-wtbl .ung-ret{margin-left:6px;font:500 11px var(--sans);vertical-align:1px}
   /* Extract: which slice of each client's to-check list goes in the file */
   #ung-extractbox .ung-pick-range{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:10px;
     border-top:1px solid var(--rule2);font-size:13px;color:var(--ink2)}
@@ -4390,8 +4389,8 @@ async function loadAll(){
      nobody has to check it a second time. */
   const known=new Set(M.all.map(r=>r.asin));
   const orphans=new Set();
-  /* Gating comes back range by range, so put these in ASIN order: their place
-     in the list is the # that Extract's From/To counts by. */
+  /* Gating comes back range by range, so put these in ASIN order, as they
+     were before, for the ASIN database's row numbers. */
   const fromGating=new Set();
   for(const g of gating) if(!known.has(g.asin)) fromGating.add(g.asin);
   [...fromGating].sort(byText).forEach(a=>orphans.add(a));
@@ -4562,9 +4561,8 @@ async function seedNewAsins(list){
 }
 
 /* Replacing the ASIN list never deletes anything. An ASIN missing from the
-   new CSV is retired: it stops being offered, but stays on Ungate Checking
-   (marked Retired) and keeps every answer, so one that comes back later is
-   already checked. */
+   new CSV is retired: it stops being offered and leaves Ungate Checking, but
+   keeps every answer, so one that comes back later is already checked. */
 async function replaceAsins(raw){
   /* Which ASINs are new is worked out against what is loaded, so nothing may
      run before the list has loaded (a failed load would make all of them new). */
@@ -4682,8 +4680,9 @@ function dbState(k){
   return "gated";
 }
 
-/* An import may answer any ASIN the app knows, retired ones included, so a
-   retired ASIN keeps getting checked and is ready if it comes back. */
+/* An import may answer any ASIN the app knows, retired ones included: a file
+   made before an ASIN left the list still holds a real answer, kept for the
+   day it comes back. */
 const knownAsins=()=>new Map((M.all||[]).map(r=>[r.asin.toUpperCase(),r.asin]));
 function summarise(rows){
   const byUpper=knownAsins();
@@ -5381,8 +5380,7 @@ function _ungDrawWork(){
     var row=list[k][0];
     rows.push('<tr data-a="'+esc(row.asin)+'" data-s="'+list[k][1]+'">'+
       (numbered ? '<td class="num ung-pos">'+list[k][2].toLocaleString()+'</td>' : '')+
-      '<td class="ui-code">'+esc(row.asin)+(row.active===false
-        ? ' <span class="ui-pill gray ung-ret">'+(row.orphan?'Not in list':'Retired')+'</span>' : '')+'</td>'+
+      '<td class="ui-code">'+esc(row.asin)+'</td>'+
       '<td class="ub">'+esc(row.brand||'')+'</td>'+
       '<td class="num">'+(row.unitCost?cash(row.unitCost):'')+'</td>'+
       '<td class="num">'+mosRoiPill(row.roi||0)+'</td>'+
@@ -5705,20 +5703,11 @@ function ungCols(){
    see it is still being checked, and it fills in on its own as answers come
    back on Ungate Checking. */
 function ungColsFor(openTab){ return ungCols(); }
-/* Ungate Checking works the whole list: active ASINs first, then retired ones
-   (off the Asins tab), then ASINs known only from old gating rows (orphans),
-   so an ASIN that comes back to the list already has its answers. Allocation
-   still offers M.pool only (active). A listing file needs only the ASIN, so
-   orphans can be extracted like the rest. */
-function ungList(){
-  var all=M.all||[], pool=M.pool||[];
-  if(M._ungListAll!==all || M._ungListPool!==pool){
-    M._ungListAll=all; M._ungListPool=pool;
-    M._ungList=pool.concat(all.filter(function(r){ return !r.active && !r.orphan; }),
-                           all.filter(function(r){ return r.orphan; }));
-  }
-  return M._ungList;
-}
+/* Ungate Checking works the Good to Order ASINs only (owner, 2026-10-06): an
+   ASIN that has left the Asins tab is not checked. Its answers, and any "not
+   checked" row, stay in mos_gating, so one that comes back is already sorted
+   for every client, and the ASIN database still shows them. */
+function ungList(){ return M.pool||[]; }
 function ungRowsFor(openTab){ return openTab ? ungList() : (M.all||[]); }
 
 /* New clients go to the far left, because the leftmost column is the one
@@ -5813,12 +5802,16 @@ async function ungSaveClients(entries){
   if(fresh.length) await saveClients();
   /* No row means Gated, so a client added with nothing behind it reads as
      Gated on every ASIN and shows as clear. Each new client gets a "not
-     checked" row on every ASIN in the list instead, so it shows up as work.
-     ignoreDuplicates keeps an answer someone saved in the meantime. */
+     checked" row on every ASIN known instead, so it shows up as work. Retired
+     and orphan ASINs get the row too: Ungate Checking does not show them, but
+     if one comes back to Good to Order it is work for this client rather than
+     a false Gated. ignoreDuplicates keeps an answer saved in the meantime.
+     Only the Good to Order ones are counted in the note. */
   let seeded=0, seedErr="";
   if(fresh.length){
-    const rows=[];
-    for(const c of fresh) for(const r of ungList()){        // retired ones too
+    const rows=[], every=(M.all&&M.all.length) ? M.all : (M.pool||[]);
+    const live=new Set((M.pool||[]).map(r=>r.asin));
+    for(const c of fresh) for(const r of every){
       const k=key(r.asin,c);
       if(!M.ungated.has(k) && !M.pending.has(k) && !M.blank.has(k)) rows.push({asin:r.asin, store_code:c, state:"blank"});
     }
@@ -5826,8 +5819,7 @@ async function ungSaveClients(entries){
       const part=rows.slice(i,i+500);
       const {error}=await sb.from("mos_gating").upsert(part,{onConflict:"asin,store_code", ignoreDuplicates:true});
       if(error){ seedErr=error.message; break; }
-      part.forEach(x=>M.blank.add(key(x.asin,x.store_code)));
-      seeded+=part.length;
+      part.forEach(x=>{ M.blank.add(key(x.asin,x.store_code)); if(live.has(x.asin)) seeded++; });
     }
   }
   /* Budgets typed in the form, for new clients and for ones already listed. */
@@ -6233,8 +6225,8 @@ function clientReport(month){
     const value=mine.reduce((s,r)=>s+(Number(r.total_price)||0),0);
     const live=all.filter(slotLive);
     const dates=all.map(r=>r.sheet_date).filter(Boolean).sort();
-    /* Ungated counts what can be offered (active ASINs); To check counts the
-       same list Ungate Checking works, retired ASINs included. */
+    /* Ungated counts what can be offered and To check the same list Ungate
+       Checking works: the Good to Order ASINs. */
     let ung=0, todo=0;
     for(const r of (M.pool||[])) if(M.ungated.has(key(r.asin,code))) ung++;
     for(const r of ungList()) if(ungCellOpen(key(r.asin,code))) todo++;
