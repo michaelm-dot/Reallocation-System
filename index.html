@@ -709,6 +709,13 @@
   #cl-grid .ungtbl.clients td.c{text-align:left;font:500 13px var(--mono)}
   #cl-grid .ungtbl.clients td.d{text-align:left;font:400 12.5px var(--sans);color:var(--ink3)}
   #cl-grid .ungtbl.clients td.bu{width:240px;min-width:200px;text-align:left}
+  /* Priority and Results: who to make the next offer sheet for. */
+  #cl-grid .ungtbl.clients td.cl-prio{text-align:left;white-space:nowrap;font:400 12px var(--sans)}
+  #cl-grid .ungtbl.clients td.cl-prio small{display:block;margin-top:3px;font:400 11px var(--sans)}
+  #cl-grid .ungtbl.clients td.cl-res{text-align:left;white-space:nowrap;font:400 12px var(--sans);color:var(--ink2)}
+  #cl-grid .ungtbl.clients td.cl-res .ui-pill{margin-left:6px}
+  #cl-card .cl-fallmin{display:inline-flex;align-items:center;gap:6px;margin-left:6px;font:400 12px var(--sans);color:var(--ink3)}
+  #cl-card .cl-fallmin select{font:500 12px var(--sans);padding:3px 6px;border:1px solid var(--rule);border-radius:6px;background:var(--panel)}
   #cl-grid .ungtbl.clients .bu-t{display:flex;justify-content:space-between;gap:12px;white-space:nowrap;
     font:400 12px var(--sans);color:var(--ink2)}
   #cl-grid .ungtbl.clients .bu-t b{font:500 13px var(--mono);color:var(--ink)}
@@ -6487,15 +6494,40 @@ const monthName=(m)=>{
   return isNaN(d) ? m : d.toLocaleDateString("en-US",{month:"long",year:"numeric"});
 };
 
+/* What became of an offer sheet line, by its Final Result in OMS: "good" once
+   it reached Waiting for invoice or Allocated to Amazon, a "fall" (fall off)
+   for any other result, "wait" while there is none yet (owner's definition,
+   2026-10-15). A released line fell off with the result it was released on. */
+const CL_GOOD=/^(waiting for invoice|allocated to amazon)$/i;
+function clResult(r){
+  if(r.released_at) return CL_GOOD.test(String(r.release_reason||"").trim()) ? "good" : "fall";
+  const s=r.tracking_code && (M.oms[r.tracking_code] || M.omsSeen[r.tracking_code]);
+  const f=String((s && s.final_result) || "").trim();
+  if(!f) return "wait";
+  return CL_GOOD.test(f) ? "good" : "fall";
+}
+/* How large a share of a client's results has to have fallen off to make it
+   priority 2. Chosen on the Clients tab, remembered per browser. */
+const CL_FALL_KEY="mos.clfall.v1";
+M.clFallMin=(()=>{ try{ const v=Number(localStorage.getItem(CL_FALL_KEY)); if(v>0 && v<=1) return v; }catch(e){} return 0.5; })();
+
 function clientReport(month){
   month = month || curMonth();
   const rows=M.stores.map((code,i)=>{
+    /* Every line of the month, released ones too: a sheet whose lines all fell
+       off was still a sheet, and its results are what priority 2 is about. */
+    const month_=M.ledger.filter(r=>r.store_code===code && monthOf(r)===month);
+    let good=0, fall=0, wait=0;
+    for(const r of month_){ const k=clResult(r); if(k==="good") good++; else if(k==="fall") fall++; else wait++; }
+    const sheets=new Set(month_.map(r=>r.batch_id)).size, decided=good+fall;
+    const fallPct=decided ? fall/decided : 0;
     const all=M.ledger.filter(r=>r.store_code===code && !r.released_at);
     const mine=all.filter(r=>monthOf(r)===month);
-    const runs=new Set(mine.map(r=>r.batch_id));
     const value=mine.reduce((s,r)=>s+(Number(r.total_price)||0),0);
     const live=all.filter(slotLive);
-    const dates=all.map(r=>r.sheet_date).filter(Boolean).sort();
+    /* Last sheet counts released lines too: a sheet that fully fell off was
+       still a sheet. */
+    const dates=M.ledger.filter(r=>r.store_code===code).map(r=>r.sheet_date).filter(Boolean).sort();
     /* Ungated counts what can be offered and To check the same list Ungate
        Checking works: the Good to Order ASINs. */
     let ung=0, todo=0;
@@ -6504,14 +6536,35 @@ function clientReport(month){
     const budget=(code in M.budgets) ? M.budgets[code] : null;
     const spent=spentIn(code, month);
     const left=remainingFor(code, month);
+    /* Priority for the next offer sheet: 1 had no sheet this month, 2 had
+       sheets but most of what came back fell off. canOffer: a sheet can
+       actually be made (a budget, and Ungated ASINs to offer). */
+    const prio = !sheets ? 1 : (decided && fallPct>=M.clFallMin) ? 2 : 0;
+    /* Room for a sheet: at least the minimum order left in this month's budget. */
+    const minOrder=(M.cfg && M.cfg.minOrder) || 0;
+    const canOffer = !!budget && ung>0 && (left||0)>=minOrder;
+    const why = !budget ? "no budget" : !ung ? "no Ungated ASINs yet"
+      : (left||0)<minOrder ? "under the "+cash0(minOrder)+" minimum left" : "";
     return {pos:i+1, code, budget, spent, left,
             used: budget ? spent/budget : 0,
-            runs:runs.size, items:mine.length, value,
+            runs:sheets, items:mine.length, value,
             holding:live.length, last:dates.length?dates[dates.length-1]:"",
             everItems:all.length, everValue:all.reduce((s,r)=>s+(Number(r.total_price)||0),0),
-            ung, todo, roi:roiOf(mine)};
+            ung, todo, roi:roiOf(mine),
+            sheets, lines:month_.length, good, fall, wait, fallPct, prio, canOffer, why,
+            /* Results sort by the share that fell off; no results yet sorts last. */
+            resKey: decided ? fallPct : -1};
   });
   return rows;
+}
+/* Priority order: 1 before 2 (the rest after), clients that can get a sheet
+   first, then the most room left (priority 1) or the most fell off (2). */
+function clPrioCmp(a, b){
+  const ra=a.prio||3, rb=b.prio||3;
+  if(ra!==rb) return ra-rb;
+  if(a.canOffer!==b.canOffer) return a.canOffer ? -1 : 1;
+  if(ra===2 && a.fallPct!==b.fallPct) return b.fallPct-a.fallPct;
+  return (b.left||0)-(a.left||0) || a.pos-b.pos;
 }
 
 /* Columns of the Clients table that repeat another figure (Value is always
@@ -6554,7 +6607,7 @@ function renderClientReport(){
   const sheetFilter=M.clSheetFilter||"all";
   let rows=clientReport(month);
 
-  const served=rows.filter(r=>r.items>0).length;
+  const served=rows.filter(r=>r.sheets>0).length;
   const totVal=rows.reduce((s,r)=>s+r.value,0);
   const totBud=rows.reduce((s,r)=>s+(r.budget||0),0);
   const lines=rows.reduce((s,r)=>s+r.items,0);
@@ -6573,41 +6626,64 @@ function renderClientReport(){
       bar(totBud?totVal/totBud:0)+'</div>';
 
   if(q) rows=rows.filter(r=>r.code.indexOf(q)>=0);
-  /* The filter chips, counted over what the search leaves. */
-  const nOf={all:rows.length, some:0, none:0, near:0, nobudget:0};
+  /* The filter chips, counted over what the search leaves. Priority is who to
+     make the next offer sheet for: no sheet this month (1), or sheets whose
+     results mostly fell off (2). */
+  const fallTxt=Math.round(M.clFallMin*100)+"%";
+  const nOf={all:rows.length, prio:0, p1:0, p2:0, some:0, near:0, nobudget:0};
   for(const r of rows){
-    if(r.runs>0) nOf.some++; else nOf.none++;
+    if(r.prio) nOf.prio++;
+    if(r.prio===1) nOf.p1++;
+    if(r.prio===2) nOf.p2++;
+    if(r.sheets>0) nOf.some++;
     if(r.budget && r.used>0.85) nOf.near++;
     if(r.budget===null) nOf.nobudget++;
   }
   const chips=el("cl-chips");
-  if(chips) chips.innerHTML=[["all","All",""],["some","Served","Has a sheet in "+mLabel],
-      ["none","Not served","No sheet in "+mLabel],["near","Near limit","Over 85% of the budget used"],
-      ["nobudget","No budget","No budget on record"]]
-    .filter(c=>c[0]!=="nobudget" || nOf.nobudget || sheetFilter==="nobudget")
-    .map(c=>'<button class="ui-chip" type="button" data-clf="'+c[0]+'" aria-pressed="'+(sheetFilter===c[0])+'"'+
-      (c[2]?' title="'+c[2]+'"':'')+'>'+c[1]+'<em>'+nOf[c[0]]+'</em></button>').join('');
-  if(sheetFilter==="none")     rows=rows.filter(r=>r.runs===0);
-  if(sheetFilter==="some")     rows=rows.filter(r=>r.runs>0);
+  if(chips){
+    chips.innerHTML=[["all","All",""],
+        ["prio","Priority","No offer sheet in "+mLabel+", or "+fallTxt+"+ of the results fell off"],
+        ["p1","No sheet","No offer sheet at all in "+mLabel],
+        ["p2","Mostly fall offs","Had sheets in "+mLabel+"; "+fallTxt+" or more of the Final Results are not Waiting for invoice or Allocated to Amazon"],
+        ["some","Served","Has a sheet in "+mLabel],["near","Near limit","Over 85% of the budget used"],
+        ["nobudget","No budget","No budget on record"]]
+      .filter(c=>c[0]!=="nobudget" || nOf.nobudget || sheetFilter==="nobudget")
+      .map(c=>'<button class="ui-chip" type="button" data-clf="'+c[0]+'" aria-pressed="'+(sheetFilter===c[0])+'"'+
+        (c[2]?' title="'+esc(c[2])+'"':'')+'>'+c[1]+'<em>'+nOf[c[0]]+'</em></button>').join('')+
+      /* What counts as "mostly": only next to the chips that use it. */
+      (sheetFilter==="prio" || sheetFilter==="p2"
+        ? '<label class="cl-fallmin">fall off at least <select id="cl-fallmin">'+
+            [0.5,0.75,1].map(v=>'<option value="'+v+'"'+(v===M.clFallMin?' selected':'')+'>'+Math.round(v*100)+'%</option>').join('')+
+          '</select></label>' : '');
+  }
+  if(sheetFilter==="prio")     rows=rows.filter(r=>r.prio>0);
+  if(sheetFilter==="p1")       rows=rows.filter(r=>r.prio===1);
+  if(sheetFilter==="p2")       rows=rows.filter(r=>r.prio===2);
+  if(sheetFilter==="none")     rows=rows.filter(r=>r.sheets===0);    // an older saved choice
+  if(sheetFilter==="some")     rows=rows.filter(r=>r.sheets>0);
   if(sheetFilter==="near")     rows=rows.filter(r=>r.budget && r.used>0.85);
   if(sheetFilter==="nobudget") rows=rows.filter(r=>r.budget===null);
 
-  const S=M.clSort||{by:"value", dir:-1};
+  /* The priority chips list in priority order until a column is clicked. */
+  const prioView=sheetFilter==="prio" || sheetFilter==="p1" || sheetFilter==="p2";
+  const S=M.clSort || (prioView ? {by:"prio", dir:1} : {by:"value", dir:-1});
   /* Ties fall back to the roster order, so the list never jitters between
      redraws even when two clients have identical figures. */
   rows.sort((a,b)=>{
-    const x=a[S.by], y=b[S.by];
+    if(S.by==="prio") return clPrioCmp(a,b)*S.dir;
+    const x=a[S.by==="results"?"resKey":S.by], y=b[S.by==="results"?"resKey":S.by];
     const c = typeof x==="string" ? String(x).localeCompare(String(y)) : (x||0)-(y||0);
     return c!==0 ? c*S.dir : a.pos-b.pos;
   });
   const arrow=c=>S.by===c ? (S.dir<0?" \u2193":" \u2191") : "";
   /* Every column the table can show, in order; the ones in M.clHide are left out.
      The sheet filter that used to sit in the month column is the chips now. */
-  const ALLC=[["code","Client"],["used","Budget used"],["left","Left"],["items","Items"],["value","Value"],
+  const ALLC=[["code","Client"],["prio","Priority"],["results","Results in "+mLabel],
+           ["used","Budget used"],["left","Left"],["items","Items"],["value","Value"],
            ["roi","ROI"],["everValue","All time"],["holding","Holding"],["ung","Ungated"],["todo","To check"],
            ["last","Last sheet"],["runs","Sheets in "+mLabel]];
   const C=ALLC.filter(c=>!M.clHide.has(c[0]));
-  const LEFT={code:1, used:1, last:1};
+  const LEFT={code:1, prio:1, results:1, used:1, last:1};
   const head='<tr><th class="rank"><input type="checkbox" id="cl-all" '+
       (M.picked===null?'checked':'')+' title="Tick to cover every client"></th>'+
     '<th class="rank">#</th>'+
@@ -6615,6 +6691,18 @@ function renderClientReport(){
 
   const cell={
     code:     r=>'<td class="c">'+r.code+'</td>',
+    prio:     r=>'<td class="cl-prio">'+(r.prio===1 ? '<span class="ui-pill bad">1 · no sheet</span>'
+                   : r.prio===2 ? '<span class="ui-pill thin">2 · fall offs</span>' : '<span class="dim">—</span>')+
+                 (r.prio && !r.canOffer ? '<small class="dim" title="An offer sheet needs a budget with at least the minimum order left, and Ungated ASINs">'+
+                   esc(r.why)+'</small>' : '')+'</td>',
+    results:  r=>'<td class="cl-res">'+(r.lines
+                   ? '<span>'+r.good.toLocaleString()+' good · <b>'+r.fall.toLocaleString()+' fall off</b>'+
+                     (r.wait?' · '+r.wait.toLocaleString()+' no result yet':'')+'</span>'+
+                     /* Red at the chosen "mostly" share, so the colour matches priority 2;
+                        rounded down so 74.9% never reads as 75%. */
+                     (r.good+r.fall ? ' <span class="ui-pill '+(r.fallPct>=M.clFallMin?'bad':r.fallPct>=M.clFallMin/2?'thin':'good')+'">'+
+                       Math.floor(r.fallPct*100)+'% fell off</span>' : '')
+                   : '<span class="dim">no sheet</span>')+'</td>',
     used:     r=>'<td class="bu">'+clBudgetCell(r)+'</td>',
     left:     r=>'<td class="n">'+(r.left===null?'\u2014':cash(r.left))+'</td>',
     items:    r=>'<td class="n">'+r.items.toLocaleString()+'</td>',
@@ -6685,8 +6773,9 @@ function renderClientReport(){
     const th=ev.target.closest("th.cs");
     if(th){
       const by=th.dataset.cs;
-      M.clSort = (M.clSort&&M.clSort.by===by) ? {by, dir:-M.clSort.dir}
-                                              : {by, dir: by==="code"?1:-1};
+      /* Against the order on screen, which may be a chip's default. */
+      M.clSort = (S.by===by) ? {by, dir:-S.dir}
+                             : {by, dir: (by==="code"||by==="prio")?1:-1};
       return renderClientReport();
     }
     const tr=ev.target.closest("tr[data-cl]");
@@ -7767,7 +7856,17 @@ function init(){
      with the table, so their clicks are caught on the container. */
   if(el("cl-chips")) el("cl-chips").addEventListener("click", function(e){
     var b=e.target.closest("button[data-clf]"); if(!b) return;
-    M.clSheetFilter=b.dataset.clf; renderClientReport();
+    M.clSheetFilter=b.dataset.clf;
+    /* The priority chips open in priority order. */
+    if(/^(prio|p1|p2)$/.test(M.clSheetFilter)) M.clSort=null;
+    renderClientReport();
+  });
+  /* How much has to have fallen off for priority 2. */
+  if(el("cl-chips")) el("cl-chips").addEventListener("change", function(e){
+    if(e.target.id!=="cl-fallmin") return;
+    M.clFallMin=Number(e.target.value)||0.5;
+    try{ localStorage.setItem(CL_FALL_KEY, String(M.clFallMin)); }catch(_){}
+    renderClientReport();
   });
   if(el("goods-chips")) el("goods-chips").addEventListener("click", function(e){
     var b=e.target.closest("button[data-gf]"); if(!b) return;
