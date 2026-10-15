@@ -6519,8 +6519,11 @@ function clientReport(month){
     const month_=M.ledger.filter(r=>r.store_code===code && monthOf(r)===month);
     let good=0, fall=0, wait=0;
     for(const r of month_){ const k=clResult(r); if(k==="good") good++; else if(k==="fall") fall++; else wait++; }
+    /* The share of ALL of the month's lines that fell off, not only of those
+       with a result: early in a month most lines have none yet, and two fall
+       offs out of fourteen lines is not "mostly fall offs". */
     const sheets=new Set(month_.map(r=>r.batch_id)).size, decided=good+fall;
-    const fallPct=decided ? fall/decided : 0;
+    const fallPct=month_.length ? fall/month_.length : 0;
     const all=M.ledger.filter(r=>r.store_code===code && !r.released_at);
     const mine=all.filter(r=>monthOf(r)===month);
     const value=mine.reduce((s,r)=>s+(Number(r.total_price)||0),0);
@@ -6539,7 +6542,7 @@ function clientReport(month){
     /* Priority for the next offer sheet: 1 had no sheet this month, 2 had
        sheets but most of what came back fell off. canOffer: a sheet can
        actually be made (a budget, and Ungated ASINs to offer). */
-    const prio = !sheets ? 1 : (decided && fallPct>=M.clFallMin) ? 2 : 0;
+    const prio = !sheets ? 1 : (fall && fallPct>=M.clFallMin) ? 2 : 0;
     /* Room for a sheet: at least the minimum order left in this month's budget. */
     const minOrder=(M.cfg && M.cfg.minOrder) || 0;
     const canOffer = !!budget && ung>0 && (left||0)>=minOrder;
@@ -6553,7 +6556,7 @@ function clientReport(month){
             ung, todo, roi:roiOf(mine),
             sheets, lines:month_.length, good, fall, wait, fallPct, prio, canOffer, why,
             /* Results sort by the share that fell off; no results yet sorts last. */
-            resKey: decided ? fallPct : -1};
+            resKey: month_.length ? fallPct : -1, decided};
   });
   return rows;
 }
@@ -6642,9 +6645,9 @@ function renderClientReport(){
   const chips=el("cl-chips");
   if(chips){
     chips.innerHTML=[["all","All",""],
-        ["prio","Priority","No offer sheet in "+mLabel+", or "+fallTxt+"+ of the results fell off"],
+        ["prio","Priority","No offer sheet in "+mLabel+", or "+fallTxt+"+ of the month's lines fell off"],
         ["p1","No sheet","No offer sheet at all in "+mLabel],
-        ["p2","Mostly fall offs","Had sheets in "+mLabel+"; "+fallTxt+" or more of the Final Results are not Waiting for invoice or Allocated to Amazon"],
+        ["p2","Mostly fall offs","Had sheets in "+mLabel+"; "+fallTxt+" or more of the month's lines fell off (Final Result not Waiting for invoice or Allocated to Amazon)"],
         ["some","Served","Has a sheet in "+mLabel],["near","Near limit","Over 85% of the budget used"],
         ["nobudget","No budget","No budget on record"]]
       .filter(c=>c[0]!=="nobudget" || nOf.nobudget || sheetFilter==="nobudget")
@@ -6700,8 +6703,9 @@ function renderClientReport(){
                      (r.wait?' · '+r.wait.toLocaleString()+' no result yet':'')+'</span>'+
                      /* Red at the chosen "mostly" share, so the colour matches priority 2;
                         rounded down so 74.9% never reads as 75%. */
-                     (r.good+r.fall ? ' <span class="ui-pill '+(r.fallPct>=M.clFallMin?'bad':r.fallPct>=M.clFallMin/2?'thin':'good')+'">'+
-                       Math.floor(r.fallPct*100)+'% fell off</span>' : '')
+                     (r.fall ? ' <span class="ui-pill '+(r.fallPct>=M.clFallMin?'bad':r.fallPct>=M.clFallMin/2?'thin':'good')+'"'+
+                       ' title="Share of the month’s '+r.lines.toLocaleString()+' lines that fell off">'+
+                       Math.floor(r.fallPct*100)+'% of lines fell off</span>' : '')
                    : '<span class="dim">no sheet</span>')+'</td>',
     used:     r=>'<td class="bu">'+clBudgetCell(r)+'</td>',
     left:     r=>'<td class="n">'+(r.left===null?'\u2014':cash(r.left))+'</td>',
