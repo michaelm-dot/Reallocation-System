@@ -4901,8 +4901,8 @@ function allocate(excluded, banned){
   }
   for(const c of M.stores) after[c]=remaining[c];
   /* Tracking codes run once through the batch rather than restarting per
-     client, so the first sheet might be M2026-09-16_1 to _12 and the next
-     one picks up at _13. Client order decides who gets which stretch. */
+     client, so the first sheet might be 2026-10-16_M1 to _M12 and the next
+     one picks up at _M13. Client order decides who gets which stretch. */
   const offset={}; let run=0;
   for(const c of M.stores){ offset[c]=run; run+=assigned[c].length; }
   const lines=Object.values(assigned).reduce((s,v)=>s+v.length,0);
@@ -4974,9 +4974,15 @@ const SHEET_HEADERS=["Store Code","Tracking Code","ASIN","ASIN Eligible","ASIN D
 const SHEET_WIDTHS=[11,16,14,12,12,13,16,11,22,14,14,15,12,9,15,12,24,16];
 const MONEY_FMT='$#,##0.00;($#,##0.00);-';
 
-/* M2026-09-16_13 — the M marks it as a manual offer sheet, and the number
-   carries on from wherever the previous client's sheet finished. */
-function trackCode(date, n){ return "M"+date+"_"+n; }
+/* 2026-10-16_M13 — the M marks it as a manual offer sheet, and the number
+   carries on from wherever the previous client's sheet finished. Before
+   2026-10-16 the M led (M2026-10-09_13); those codes stay as they were, since
+   OMS knows them by that name. The OMS Portal keeps a code ending in _M<n> as
+   it is and treats it as manual (it used to put an M in front of any code
+   without one). */
+function trackCode(date, n){ return date+"_M"+n; }
+/* The running number at the end of a code, in either style. */
+function trackNum(code){ const m=String(code||"").match(/_M?(\d+)$/); return m ? Number(m[1]) : NaN; }
 
 function fillSheet(ws, code, items, date, offset){
   offset = offset || 0;
@@ -4998,7 +5004,9 @@ function fillSheet(ws, code, items, date, offset){
   });
   items.forEach((r,i)=>{
     const row=3+i;
-    const vals=[code,trackCode(date, offset+i+1),r.asin,true,true,+r.total.toFixed(2),r.upc,
+    /* A recorded line keeps the code it was recorded with (OMS knows it by
+       that name, whatever the style was then); only a preview makes one up. */
+    const vals=[code,r.code||trackCode(date, offset+i+1),r.asin,true,true,+r.total.toFixed(2),r.upc,
       +r.unitCost.toFixed(2),r.qty,+r.avg90.toFixed(2),r.status,r.notes,r.bundle,
       +r.roi.toFixed(4),+r.ppu.toFixed(2),+r.p30.toFixed(2),r.brand,r.dist];
     vals.forEach((v,j)=>{ const c=ws.getCell(row,j+1); c.value=v; c.font={name:"Arial",size:10}; });
@@ -7459,13 +7467,13 @@ async function _rebuildRun(run, onProgress){
       String(a.tracking_code).localeCompare(String(b.tracking_code),undefined,{numeric:true}));
     const items=rows.map(r=>{
       const m=meta.get(r.asin)||{};
-      return {asin:r.asin, total:Number(r.total_price)||0, unitCost:Number(r.unit_cost)||0,
+      return {asin:r.asin, code:r.tracking_code||"", total:Number(r.total_price)||0, unitCost:Number(r.unit_cost)||0,
               qty:r.qty||0, upc:m.upc||"", status:m.status||"", notes:m.notes||"",
               avg90:m.avg90||0, bundle:m.bundle||1, ppu:m.ppu||0, roi:m.roi||0,
               p30:m.p30||0, brand:r.brand||m.brand||"", dist:r.distributor||m.dist||""};
     });
     const first=String(rows[0] && rows[0].tracking_code || "");
-    const num=parseInt((first.split("_")[1]||"1"),10);
+    const num=trackNum(first);
     const wb=new ExcelJS.Workbook();
     fillSheet(wb.addWorksheet(code.slice(0,31)), code, items, run.date, (isFinite(num)?num:1)-1);
     await saveBook(wb, code+"_Offer_Sheet_"+run.date+".xlsx");
@@ -7487,13 +7495,13 @@ async function _rebuildSheet(run, code){
     .sort((a,b)=>String(a.tracking_code).localeCompare(String(b.tracking_code),undefined,{numeric:true}));
   const items=rows.map(r=>{
     const m=meta.get(r.asin)||{};
-    return {asin:r.asin, total:Number(r.total_price)||0, unitCost:Number(r.unit_cost)||0,
+    return {asin:r.asin, code:r.tracking_code||"", total:Number(r.total_price)||0, unitCost:Number(r.unit_cost)||0,
             qty:r.qty||0, upc:m.upc||"", status:m.status||"", notes:m.notes||"",
             avg90:m.avg90||0, bundle:m.bundle||1, ppu:m.ppu||0, roi:m.roi||0,
             p30:m.p30||0, brand:r.brand||m.brand||"", dist:r.distributor||m.dist||""};
   });
   const first=rows.length ? String(rows[0].tracking_code||"") : "";
-  const n=parseInt((first.split("_")[1]||"1"),10);
+  const n=trackNum(first);
   const wb=new ExcelJS.Workbook();
   fillSheet(wb.addWorksheet(code.slice(0,31)), code, items, run.date, (isFinite(n)?n:1)-1);
   await saveBook(wb, code+"_Offer_Sheet_"+run.date+".xlsx");
