@@ -7659,7 +7659,7 @@ function leaveMos(){
 function enterPr(){
   document.body.classList.add("pr-on");
   const f=el("pr-frame");
-  if(f && !f.getAttribute("src")) f.setAttribute("src", "pr.html?v=1.2");
+  if(f && !f.getAttribute("src")) f.setAttribute("src", "pr.html?v=1.3");
   else{
     /* It opened before sign-in finished (or lost the database): load it again. */
     try{ const w=f && f.contentWindow; if(w && w.PR && w.PR.cloud && w.PR.cloud.error) w.location.reload(); }catch(e){}

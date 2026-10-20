@@ -17,6 +17,11 @@
   .distpick select{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--accent);background:var(--panel2);color:var(--text);font:inherit;font-size:13px}
   textarea.cell{width:100%;max-width:560px;text-align:left;font:inherit;font-size:13px;resize:vertical}
   tr.activebatch td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+  .nbform{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+  .nbform label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  .nbform select,.nbform input{padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font:inherit;font-size:13px;max-width:100%}
+  .nbform select{min-width:220px}.nbform input{width:320px}
+  .nbhint{font-size:12.5px;color:var(--muted);margin:8px 0 0}.nbhint:empty{display:none}.nbhint.warn{color:var(--warn)}.nbhint.bad{color:var(--bad)}
   body{background:var(--bg);color:var(--text);font:14px/1.45 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
   a{color:var(--accent)}
   .app{display:flex;min-height:100vh}
@@ -135,7 +140,7 @@
 <div class="app">
   <aside class="side">
     <div class="brand"><div class="logo">PR</div><div><b>PR Tool</b><span>Product Research</span></div></div>
-    <div class="distpick"><label for="selDist">Distributor</label><select id="selDist"></select></div>
+    <div class="distpick"><label for="selDist">Batch</label><select id="selDist"></select></div>
     <div class="navlabel">Process</div>
     <nav class="nav" id="nav">
       <a data-view="upload"><span class="step">1</span>Upload<em id="bUpload"></em></a>
@@ -147,7 +152,7 @@
     <div class="foot">
       <div class="batch" id="batchInfo"></div>
       <button class="btn" id="btnTheme" type="button">Light mode</button>
-      <button class="btn danger" id="btnClear" type="button">Clear batch</button>
+      <button class="btn danger" id="btnDelete" type="button">Delete batch</button>
       <div class="ver" id="ver"></div>
     </div>
   </aside>
@@ -164,7 +169,7 @@
 <script>
 (function () {
 'use strict';
-const VERSION = 'v1.2 · 2026-10-20';
+const VERSION = 'v1.3 · 2026-10-21';
 const LS_THEME = 'prtool.theme';
 // Inside the Reallocation desk this page runs in a frame and the desk lends its signed-in Supabase client
 // (window.PR_HOST). Then batches live in the shared database; opened on its own, the page uses this browser.
@@ -213,8 +218,8 @@ const str = v => (v == null ? '' : String(v).trim());
 const isBlank = v => v == null || (typeof v === 'string' && v.trim() === '');
 const isEmptyLike = v => isBlank(v) || /^(no|false|0|-|n\/a|na|none)$/i.test(String(v).trim());
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
-// "1 ASIN" / "2 ASINs", and the matching verb.
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+// "1 ASIN" / "2 ASINs", and the matching verb. n is escaped: counts from a shared row are not trusted as markup.
+const plural = (n, word) => `${esc(n)} ${word}${n === 1 ? '' : 's'}`;
 const isAre = n => (n === 1 ? 'is' : 'are');
 const hasHave = n => (n === 1 ? 'has' : 'have');
 
@@ -446,13 +451,16 @@ const clone = o => JSON.parse(JSON.stringify(o));
 // The team's distributor list lives in Supabase (pr_settings), not in this public file.
 const DEFAULT_DISTRIBUTORS = [];
 
-// Storage: shared settings in one key and one key per distributor batch. The picked distributor, view and
-// filters belong to the tab (sessionStorage), so two tabs can work on two distributors at the same time.
-const LS_V1 = 'prtool.v1'; // single-batch save from before distributors; moved once by migrateV1()
-const LS_META = 'prtool.v2.meta';
-const LS_BATCH = 'prtool.v2.batch:';
-const SS_TAB = 'prtool.v2.tab';
+// Storage: shared settings in one key and one key per named batch (LS_BATCH + its name; the record holds its
+// distributor). The open batch's name, the view and the filters belong to the tab (sessionStorage), so two tabs
+// can work on two batches at the same time.
+const LS_V1 = 'prtool.v1'; // single-batch save from before distributors; migrateV1() moves it into LS_BATCH_V2, migrateV2() on
+const LS_META = 'prtool.v2.meta'; // { settings, settingsRev, last (the last open batch's name), migratedV1 }
+const LS_BATCH = 'prtool.v3.batch:';
+const LS_BATCH_V2 = 'prtool.v2.batch:'; // legacy: one batch per distributor (key = distributor); read only by the migrations
+const SS_TAB = 'prtool.v2.tab'; // { batch, view, filters }
 const STORAGE_LIMIT = 5000000; // roughly what a browser allows per site, in characters
+const NAME_MAX = 200; // batch and distributor names; the database allows the same length
 const BATCH_KEYS = ['upload', 'keepa', 'profit', 'qc'];
 const freshBatch = () => ({ upload: null, keepa: { rows: [], uploads: [] }, qc: {}, profit: null, dataRev: '' });
 const freshSettings = () => Object.assign(clone(DEFAULT_SETTINGS), { distributors: DEFAULT_DISTRIBUTORS.slice() });
@@ -460,7 +468,59 @@ const freshFilters = () => ({ keepa: 'all', qc: 'all', profit: 'all' });
 // Same distributor when the names match ignoring case, spaces and punctuation ("ABC DC1" = "Abc dc-1").
 // A name with no letters or digits falls back to its trimmed lowercase text.
 const distKey = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '') || String(s || '').trim().toLowerCase();
-const matchDistributor = (text, list) => (distKey(text) ? list.find(d => distKey(d) === distKey(text)) || '' : '');
+// The endings of a name, whole words only ("ABC Foods DC1" -> "foods dc1", "dc1"), compared like distKey.
+const tailKeys = s => { const w = str(s).split(/\s+/); return w.slice(1).map((x, i) => distKey(w.slice(i + 1).join(' '))); };
+// The list entry a file's "Distributor:" text means: the same name, else the ONE entry ending with it as whole
+// words ("DC1" -> "ABC DC1", "dc-1" too, never "C1"). With "ABC DC1" and "XYZ DC1" both listed it stays unknown ('').
+function resolveDistributor(text, list) {
+  const k = distKey(text);
+  if (!k) return '';
+  const exact = list.find(d => distKey(d) === k);
+  if (exact) return exact;
+  const ends = list.filter(d => tailKeys(d).includes(k));
+  return ends.length === 1 ? ends[0] : '';
+}
+// An Upload Format fits a batch when the distributor names match, or one ends with the other as whole words
+// (no list needed, so a batch whose distributor is off the list compares too). A blank name fits anything.
+function distMatches(a, b) {
+  const ka = distKey(a), kb = distKey(b);
+  if (!ka || !kb || ka === kb) return true;
+  return tailKeys(a).includes(kb) || tailKeys(b).includes(ka);
+}
+// Batch names are free text: only normalised (NFC, no control or format characters such as zero-width, bidi
+// marks or soft hyphens, single spaces).
+const normName = s => String(s == null ? '' : s).normalize('NFC').replace(/\s+/g, ' ')
+  .replace(/[\p{Cc}\p{Cf}]/gu, '').replace(/\s+/g, ' ').trim();
+const cutName = (s, n) => (s.length <= n ? s : s.slice(0, n).replace(/[\ud800-\udbff]$/, '').trim()); // never half a character
+const withSuffix = (base, n) => { const sfx = ` (${n})`; return cutName(base, NAME_MAX - sfx.length) + sfx; };
+// A taken name (ignoring case) gets " (2)", " (3)", …; a " (n)" typed at the end is replaced, and only the base
+// is cut to fit NAME_MAX, never the suffix.
+function uniqueName(name, names) {
+  const taken = new Set(names.map(n => String(n).toLowerCase()));
+  name = cutName(name, NAME_MAX);
+  if (!taken.has(name.toLowerCase())) return name;
+  const base = name.replace(/ \(\d+\)$/, '');
+  for (let n = 2; ; n++) { const c = withSuffix(base, n); if (!taken.has(c.toLowerCase())) return c; }
+}
+// "<Distributor> MM-DD-YYYY" (local date); a long distributor name is cut, never the date.
+const autoName = (dist, t) => cutName(dist, NAME_MAX - 11) + ' ' + mmddyyyy(t);
+function mmddyyyy(t) { const d = new Date(t); return String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + '-' + d.getFullYear(); }
+// newRev() starts with Date.now() in base 36 (8 characters until 2059): the time of a batch's last change.
+// Anything else (hand-written revs, '') gives null.
+function revTime(rev) {
+  if (!/^[0-9a-z]{8}/.test(rev || '')) return null;
+  const t = parseInt(rev.slice(0, 8), 36);
+  return t >= Date.UTC(2026, 0, 1) && t <= Date.now() + 864e5 ? t : null;
+}
+function uuid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128; // version 4, variant 1
+  const h = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+const nowIso = () => new Date().toISOString();
+const isQuota = e => !!e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014);
 // Adds default categories introduced after `fromVersion`, unless the user already has that category.
 function upgradeLimits(S, fromVersion) {
   for (let v = fromVersion + 1; v <= LIMITS_VERSION; v++) {
@@ -473,13 +533,17 @@ function upgradeLimits(S, fromVersion) {
 // With storage blocked (strict privacy settings) even reading `localStorage` throws, so always go through store().
 const store = name => { try { return window[name] || null; } catch (e) { return null; } };
 function readJSON(storeName, key) { try { const s = store(storeName), raw = s && s.getItem(key); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
+// The counts a batch shows are made numbers (a missing one stays missing): a shared row can be written by any
+// teammate, so none of it reaches the page as markup. Files parsed here always have numbers already.
+const toCounts = (o, keys) => { if (o && typeof o === 'object') keys.forEach(k => { if (o[k] != null) o[k] = Number(o[k]) || 0; }); return o; };
 function normBatch(b) {
   b = b || {};
   const k = b.keepa || {};
+  const uploads = Array.isArray(k.uploads) ? k.uploads : (k.files || []).map(name => ({ name }));
   return {
-    upload: b.upload || null,
-    keepa: { rows: Array.isArray(k.rows) ? k.rows : [], uploads: Array.isArray(k.uploads) ? k.uploads : (k.files || []).map(name => ({ name })) },
-    qc: b.qc && typeof b.qc === 'object' ? b.qc : {}, profit: b.profit || null, dataRev: b.dataRev || ''
+    upload: toCounts(b.upload || null, ['count', 'unique', 'dups', 'noPrice']),
+    keepa: { rows: Array.isArray(k.rows) ? k.rows : [], uploads: uploads.map(x => toCounts(x, ['rows', 'added', 'replaced', 'lossy'])) },
+    qc: b.qc && typeof b.qc === 'object' ? b.qc : {}, profit: toCounts(b.profit || null, ['dups']), dataRev: b.dataRev || ''
   };
 }
 function loadMeta() {
@@ -490,13 +554,31 @@ function loadMeta() {
   if (!Array.isArray(S.distributors) || !S.distributors.length) S.distributors = DEFAULT_DISTRIBUTORS.slice();
   return { settings: S, settingsRev: m.settingsRev || '', last: m.last || '', migratedV1: !!m.migratedV1 };
 }
-const loadBatch = name => normBatch(readJSON('localStorage', LS_BATCH + name));
-const batchOf = s => ({ upload: s.upload, keepa: s.keepa, qc: s.qc, profit: s.profit, dataRev: s.dataRev });
+// A local batch record: { id, name, distributor, createdAt, savedAt, from, fromRev, upload, keepa, qc, profit, dataRev }.
+// from/fromRev name the legacy key (and its dataRev) a migrated batch came from, so a migration never runs twice.
+function normRecord(r, name) {
+  const o = r && typeof r === 'object' ? r : {};
+  return Object.assign(normBatch(o), { id: str(o.id), name, distributor: str(o.distributor), createdAt: str(o.createdAt),
+    savedAt: str(o.savedAt), from: str(o.from), fromRev: str(o.fromRev) });
+}
+// null when the batch does not exist (deleted, or never created): a missing batch is never opened as an empty one.
+const loadBatch = name => { const r = readJSON('localStorage', LS_BATCH + name); return r ? normRecord(r, name) : null; };
+const newRecord = (name, dist) => { const at = nowIso(); return Object.assign({ id: uuid(), name, distributor: dist, createdAt: at, savedAt: at, from: '', fromRev: '' }, freshBatch(), { dataRev: newRev() }); };
+const batchOf = s => ({ id: s.batchInfo.id, name: s.batch, distributor: s.batchInfo.distributor, createdAt: s.batchInfo.createdAt, savedAt: nowIso(),
+  from: s.batchInfo.from, fromRev: s.batchInfo.fromRev, upload: s.upload, keepa: s.keepa, qc: s.qc, profit: s.profit, dataRev: s.dataRev });
 function setBatch(b) { state.upload = b.upload; state.keepa = b.keepa; state.qc = b.qc; state.profit = b.profit; state.dataRev = b.dataRev; }
+// The open batch: its name (state.batch, '' = none) and identity (state.batchInfo), then its data.
+function setOpen(rec) {
+  state.batch = rec ? rec.name : '';
+  state.batchInfo = rec ? { id: rec.id || '', distributor: rec.distributor || '', createdAt: rec.createdAt || '', from: rec.from || '',
+    fromRev: rec.fromRev || '', memoryOnly: !!rec.memoryOnly } : null;
+  setBatch(rec || freshBatch());
+}
 
-// One-time move of a v1 save (one batch for everything) into the per-distributor layout. The batch goes to the
-// distributor named in its Upload Format. The v1 key is removed only once the move succeeded (meta.migratedV1);
-// if storage is too full to copy, the data is moved instead, and put back if even that fails.
+// One-time move of a v1 save (one batch for everything) into the legacy per-distributor layout (LS_BATCH_V2),
+// which migrateV2() then turns into a named batch in the same start-up. The batch goes to the distributor named
+// in its Upload Format. The v1 key is removed only once the move succeeded (meta.migratedV1); if storage is too
+// full to copy, the data is moved instead, and put back if even that fails.
 let migrationFailed = false;
 function migrateV1() {
   const ls = store('localStorage');
@@ -514,25 +596,84 @@ function migrateV1() {
   const b = normBatch(old);
   const hasData = !!(b.upload || b.keepa.rows.length || b.profit || Object.keys(b.qc).length);
   const fileDist = b.upload ? b.upload.distributor : '';
-  let name = hasData ? (matchDistributor(fileDist, S.distributors) || str(fileDist) || 'Unassigned') : '';
+  let name = hasData ? (resolveDistributor(fileDist, S.distributors) || str(fileDist) || 'Unassigned') : '';
   // Never overwrite an existing batch: use "<name> (old)", "<name> (old 2)", … (so the failure path below
   // only ever removes a key that this call created).
-  if (name && readJSON('localStorage', LS_BATCH + name)) {
+  if (name && readJSON('localStorage', LS_BATCH_V2 + name)) {
     const base = name;
-    for (let i = 1; readJSON('localStorage', LS_BATCH + name); i++) name = `${base} (old${i > 1 ? ' ' + i : ''})`;
+    for (let i = 1; readJSON('localStorage', LS_BATCH_V2 + name); i++) name = `${base} (old${i > 1 ? ' ' + i : ''})`;
   }
   const batchOut = hasData ? JSON.stringify(Object.assign(b, { dataRev: newRev() })) : null;
   const metaOut = JSON.stringify({ settings: S, settingsRev: newRev(), last: name || (meta && meta.last) || '', migratedV1: true });
-  const write = () => { if (batchOut) ls.setItem(LS_BATCH + name, batchOut); ls.setItem(LS_META, metaOut); ls.removeItem(LS_V1); };
+  const write = () => { if (batchOut) ls.setItem(LS_BATCH_V2 + name, batchOut); ls.setItem(LS_META, metaOut); ls.removeItem(LS_V1); };
   try { write(); return; } catch (e) { /* probably full: try moving instead of copying */ }
   try { ls.removeItem(LS_V1); write(); } catch (e) {
-    try { if (batchOut) ls.removeItem(LS_BATCH + name); ls.setItem(LS_V1, raw); } catch (e2) { /* nothing more to do */ }
+    try { if (batchOut) ls.removeItem(LS_BATCH_V2 + name); ls.setItem(LS_V1, raw); } catch (e2) { /* nothing more to do */ }
     migrationFailed = true;
   }
 }
 
-// Distributors that have a saved batch, with counts for the picker and the batch table (parsed once per change).
-const summaryCache = {};
+// Legacy per-distributor batches (LS_BATCH_V2) become named batches "<distributor> MM-DD-YYYY" (the date of their
+// last save). No flag: the legacy keys themselves are the to-do list, checked on every start-up. Each step is
+// deterministic (sorted keys; name, record and id come only from the legacy data) and stamped with its source
+// (from/fromRev), so two tabs starting at once write the same bytes and a second run stops at the batch it
+// already made. The legacy key is removed only if it still holds what was read; when storage is too full to
+// copy, the data is moved instead and put back if even that fails.
+function migrateV2() {
+  const ls = store('localStorage');
+  if (!ls) return;
+  const keys = [], taken = new Set();
+  for (let i = 0; i < ls.length; i++) {
+    const k = ls.key(i);
+    if (k && k.startsWith(LS_BATCH_V2)) keys.push(k);
+    else if (k && k.startsWith(LS_BATCH)) taken.add(k.slice(LS_BATCH.length).toLowerCase());
+  }
+  if (!keys.length) return;
+  keys.sort();
+  const m = loadMeta(), list = (m ? m.settings : freshSettings()).distributors, meta = readJSON('localStorage', LS_META);
+  let last = '';
+  for (const key of keys) {
+    let raw = null, old = null;
+    try { raw = ls.getItem(key); } catch (e) { continue; }
+    if (raw == null) continue; // another tab finished it
+    try { old = JSON.parse(raw); } catch (e) { continue; } // unreadable: leave it alone
+    if (!old || typeof old !== 'object') continue;
+    const dropOld = () => { try { if (ls.getItem(key) === raw) ls.removeItem(key); } catch (e) { /* ignore */ } };
+    const b = normBatch(old), legacy = key.slice(LS_BATCH_V2.length);
+    if (!(b.upload || b.keepa.rows.length || b.profit || Object.keys(b.qc).length)) { dropOld(); continue; } // nothing to keep
+    const stripped = normName(legacy.replace(/ \(old(?: \d+)?\)$/, '')), dist = resolveDistributor(stripped, list) || stripped || 'Unassigned';
+    const t = revTime(b.dataRev) || Date.now(), base = autoName(dist, t);
+    let name = '', done = false;
+    for (let n = 1; n < 1000 && !name; n++) {
+      const cand = n === 1 ? base : withSuffix(base, n);
+      let cur = null;
+      try { const r = ls.getItem(LS_BATCH + cand); cur = r == null ? null : JSON.parse(r); } catch (e) { cur = {}; } // unreadable = taken
+      if (cur && cur.from === key && cur.fromRev === b.dataRev) { name = cand; done = true; } // made by an earlier run or another tab
+      else if (!cur && !taken.has(cand.toLowerCase())) name = cand;
+    }
+    if (!name) continue;
+    if (!done) {
+      const at = new Date(t).toISOString();
+      const out = JSON.stringify(Object.assign({ id: b.dataRev || 'v2:' + legacy, name, distributor: dist, createdAt: at, savedAt: at, from: key, fromRev: b.dataRev }, b));
+      try { ls.setItem(LS_BATCH + name, out); } catch (e) {
+        try { ls.removeItem(key); ls.setItem(LS_BATCH + name, out); } catch (e2) {
+          try { if (ls.getItem(key) == null) ls.setItem(key, raw); } catch (e3) { /* nothing more to do */ }
+          migrationFailed = true;
+          continue;
+        }
+      }
+    }
+    taken.add(name.toLowerCase());
+    dropOld();
+    if (meta && meta.last === legacy) last = name;
+  }
+  if (last) { meta.last = last; try { ls.setItem(LS_META, JSON.stringify(meta)); } catch (e) { /* the old pointer just opens nothing */ } }
+}
+
+// Every batch, newest first, with counts for the picker and the batch table. Locally each stored value is parsed
+// once per change; the cache is a Map because batch names are free text (even "__proto__").
+const summaryCache = new Map();
+const byNewest = (a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0) || a.name.localeCompare(b.name, undefined, { numeric: true });
 function batchList() {
   const out = [];
   if (CLOUD) cloud.list.forEach(b => out.push(Object.assign({}, b)));
@@ -541,45 +682,64 @@ function batchList() {
       const key = localStorage.key(i);
       if (!key || !key.startsWith(LS_BATCH)) continue;
       const name = key.slice(LS_BATCH.length), raw = localStorage.getItem(key) || '';
-      let c = summaryCache[name];
+      let c = summaryCache.get(name);
       if (!c || c.raw !== raw) {
         let b = null;
         try { b = JSON.parse(raw); } catch (e) { /* unreadable batch: counts stay 0 */ }
-        b = normBatch(b);
-        c = summaryCache[name] = {
-          raw, asins: b.keepa.rows.length, profit: b.profit ? b.profit.rows.length : 0,
-          matched: Object.values(b.qc).filter(q => q && q.match === 'Matched').length
-        };
+        b = normRecord(b, name);
+        c = { raw, id: b.id, distributor: b.distributor, createdAt: b.createdAt, savedAt: b.savedAt,
+          asins: b.keepa.rows.length, profit: b.profit ? b.profit.rows.length : 0,
+          matched: Object.values(b.qc).filter(q => q && q.match === 'Matched').length };
+        summaryCache.set(name, c);
       }
-      out.push({ name, size: raw.length, asins: c.asins, matched: c.matched, profit: c.profit });
+      out.push({ id: c.id, name, distributor: c.distributor, createdAt: c.createdAt, updatedAt: c.savedAt, updatedBy: '',
+        size: raw.length, asins: c.asins, matched: c.matched, profit: c.profit });
     }
   } catch (e) { /* storage blocked */ }
-  // The picked batch may have changes that are not written yet: show its live counts.
-  if (state && state.distributor) {
-    const live = { asins: state.keepa.rows.length, profit: state.profit ? state.profit.rows.length : 0,
+  // The open batch may have changes that are not written yet: show its live counts. It is added when missing
+  // only in the shared database (the list can lag) or when it lives in memory only; a local batch missing from
+  // storage was deleted in another tab and must not show up again.
+  if (state && state.batch) {
+    const info = state.batchInfo || {}, live = { asins: state.keepa.rows.length, profit: state.profit ? state.profit.rows.length : 0,
       matched: Object.values(state.qc).filter(q => q && q.match === 'Matched').length };
-    const cur = out.find(b => b.name === state.distributor);
+    const cur = out.find(b => b.name === state.batch);
     if (cur) Object.assign(cur, live);
-    else if (state.upload || live.asins || live.profit || Object.keys(state.qc).length) out.push(Object.assign({ name: state.distributor, size: 0 }, live));
+    else if (CLOUD || info.memoryOnly) out.push(Object.assign({ id: info.id || '', name: state.batch, distributor: info.distributor || '',
+      createdAt: info.createdAt || '', updatedAt: '', updatedBy: '', size: 0 }, live));
   }
-  return out;
+  return out.sort(byNewest);
 }
 function storageUsed() {
   let n = 0;
   try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('prtool.')) n += k.length + (localStorage.getItem(k) || '').length; } } catch (e) { /* blocked */ }
   return n;
 }
+// Legacy batches migrateV2() could not move yet (storage full): nothing else lists them, so the Batches card
+// does, with their stored size, to be deleted. Name = the legacy key's distributor.
+function legacyLeft() {
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(LS_BATCH_V2)) out.push({ name: k.slice(LS_BATCH_V2.length), size: k.length + (localStorage.getItem(k) || '').length });
+    }
+  } catch (e) { /* storage blocked */ }
+  return out.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+}
 
 let state = null;
 function initState() {
   try { migrateV1(); } catch (e) { migrationFailed = true; }
+  try { migrateV2(); } catch (e) { migrationFailed = true; }
   const m = loadMeta(), tab = readJSON('sessionStorage', SS_TAB) || {};
   state = Object.assign({ settings: m ? m.settings : freshSettings(), settingsRev: m ? m.settingsRev : '', migratedV1: !!(m && m.migratedV1),
-    distributor: '', view: 'upload', filters: freshFilters() }, freshBatch());
+    batch: '', batchInfo: null, view: 'upload', filters: freshFilters() }, freshBatch());
   if (tab.view) state.view = tab.view;
   Object.assign(state.filters, tab.filters || {});
-  state.distributor = (typeof tab.distributor === 'string' ? tab.distributor : (m ? m.last : '')) || '';
-  if (state.distributor) setBatch(loadBatch(state.distributor));
+  // A tab from before named batches holds a distributor ({distributor}): it is ignored. A name that no longer
+  // exists opens nothing.
+  const name = (typeof tab.batch === 'string' ? tab.batch : (m ? m.last : '')) || '';
+  setOpen(name ? loadBatch(name) : null);
 }
 
 // Saving is debounced. `dirty` remembers what this tab changed since its last write, so a write from
@@ -588,7 +748,7 @@ let saveTimer = null, saveFailing = false;
 const dirty = new Set();
 const batchDirty = () => [...dirty].some(k => k !== 'settings' && k !== 'meta');
 const dropBatchDirty = () => [...dirty].forEach(k => { if (k !== 'settings' && k !== 'meta') dirty.delete(k); });
-function writeTab() { try { sessionStorage.setItem(SS_TAB, JSON.stringify({ distributor: state.distributor, view: state.view, filters: state.filters })); } catch (e) { /* ignore */ } }
+function writeTab() { try { sessionStorage.setItem(SS_TAB, JSON.stringify({ batch: state.batch, view: state.view, filters: state.filters })); } catch (e) { /* ignore */ } }
 // Meta and batch are written separately; each one's dirty marks are cleared only when that write succeeds.
 function writeNow() {
   clearTimeout(saveTimer); saveTimer = null;
@@ -597,14 +757,21 @@ function writeNow() {
   if (dirty.has('settings') || dirty.has('meta')) {
     try {
       // migratedV1 is carried over so a later meta write does not re-arm the v1 migration.
-      ls.setItem(LS_META, JSON.stringify({ settings: state.settings, settingsRev: state.settingsRev, last: state.distributor, migratedV1: state.migratedV1 }));
+      ls.setItem(LS_META, JSON.stringify({ settings: state.settings, settingsRev: state.settingsRev, last: state.batch, migratedV1: state.migratedV1 }));
       dirty.delete('settings'); dirty.delete('meta');
     } catch (e) { ok = false; }
   }
+  let gone = false;
   if (batchDirty()) {
-    if (!state.distributor) dropBatchDirty();
-    else try { ls.setItem(LS_BATCH + state.distributor, JSON.stringify(batchOf(state))); dropBatchDirty(); } catch (e) { ok = false; }
+    if (!state.batch) dropBatchDirty();
+    else try {
+      // Batches are created only by Create batch: a missing key means it was deleted (e.g. in another tab), so
+      // this tab's edits are dropped instead of bringing it back.
+      if (!state.batchInfo.memoryOnly && ls.getItem(LS_BATCH + state.batch) == null) gone = true;
+      else { ls.setItem(LS_BATCH + state.batch, JSON.stringify(batchOf(state))); state.batchInfo.memoryOnly = false; dropBatchDirty(); }
+    } catch (e) { ok = false; }
   }
+  if (gone) closeBatch('was deleted in another tab');
   writeTab();
   saveFailing = !ok;
   const w = document.getElementById('saveWarn');
@@ -612,7 +779,7 @@ function writeNow() {
 }
 // dataRev / settingsRev change with every data change, so another tab can tell a real change from its own echo.
 const newRev = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-// keys: 'upload' | 'keepa' | 'profit' | 'qc:<ASIN>' | 'all' (the picked distributor's batch), 'settings', 'meta'
+// keys: 'upload' | 'keepa' | 'profit' | 'qc:<ASIN>' (the open batch), 'settings', 'meta'
 function save(...keys) {
   if (CLOUD && keys.length) cloud.seq++; // a check that is reading right now must not apply what it read
   keys.forEach(k => dirty.add(k));
@@ -628,10 +795,10 @@ function flushSave() {
 window.addEventListener('pagehide', flushSave);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
 
-// Another tab saved this distributor's batch: put this tab's unsaved parts on top of its copy.
+// Another tab saved this batch: put this tab's unsaved parts on top of its copy (its data only; the batch's
+// identity stays this tab's).
 function mergeRemote(s) {
-  if (dirty.has('all')) BATCH_KEYS.forEach(k => { s[k] = state[k]; });
-  else dirty.forEach(k => {
+  dirty.forEach(k => {
     if (k.startsWith('qc:')) { const a = k.slice(3); if (state.qc[a]) s.qc[a] = state.qc[a]; }
     else if (BATCH_KEYS.includes(k)) s[k] = state[k];
   });
@@ -639,48 +806,125 @@ function mergeRemote(s) {
   return s;
 }
 
-// Bumped whenever the picked batch is switched or cleared, so a file that is still loading cannot land in it.
+// Bumped whenever the open batch is switched, created, closed or deleted, so a file that is still loading cannot land in it.
 let batchGen = 0;
 
-// Picking another distributor saves the current batch first, then loads the other one.
-function switchDistributor(name) {
-  if (CLOUD) return cloudSwitch(name); // a Promise of true/false
-  name = name || '';
-  if (name === state.distributor) return true;
+// Leaving the open batch saves it first; a batch that could not be saved is only left after asking.
+function leaveOpen(ask) {
   flushSave();
-  if (batchDirty() && !confirm(`The "${state.distributor}" batch could not be saved. Switch anyway? Its unsaved changes will be lost.`)) {
+  if (batchDirty() && !confirm(`The "${state.batch}" batch could not be saved. ${ask} Its unsaved changes will be lost.`)) {
     const sel = $('selDist');
-    if (sel) sel.value = state.distributor; // the picker still shows the cancelled choice
+    if (sel) sel.value = state.batch; // the picker still shows the cancelled choice
     return false;
   }
+  return true;
+}
+// Opening another batch (by its name) saves the current one first. '' closes the open batch.
+function openBatch(name) {
+  if (CLOUD) return cloudSwitch(name); // a Promise of true/false
+  name = name || '';
+  if (name === state.batch) return true;
+  const rec = name ? loadBatch(name) : null;
+  if (name && !rec) { toast('That batch no longer exists.', true); batchesChanged(); return false; }
+  if (!leaveOpen('Switch anyway?')) return false;
   dropBatchDirty();
   batchGen++;
-  state.distributor = name;
-  setBatch(name ? loadBatch(name) : freshBatch());
+  setOpen(rec);
   search.keepa = search.qc = search.profit = '';
   save('meta');
   derive(); render();
   return true;
 }
-function clearBatch(name) {
-  if (!name) return;
-  if (!confirm(`Clear the "${name}" batch? This removes its Upload Format, Keepa files, QC inputs and Profitability${CLOUD ? ' for everyone on the team' : ''}. Other distributors and Settings are kept.`)) return;
-  if (CLOUD) { cloudClear(name); return; }
+// The distributor must come from the list; the name (after normName) needs 1 to NAME_MAX characters.
+function newBatchError(dist, name) {
+  if (!dist || !state.settings.distributors.includes(dist)) return 'Choose a distributor from the list for the new batch.';
+  if (!name || name.length > NAME_MAX) return `A batch name needs 1 to ${NAME_MAX} characters.`;
+  return '';
+}
+const createdMsg = (asked, got) => (got === asked ? `Created the batch "${got}".` : `"${asked}" already exists, so the batch was created as "${got}".`);
+// A batch is created only here, never by a save: its name is reserved at once (a taken name gets " (2)", …),
+// then it is opened. Returns the name it got, or '' when refused (in the shared database: a Promise of it).
+function createBatch(dist, rawName) {
+  if (CLOUD) return cloudCreateBatch(dist, rawName);
+  const name = normName(rawName), err = newBatchError(dist, name);
+  if (err) { toast(err, true); return ''; }
+  if (!leaveOpen('Create the new batch anyway?')) return '';
+  // Checked and written in one go (no await between), so the name cannot be taken in between.
+  const ls = store('localStorage'), got = uniqueName(name, batchList().map(b => b.name)), rec = newRecord(got, dist);
+  if (ls) {
+    try { ls.setItem(LS_BATCH + got, JSON.stringify(rec)); } catch (e) {
+      toast(isQuota(e) ? 'Browser storage is full: delete batches you no longer need.' : `Could not create the batch: ${e.message || e}`, true);
+      return '';
+    }
+  } else rec.memoryOnly = true; // storage blocked: the batch still works, unsaved (the warning stays up)
+  dropBatchDirty();
+  batchGen++;
+  setOpen(rec);
+  search.keepa = search.qc = search.profit = '';
+  save('meta');
+  derive(); render();
+  const pct = Math.round(storageUsed() / STORAGE_LIMIT * 100);
+  toast(createdMsg(name, got) + (pct >= 80 ? `\nBrowser storage is about ${pct}% full: delete batches you no longer need.` : ''), pct >= 80);
+  return got;
+}
+// The open batch was deleted (here, in another tab or by a teammate): close it. Its unsaved changes are dropped,
+// never written back, so a delete is final.
+function closeBatch(msg, lost) {
+  const name = state.batch, id = state.batchInfo ? state.batchInfo.id : '';
+  lost = !!lost || batchDirty() || (CLOUD && cloud.ops.length > 0);
+  dropBatchDirty();
+  batchGen++;
+  if (CLOUD) {
+    cloud.ops = []; cloud.attempts = []; cloud.qcFields = {}; cloud.inflightQc = new Set();
+    cloud.rev = ''; cloud.qcRev = ''; cloud.saves = []; cloud.loading = false; cloud.failed = '';
+    cloud.list = cloud.list.filter(b => (id ? b.id !== id : b.name !== name));
+    clearCloudLast(name);
+    cloudSaveIdle();
+  }
+  setOpen(null);
+  search.keepa = search.qc = search.profit = '';
+  if (!CLOUD) save('meta'); // meta.last must stop pointing at it
+  derive(); render();
+  if (msg) toast(`"${name}" ${msg}${lost ? '; its unsaved changes here were dropped' : ''}.`, lost);
+}
+function deleteBatch(name) {
+  if (!name) return false;
+  if (!confirm(`Delete the "${name}" batch? Its uploads, QC answers and Profitability import are removed ${CLOUD ? 'for everyone' : 'in this browser'}. Other batches and Settings are kept.`)) return false;
+  if (CLOUD) return cloudDelete(name);
   try { store('localStorage').removeItem(LS_BATCH + name); } catch (e) { /* blocked */ }
-  delete summaryCache[name];
-  if (name === state.distributor) { dropBatchDirty(); batchGen++; setBatch(freshBatch()); derive(); }
+  summaryCache.delete(name);
+  if (name === state.batch) closeBatch();
   if (dirty.size) writeNow(); // space was freed: retry anything that failed to save
   render();
-  toast(`${name}: batch cleared.`);
+  toast(`"${name}" was deleted.`);
+  return true;
+}
+// A legacy batch that was not moved yet (this browser only). The space it frees is used right away: first for
+// this tab's unsaved changes, then to move the other legacy batches.
+function deleteLegacy(name) {
+  if (!confirm(`Delete the earlier "${name}" batch that was not moved yet? Its uploads, QC answers and Profitability import are removed in this browser.`)) return false;
+  try { store('localStorage').removeItem(LS_BATCH_V2 + name); } catch (e) { /* blocked */ }
+  if (dirty.size) writeNow();
+  migrationFailed = false;
+  try { migrateV2(); } catch (e) { migrationFailed = true; }
+  batchesChanged();
+  toast(`"${name}" was deleted.` + (migrationFailed ? '\nStorage is still too full to move the other earlier batches: delete what you no longer need.' : ''), migrationFailed);
+  return true;
 }
 const isEditing = () => { const a = document.activeElement; return !!(a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && a.closest('#content')); };
 let renderPending = false;
 // QC inputs are patched in place, so a full re-render can wait until the user leaves the field.
 // Settings rows are addressed by index, so that page always re-renders at once.
 function renderSoon() { if (isEditing() && state.view !== 'settings') { renderPending = true; renderBadges(); } else render(); }
-document.addEventListener('focusout', () => setTimeout(() => { if (renderPending && !isEditing()) { renderPending = false; render(); } }, 0));
+document.addEventListener('focusout', e => setTimeout(() => {
+  if (renderPending && !isEditing()) { renderPending = false; render(); }
+  else if (e.target.id === 'nbName' && !nb.edited && newBatchCard().isConnected) syncNewBatch(); // an emptied name fills in again
+  if (e.target.id === 'selDist') renderBatchSelect(); // the picker is not rebuilt while it has focus: catch up now
+}, 0));
 // After a batch change from another tab: Settings does not show batch data, so only refresh the sidebar there.
-function refreshAfterBatchChange() { if (state.view === 'settings') { renderBadges(); renderDistSelect(); } else renderSoon(); }
+function refreshAfterBatchChange() { if (state.view === 'settings') { renderBadges(); renderBatchSelect(); } else renderSoon(); }
+// Another batch was created, changed or deleted: the picker, and on Upload the batch table and the New batch name.
+function batchesChanged() { renderBatchSelect(); if (state.view === 'upload') renderSoon(); }
 // Another tab saved: take its copy (keeping this tab's unsaved changes) so neither tab overwrites the other.
 window.addEventListener('storage', e => {
   if (CLOUD || !e.key || !state) return;
@@ -692,18 +936,14 @@ window.addEventListener('storage', e => {
     derive(); renderSoon();
     return;
   }
-  if (!e.key.startsWith(LS_BATCH)) return;
+  if (!e.key.startsWith(LS_BATCH)) return; // legacy keys (old tabs, migrations) are not listed
   const name = e.key.slice(LS_BATCH.length);
-  if (name !== state.distributor) { renderDistSelect(); if (state.view === 'upload') renderSoon(); return; } // another distributor
+  if (!state.batch || name !== state.batch) { batchesChanged(); return; } // another batch
   const hadLocal = batchDirty();
-  if (e.newValue == null) { // cleared in another tab
-    if (hadLocal) return; // this tab's edits will be written back
-    batchGen++;
-    setBatch(freshBatch()); derive(); refreshAfterBatchChange();
-    toast(`${name}: batch cleared in another tab.`);
-    return;
-  }
+  // Deleted in another tab: a delete wins, this tab's edits are dropped (never written back).
+  if (e.newValue == null) { closeBatch('was deleted in another tab'); return; }
   const s = loadBatch(name);
+  if (!s || (s.id && state.batchInfo.id && s.id !== state.batchInfo.id)) { closeBatch('was deleted in another tab'); return; } // gone, or deleted and made again
   if (s.dataRev === state.dataRev) return;
   setBatch(mergeRemote(s));
   derive();
@@ -713,16 +953,21 @@ window.addEventListener('storage', e => {
 });
 
 /* ============================== SHARED DATABASE (inside the Reallocation desk) ============================== */
-// Tables (team-only RLS): pr_settings (one row), pr_batches (one row per distributor: upload, keepa, profit, rev,
-// qc_rev), pr_qc (one row per distributor + ASIN; deleted with its batch). Every read goes through RLS: teammates'
-// changes are picked up by a light check every few seconds (revs only), never through a public channel.
-const LS_CLOUD_LAST = 'prtool.cloud.last';
+// Tables (team-only RLS): pr_settings (one row), pr_batches (one row per named batch: id, name (unique ignoring
+// case), distributor, upload, keepa, profit, rev, qc_rev), pr_qc (one row per batch_id + ASIN; deleted with its
+// batch), and the view pr_batch_list (the batch table, with Matched counts). A batch is found by its name only to
+// open it; after that every read and write uses its id, so a newer batch that took a deleted one's name is never
+// touched. Every read goes through RLS: teammates' changes are picked up by a light check every few seconds
+// (revs only), never through a public channel.
+const LS_CLOUD_LAST = 'prtool.cloud.last'; // the last open batch's name
 const POLL_MS = 6000;
-const cloud = { sb: null, me: null, rev: '', qcRev: '', ops: [], loading: false, failed: '', error: '', saveError: '',
+// ready: signed in and the shared settings read (set just before the start-up open); New batch waits for it.
+const cloud = { sb: null, me: null, ready: false, rev: '', qcRev: '', ops: [], loading: false, failed: '', error: '', saveError: '',
   settingsRev: '', settingsTouched: new Map(), qcFields: {}, inflightQc: new Set(), attempts: [], saves: [], writingBatch: false, seq: 0,
-  list: [], listAt: 0, writing: null, writeAgain: false, retry: null, pollRun: null, pollTimer: null };
+  list: [], listAt: 0, listSeq: 0, writing: null, writeAgain: false, retry: null, pollRun: null, pollTimer: null };
 const errText = e => (e && (e.message || e.details || e.hint)) || String(e);
-const nowIso = () => new Date().toISOString();
+function setCloudLast(name) { try { localStorage.setItem(LS_CLOUD_LAST, JSON.stringify(name)); } catch (e) { /* blocked */ } }
+function clearCloudLast(name) { try { if (readJSON('localStorage', LS_CLOUD_LAST) === name) localStorage.removeItem(LS_CLOUD_LAST); } catch (e) { /* blocked */ } }
 const partsDirty = () => ['upload', 'keepa', 'profit'].some(k => dirty.has(k));
 
 // Settings or QC changed here: in the shared database only the touched settings and QC fields are written,
@@ -740,7 +985,7 @@ function markQc(asin, ...fields) {
 async function cloudInit() {
   cloud.sb = HOST.client ? HOST.client() : null;
   const tab = readJSON('sessionStorage', SS_TAB) || {};
-  state = Object.assign({ settings: freshSettings(), settingsRev: '', migratedV1: true, distributor: '', view: 'upload', filters: freshFilters() }, freshBatch());
+  state = Object.assign({ settings: freshSettings(), settingsRev: '', migratedV1: true, batch: '', batchInfo: null, view: 'upload', filters: freshFilters() }, freshBatch());
   if (tab.view) state.view = tab.view;
   Object.assign(state.filters, tab.filters || {});
   cloud.loading = true; derive(); render();
@@ -752,9 +997,11 @@ async function cloudInit() {
   try { await cloudLoadSettings(); }
   catch (e) { cloud.error = 'Could not read the shared settings: ' + errText(e); cloud.loading = false; derive(); render(); return; }
   refreshBatchList();
-  const last = typeof tab.distributor === 'string' ? tab.distributor : (readJSON('localStorage', LS_CLOUD_LAST) || '');
+  // A remembered name that no longer exists (or a distributor saved before named batches) opens nothing, quietly.
+  const last = typeof tab.batch === 'string' ? tab.batch : (readJSON('localStorage', LS_CLOUD_LAST) || '');
   cloud.loading = false;
-  await cloudOpen(typeof last === 'string' ? last : '');
+  cloud.ready = true; // a create from here on supersedes this open, which is what the user wants
+  await cloudOpen(typeof last === 'string' ? last : '', true);
   cloud.pollTimer = setInterval(() => { if (!cloud.pollRun) cloudPoll(); }, POLL_MS);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) cloudPoll(); });
 }
@@ -762,6 +1009,13 @@ async function cloudInit() {
 function normSettings(raw) {
   raw = raw || {};
   const S = Object.assign(freshSettings(), raw);
+  // Any teammate can write the shared settings: a limit is a whole number or blank (null), a name is text.
+  if (!Array.isArray(S.limits)) S.limits = freshSettings().limits;
+  if (!Number.isFinite(Number(S.bbThreshold))) S.bbThreshold = freshSettings().bbThreshold;
+  S.limits = S.limits.map(L => {
+    const n = L && L.limit != null && L.limit !== '' ? Number(L.limit) : NaN;
+    return { name: String((L && L.name) || ''), limit: Number.isFinite(n) ? Math.round(n) : null };
+  });
   upgradeLimits(S, raw.limitsVersion || 1);
   if (!Array.isArray(S.distributors)) S.distributors = DEFAULT_DISTRIBUTORS.slice();
   return S;
@@ -773,24 +1027,26 @@ async function cloudLoadSettings() {
   cloud.settingsRev = state.settingsRev = (data && data.rev) || '';
 }
 
-async function fetchBatchRow(name) {
-  const { data, error } = await cloud.sb.from('pr_batches').select('upload,keepa,profit,rev,qc_rev,last_saves').eq('distributor', name).maybeSingle();
+// key: { id } (every read once a batch is open) or { name } (only to open it).
+async function fetchBatchRow(key) {
+  const q = cloud.sb.from('pr_batches').select('id,name,distributor,created_at,upload,keepa,profit,rev,qc_rev,last_saves');
+  const { data, error } = await (key.id ? q.eq('id', key.id) : q.eq('name', key.name)).maybeSingle();
   if (error) throw error;
-  const b = normBatch(data || {});
-  return { exists: !!data, upload: b.upload, keepa: b.keepa, profit: b.profit, rev: (data && data.rev) || '', qcRev: (data && data.qc_rev) || '',
-    saves: (data && Array.isArray(data.last_saves)) ? data.last_saves : [] };
+  const d = data || {}, b = normBatch(d);
+  return { exists: !!data, id: d.id || '', name: d.name || '', distributor: d.distributor || '', createdAt: d.created_at || '',
+    upload: b.upload, keepa: b.keepa, profit: b.profit, rev: d.rev || '', qcRev: d.qc_rev || '', saves: Array.isArray(d.last_saves) ? d.last_saves : [] };
 }
-// All QC rows of a distributor, paged (the API returns at most 1000 rows at a time).
-async function fetchQc(name) {
+// All QC rows of a batch, paged (the API returns at most 1000 rows at a time).
+async function fetchQc(id) {
   const qc = {};
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await cloud.sb.from('pr_qc').select('asin,bundle,match').eq('distributor', name).order('asin').range(from, from + 999);
+    const { data, error } = await cloud.sb.from('pr_qc').select('asin,bundle,match').eq('batch_id', id).order('asin').range(from, from + 999);
     if (error) throw error;
     (data || []).forEach(r => { qc[r.asin] = { bundle: r.bundle, match: r.match || '' }; });
     if (!data || data.length < 1000) return qc;
   }
 }
-// The database's QC answers replace this tab's (answers of a cleared batch must not linger), except the
+// The database's QC answers replace this tab's (answers removed by a teammate must not linger), except the
 // ones this tab has not saved yet (marked, or being saved right now).
 function mergeQc(qc) {
   const next = Object.assign({}, qc);
@@ -798,51 +1054,136 @@ function mergeQc(qc) {
   state.qc = next;
 }
 
-// Resolves to false when another pick (or a clear) took over while it was loading.
-async function cloudOpen(name) {
-  const gen = ++batchGen;
-  state.distributor = name || '';
+// Opens a batch by its name (target: a name), or right after creating it by its id (target: { id, name, … }).
+// Resolves to false when it does not exist (any more), or when another pick (or a delete) took over while it was
+// loading. A missing batch opens nothing (with a toast, except at start-up) and is never created by opening it.
+async function cloudOpen(target, quiet) {
+  const gen = ++batchGen, want = typeof target === 'string' ? { name: target } : (target || {});
   cloud.rev = ''; cloud.qcRev = ''; cloud.saves = []; cloud.ops = []; cloud.qcFields = {}; cloud.attempts = []; cloud.failed = '';
   dropBatchDirty();
-  setBatch(freshBatch());
-  cloud.loading = !!name;
+  cloudSaveIdle();
+  setOpen(want.name ? Object.assign({}, want, freshBatch()) : null); // the name shows while it loads; its id may come with the row
+  cloud.loading = !!state.batch;
   writeTab(); derive(); render();
-  if (!name) return true;
+  if (!state.batch) return true;
   try {
     // The row first, then the answers: a qc_rev older than the answers only costs one extra read later,
     // while the other order could miss a teammate's answer.
-    const row = await fetchBatchRow(name);
-    const qc = await fetchQc(name);
+    const row = await fetchBatchRow(want.id ? { id: want.id } : { name: want.name });
     if (gen !== batchGen) return false;
-    setBatch({ upload: row.upload, keepa: row.keepa, profit: row.profit, qc, dataRev: row.rev });
+    if (!row.exists) {
+      clearCloudLast(want.name);
+      cloud.listSeq++; // a list read already under way must not bring it back, so read it again
+      cloud.list = cloud.list.filter(b => (want.id ? b.id !== want.id : b.name !== want.name));
+      refreshBatchList();
+      setOpen(null);
+      if (!quiet) toast(`That batch no longer exists ("${want.name}").`, true);
+      return false;
+    }
+    const qc = await fetchQc(row.id);
+    if (gen !== batchGen) return false;
+    setOpen({ id: row.id, name: row.name, distributor: row.distributor, createdAt: row.createdAt,
+      upload: row.upload, keepa: row.keepa, profit: row.profit, qc, dataRev: row.rev });
     cloud.rev = row.rev; cloud.qcRev = row.qcRev; cloud.saves = row.saves;
   } catch (e) {
-    if (gen === batchGen) cloud.failed = `Could not load "${name}": ${errText(e)}`;
+    if (gen === batchGen) cloud.failed = `Could not load "${state.batch}": ${errText(e)}`;
   } finally {
     if (gen === batchGen) { cloud.loading = false; derive(); render(); }
   }
-  return gen === batchGen && !cloud.failed;
+  return gen === batchGen && !cloud.failed && !!state.batch;
 }
 
 // Saves everything pending first; a batch that cannot be saved is only left behind after asking.
-async function cloudSwitch(name) {
-  name = name || '';
-  if (name === state.distributor) return true;
+async function cloudLeave(ask) {
   await cloudFlush();
   if ((batchDirty() || cloud.ops.length) &&
-    !confirm(`The "${state.distributor}" batch could not be saved (${cloud.saveError || 'no connection'}). Switch anyway? Its unsaved changes will be lost.`)) {
+    !confirm(`The "${state.batch}" batch could not be saved (${cloud.saveError || 'no connection'}). ${ask} Its unsaved changes will be lost.`)) {
     const sel = $('selDist');
-    if (sel) sel.value = state.distributor;
+    if (sel) sel.value = state.batch;
     return false;
   }
+  return true;
+}
+async function cloudSwitch(name) {
+  name = name || '';
+  if (name === state.batch) return true;
+  if (!(await cloudLeave('Switch anyway?'))) return false;
+  // A picked batch a teammate deleted (stale picker entry) leaves the open one open and remembered, like in this
+  // browser. It is checked by the open itself, not before leaving: an extra read up front would keep the old batch
+  // on screen (and Delete batch pointed at it) for a round trip after every pick. The old batch was saved (or its
+  // changes given up) just above, so it is simply opened again.
+  const was = state.batchInfo && state.batchInfo.id ? { id: state.batchInfo.id, name: state.batch, distributor: state.batchInfo.distributor,
+    createdAt: state.batchInfo.createdAt } : null;
   search.keepa = search.qc = search.profit = '';
-  try { localStorage.setItem(LS_CLOUD_LAST, JSON.stringify(name)); } catch (e) { /* blocked */ }
-  return cloudOpen(name);
+  setCloudLast(name);
+  const gen = batchGen + 1, ok = await cloudOpen(name);
+  // Only for a missing row: not when the read failed, or another pick or a delete took over (batchGen moved on).
+  if (!ok && was && gen === batchGen && !state.batch && !cloud.failed) { setCloudLast(was.name); await cloudOpen(was, true); }
+  return ok;
+}
+
+// The INSERT reserves the name for the whole team: a name taken meanwhile (23505, also by case) moves on to the
+// next " (n)". Any other error may be a lost answer: the row carries this page's id, so reading it back tells
+// whether it landed. The current batch is left (saved, or asked) BEFORE the insert, so a cancelled create
+// reserves nothing.
+async function cloudCreateBatch(dist, rawName) {
+  // Not before sign-in and the shared settings: the start-up open would replace the new batch.
+  const name = normName(rawName), err = cloud.error || (!cloud.ready || !cloud.me ? 'Still connecting to the shared database. Try again in a moment.' : '')
+    || newBatchError(dist, name);
+  if (err) { toast(err, true); return ''; }
+  if (!(await cloudLeave('Create the new batch anyway?'))) return '';
+  // Still pending now = the user just agreed to lose it. It is dropped only once the new batch opens (cloudOpen),
+  // so a failed create leaves the open batch and its retries as they were.
+  const agreed = new Set([...dirty].filter(k => k !== 'settings' && k !== 'meta')), agreedOps = new Set(cloud.ops);
+  const asked = agreed.size > 0 || agreedOps.size > 0;
+  const changedSince = () => [...dirty].some(k => k !== 'settings' && k !== 'meta' && !agreed.has(k)) || cloud.ops.some(op => !agreedOps.has(op));
+  const id = uuid(), rev = newRev(), by = cloud.me.email || '', tried = batchList().map(b => b.name);
+  let got = '', createdAt = '';
+  try {
+    for (let i = 0; i < 20 && !got; i++) {
+      const tryName = uniqueName(name, tried);
+      const { data, error } = await cloud.sb.from('pr_batches').insert({ id, name: tryName, distributor: dist, created_by: by, updated_by: by,
+        rev, qc_rev: newRev(), last_saves: [rev], upload: null, keepa: null, profit: null }).select('id,created_at');
+      if (error && error.code === '23505') { tried.push(tryName); continue; }
+      if (!error && data && data.length) { got = tryName; createdAt = data[0].created_at || ''; break; }
+      const chk = await cloud.sb.from('pr_batches').select('id,created_at').eq('id', id).maybeSingle();
+      if (chk.data) { got = tryName; createdAt = chk.data.created_at || ''; break; }
+      throw error || chk.error || new Error('the database gave no answer');
+    }
+    if (!got) throw new Error('no free name was found');
+  } catch (e) { toast(`Could not create "${name}": ${errText(e)}`, true); return ''; }
+  cloud.listSeq++; // a list read that started before the insert must not drop the new batch
+  cloud.list = [{ id, name: got, distributor: dist, createdAt, createdBy: by, asins: 0, profit: 0, matched: 0, size: 0, updatedBy: by, updatedAt: createdAt }]
+    .concat(cloud.list.filter(b => b.id !== id));
+  refreshBatchListSoon();
+  // A save that started during the insert (an edit, or a retry) read the old batch's id but builds its QC rows
+  // only when it sends them: let it finish, so no save is running when cloudOpen swaps the batch below, and a
+  // failed one's marks are back in place for the check.
+  while (cloud.writing) await cloud.writing;
+  // Something was changed here while the name was being reserved: save it (or ask) before leaving. What the user
+  // already agreed to lose above is not asked about again; cloudOpen drops it.
+  if ((asked ? changedSince() : batchDirty() || cloud.ops.length > 0) && !(await cloudLeave('Open the new batch anyway?'))) {
+    renderBatchSelect(); toast(`Created the batch "${got}". Open it ${PICK_WHERE}.`); return got;
+  }
+  search.keepa = search.qc = search.profit = '';
+  setCloudLast(got);
+  await cloudOpen({ id, name: got, distributor: dist, createdAt });
+  toast(createdMsg(name, got));
+  return got;
 }
 
 async function cloudFlush() {
   clearTimeout(saveTimer); saveTimer = null;
   for (let i = 0; i < 4 && (cloud.writing || dirty.size); i++) await cloudWrite();
+}
+// Nothing is left to save (opening or closing a batch dropped the marks of a save that kept failing): no retry
+// will run, so the banner goes now instead of asking to keep the page open. Shared database only (in this
+// browser #saveWarn also means blocked storage).
+function cloudSaveIdle() {
+  if (dirty.size || cloud.ops.length || cloud.writing) return;
+  clearTimeout(cloud.retry); cloud.saveError = ''; saveFailing = false;
+  const w = $('saveWarn');
+  if (w) w.hidden = true;
 }
 
 // One save at a time; anything marked while it runs is saved right after. A failed save keeps its marks
@@ -856,7 +1197,7 @@ function cloudWrite() {
     let ok = true;
     do {
       cloud.writeAgain = false;
-      const keys = [...dirty], d = state.distributor;
+      const keys = [...dirty], id = state.batchInfo ? state.batchInfo.id : '', name = state.batch;
       dirty.clear();
       const qcAsins = keys.filter(k => k.startsWith('qc:')).map(k => k.slice(3));
       const fields = {};
@@ -864,13 +1205,17 @@ function cloudWrite() {
       cloud.inflightQc = new Set(qcAsins); // not marked any more, but not saved yet either
       try {
         if (keys.includes('settings')) await cloudWriteSettings();
-        if (d && keys.some(k => k === 'upload' || k === 'keepa' || k === 'profit')) await cloudWriteBatch(d);
-        if (d && qcAsins.length) await cloudWriteQc(d, qcAsins, fields);
+        let gone = false; // the batch was deleted meanwhile: it is closed, and its QC answers are not sent
+        if (id && keys.some(k => k === 'upload' || k === 'keepa' || k === 'profit')) gone = (await cloudWriteBatch(id)) === 'gone';
+        if (id && !gone && qcAsins.length) await cloudWriteQc(id, name, qcAsins, fields);
       } catch (e) {
         ok = false;
         cloud.saveError = errText(e);
-        keys.forEach(k => { if (k !== 'meta' && k !== 'all') dirty.add(k); });
-        qcAsins.forEach(a => { const s = cloud.qcFields[a] || (cloud.qcFields[a] = new Set()); fields[a].forEach(f => s.add(f)); });
+        // Marked again for the retry: the settings always, the batch's parts only while that batch is still the open
+        // one (opening another one gave them up, and a retry would write them under the new batch's id).
+        const same = (state.batchInfo ? state.batchInfo.id : '') === id;
+        keys.forEach(k => { if (k === 'settings' || (same && k !== 'meta')) dirty.add(k); });
+        if (same) qcAsins.forEach(a => { const s = cloud.qcFields[a] || (cloud.qcFields[a] = new Set()); fields[a].forEach(f => s.add(f)); });
       } finally { cloud.inflightQc = new Set(); }
     } while (ok && cloud.writeAgain && dirty.size);
     saveFailing = !ok;
@@ -881,6 +1226,7 @@ function cloudWrite() {
     if (!ok) cloud.retry = setTimeout(() => { if (dirty.size) cloudWrite(); }, 5000);
     cloud.seq++;
     cloud.writing = null;
+    cloudSaveIdle(); // a failed save whose marks were given up (another batch opened meanwhile) leaves no banner
     writeTab();
   })();
   cloud.writing = run;
@@ -926,7 +1272,9 @@ async function cloudWriteSettings() {
 // A save whose answer was lost (network) may still have landed, even under a teammate's later save. Every
 // row keeps its last 20 save revs (last_saves), and this tab remembers each rev it tried until one is
 // confirmed, so a landed save is recognised and its ops are never applied twice.
-async function cloudWriteBatch(d) {
+// Rows are only ever updated here (Create batch makes them): a batch deleted meanwhile is closed, never re-created,
+// and 'gone' tells cloudWrite to skip its QC answers.
+async function cloudWriteBatch(id) {
   cloud.writingBatch = true;
   try {
     for (let attempt = 0; attempt < 6; attempt++) {
@@ -934,101 +1282,100 @@ async function cloudWriteBatch(d) {
       cloud.attempts.push(tried);
       const row = { upload: state.upload, keepa: state.keepa, profit: state.profit, asins: state.keepa.rows.length,
         profit_rows: state.profit ? state.profit.rows.length : 0, rev, last_saves: saves, updated_at: nowIso(), updated_by: cloud.me.email || '' };
-      const { data, error } = await (cloud.rev
-        ? cloud.sb.from('pr_batches').update(row).eq('distributor', d).eq('rev', cloud.rev).select('rev')
-        : cloud.sb.from('pr_batches').insert(Object.assign({ distributor: d, qc_rev: newRev() }, row)).select('rev'));
-      // 23505: someone created this batch first. Any other error may be a lost answer: this try may have landed.
-      if (error && error.code !== '23505') { tried.unknown = true; throw error; }
-      if (!error && data && data.length) {
+      const { data, error } = await cloud.sb.from('pr_batches').update(row).eq('id', id).eq('rev', cloud.rev).select('rev');
+      if (error) throw error; // may be a lost answer: this try may have landed (cloud.attempts remembers it)
+      if (data && data.length) {
         cloud.ops.splice(0, n); cloud.rev = rev; cloud.saves = saves; state.dataRev = rev; cloud.attempts = [];
         refreshBatchListSoon();
         return;
       }
-      const fresh = await fetchBatchRow(d);
-      if (state.distributor !== d) return;
+      const fresh = await fetchBatchRow({ id });
+      const still = !!state.batchInfo && state.batchInfo.id === id;
+      if (!fresh.exists) { if (still) closeBatch('was deleted by a teammate'); return 'gone'; }
+      if (!still) return;
       // Did an earlier try of ours land after all? Then its ops are already in the row.
       const landed = cloud.attempts.filter(a => fresh.saves.includes(a.rev));
       if (landed.length) {
         const done = Math.max(...landed.map(a => a.n));
         cloud.ops.splice(0, done);
-        cloud.attempts = cloud.attempts.filter(a => a.n > done && !landed.includes(a)).map(a => ({ rev: a.rev, n: a.n - done, unknown: a.unknown }));
-      }
-      if (!fresh.exists) {
-        // Cleared by a teammate: start again from an empty batch with this tab's newer changes only. A try whose
-        // answer was lost may have landed before the clear, so the teammate cleared its changes on purpose:
-        // they are dropped, never brought back.
-        const unsure = cloud.attempts.filter(a => a.unknown);
-        if (unsure.length) {
-          cloud.ops.splice(0, Math.max(...unsure.map(a => a.n)));
-          toast(`${d}: a teammate cleared this batch while a save from this page was unconfirmed, so those changes were not saved again.`, true);
-        }
-        cloud.attempts = [];
-        mergeQc({}); cloud.qcRev = '';
+        cloud.attempts = cloud.attempts.filter(a => a.n > done && !landed.includes(a)).map(a => ({ rev: a.rev, n: a.n - done }));
       }
       const base = { upload: fresh.upload, keepa: fresh.keepa, profit: fresh.profit };
       cloud.ops.forEach(op => OPS[op.name](base, ...op.args));
       state.upload = base.upload; state.keepa = base.keepa; state.profit = base.profit;
       cloud.rev = fresh.rev; cloud.saves = fresh.saves;
       derive(); refreshAfterBatchChange();
-      if (!cloud.ops.length) { cloud.attempts = []; state.dataRev = fresh.rev; return; } // nothing of ours left to save (never re-create a cleared batch for nothing)
+      if (!cloud.ops.length) { cloud.attempts = []; state.dataRev = fresh.rev; return; } // nothing of ours left to save
     }
     throw new Error('teammates kept saving this batch at the same moment; it will try again');
   } finally { cloud.writingBatch = false; }
 }
 
 // Only the fields changed here are written (bundle, match or both), then the batch's qc_rev is bumped so
-// teammates re-read the QC answers. A batch cleared meanwhile (23503) drops these answers instead of retrying.
-async function cloudWriteQc(d, asins, fields) {
+// teammates re-read the QC answers (and the batch's "Last saved" shows the QC work). A batch deleted meanwhile
+// (23503) is closed and these answers are dropped instead of retried.
+async function cloudWriteQc(id, name, asins, fields) {
   const at = nowIso(), by = cloud.me.email || '', groups = {};
   asins.forEach(a => {
-    const f = [...fields[a]].sort().join(','), q = state.qc[a] || {}, r = { distributor: d, asin: a, updated_at: at, updated_by: by };
+    const f = [...fields[a]].sort().join(','), q = state.qc[a] || {}, r = { batch_id: id, asin: a, updated_at: at, updated_by: by };
     if (fields[a].has('bundle')) r.bundle = Number.isInteger(q.bundle) && q.bundle > 0 && q.bundle <= MAX_BUNDLE ? q.bundle : null;
     if (fields[a].has('match')) r.match = q.match || '';
     (groups[f] = groups[f] || []).push(r);
   });
   for (const rows of Object.values(groups)) {
     for (let i = 0; i < rows.length; i += 500) {
-      const { error } = await cloud.sb.from('pr_qc').upsert(rows.slice(i, i + 500), { onConflict: 'distributor,asin' });
+      const { error } = await cloud.sb.from('pr_qc').upsert(rows.slice(i, i + 500), { onConflict: 'batch_id,asin' });
       if (error && error.code === '23503') {
-        toast(`${d}: these QC answers were not saved because the batch was cleared.`, true);
-        if (state.distributor === d) { asins.forEach(a => { if (!dirty.has('qc:' + a)) delete state.qc[a]; }); derive(); refreshAfterBatchChange(); }
-        cloudPoll(); return;
+        if (state.batchInfo && state.batchInfo.id === id) closeBatch('was deleted by a teammate', true);
+        else toast(`"${name}": these QC answers were not saved because the batch was deleted.`, true);
+        refreshBatchListSoon(); return;
       }
       if (error) throw error;
     }
   }
   // Bump qc_rev over the value this tab last read. If a teammate bumped it meanwhile, their answers are not
   // here yet: bump it anyway (so they re-read ours) and forget ours (so the next check re-reads theirs).
-  const qcRev = newRev();
-  const res = await cloud.sb.from('pr_batches').update({ qc_rev: qcRev }).eq('distributor', d).eq('qc_rev', cloud.qcRev).select('qc_rev');
+  const qcRev = newRev(), stamp = { qc_rev: qcRev, updated_at: nowIso(), updated_by: by };
+  const res = await cloud.sb.from('pr_batches').update(stamp).eq('id', id).eq('qc_rev', cloud.qcRev).select('qc_rev');
   if (res.error) throw res.error;
   if (res.data && res.data.length) cloud.qcRev = qcRev;
   else {
-    const again = await cloud.sb.from('pr_batches').update({ qc_rev: qcRev }).eq('distributor', d);
+    const again = await cloud.sb.from('pr_batches').update(stamp).eq('id', id);
     if (again.error) throw again.error;
     cloud.qcRev = '';
   }
   refreshBatchListSoon();
 }
 
-// Deleting the batch row also deletes its QC answers (foreign key, on delete cascade): one atomic step.
-async function cloudClear(name) {
+// Deleting the batch row also deletes its QC answers (foreign key, on delete cascade): one atomic step. The row
+// is deleted by its id, so a newer batch that took the same name is never touched.
+async function cloudDelete(name) {
+  const open = name === state.batch, cur = cloud.list.find(b => b.name === name);
+  let id = (open && state.batchInfo && state.batchInfo.id) || (cur && cur.id) || '';
   try {
-    if (name === state.distributor) {
+    if (open) {
       dropBatchDirty(); cloud.ops = []; cloud.qcFields = {}; cloud.attempts = []; batchGen++;
       cloud.loading = false; cloud.failed = '';
       clearTimeout(saveTimer); saveTimer = dirty.size ? setTimeout(cloudWrite, 400) : null; // a pending settings save still goes out
     }
-    if (cloud.writing) await cloud.writing; // a save still running must not bring the batch back
-    const r = await cloud.sb.from('pr_batches').delete().eq('distributor', name);
-    if (r.error) throw r.error;
-    if (name === state.distributor) { dropBatchDirty(); cloud.ops = []; cloud.rev = ''; cloud.qcRev = ''; cloud.saves = []; setBatch(freshBatch()); derive(); }
-    cloud.list = cloud.list.filter(b => b.name !== name);
+    if (cloud.writing) await cloud.writing; // let a save still running finish first
+    if (!id) { // still loading by its name
+      const r = await cloud.sb.from('pr_batches').select('id').eq('name', name).maybeSingle();
+      if (r.error) throw r.error;
+      id = r.data ? r.data.id : '';
+    }
+    if (id) { const r = await cloud.sb.from('pr_batches').delete().eq('id', id); if (r.error) throw r.error; }
+    if (state.batch === name && (!state.batchInfo || !state.batchInfo.id || state.batchInfo.id === id)) closeBatch();
+    cloud.listSeq++; // a list read that started before the delete must not bring it back
+    cloud.list = cloud.list.filter(b => (id ? b.id !== id : b.name !== name));
+    clearCloudLast(name);
     render();
-    toast(`${name}: batch cleared.`);
+    toast(`"${name}" was deleted.`);
+    return true;
   } catch (e) {
-    toast(`Could not clear "${name}": ${errText(e)}`, true);
-    if (name === state.distributor) cloudOpen(name);
+    toast(`Could not delete "${name}": ${errText(e)}`, true);
+    if (open && state.batch === name) cloudOpen(id ? { id, name } : name);
+    return false;
   }
 }
 
@@ -1053,45 +1400,46 @@ async function pollOnce() {
       derive(); renderSoon();
     }
   }
-  const d = state.distributor;
-  if (!d || cloud.loading || cloud.failed) return;
+  // The picker lists the team's batches: keep it fresh on every view, also while no batch is open.
+  if (Date.now() - cloud.listAt > 30000) refreshBatchList();
+  const id = state.batchInfo ? state.batchInfo.id : '', name = state.batch;
+  if (!id || cloud.loading || cloud.failed) return;
   seq = cloud.seq;
-  const { data: b, error } = await cloud.sb.from('pr_batches').select('rev,qc_rev').eq('distributor', d).maybeSingle();
-  if (error || d !== state.distributor || cloud.loading) return;
-  const free = () => d === state.distributor && quiet(seq) && !cloud.ops.length;
-  if (!b && cloud.rev && free()) {
-    batchGen++; cloud.rev = ''; cloud.qcRev = ''; cloud.saves = []; cloud.attempts = []; setBatch(freshBatch()); derive(); refreshAfterBatchChange();
-    toast(`${d}: batch cleared by a teammate.`);
-    return;
-  }
-  if (b && b.rev !== cloud.rev && free()) {
-    const fresh = await fetchBatchRow(d);
+  const { data: b, error } = await cloud.sb.from('pr_batches').select('rev,qc_rev').eq('id', id).maybeSingle();
+  const same = () => !!state.batchInfo && state.batchInfo.id === id;
+  if (error || !same() || cloud.loading) return;
+  const free = () => same() && quiet(seq) && !cloud.ops.length;
+  if (!b) { if (free()) closeBatch('was deleted by a teammate'); return; } // with unsaved changes here, the next save finds out
+  if (b.rev !== cloud.rev && free()) {
+    const fresh = await fetchBatchRow({ id });
     if (fresh.exists && free()) {
       state.upload = fresh.upload; state.keepa = fresh.keepa; state.profit = fresh.profit;
       cloud.rev = state.dataRev = fresh.rev; cloud.saves = fresh.saves; // keeps others' save revs in our next save
       derive(); refreshAfterBatchChange();
-      toast(`${d}: updated by a teammate.`);
+      toast(`${name}: updated by a teammate.`);
     }
   }
-  if (b && b.qc_rev !== cloud.qcRev && free()) {
-    const qc = await fetchQc(d);
+  if (b.qc_rev !== cloud.qcRev && free()) {
+    const qc = await fetchQc(id);
     if (free()) { mergeQc(qc); cloud.qcRev = b.qc_rev; derive(); refreshAfterBatchChange(); }
   }
-  if (state.view === 'upload' && Date.now() - cloud.listAt > 30000) refreshBatchList();
 }
 
 let listTimer = null;
 function refreshBatchListSoon() { clearTimeout(listTimer); listTimer = setTimeout(refreshBatchList, 1500); }
+// One query (the pr_batch_list view has the Matched counts). A read that started before this page created or
+// deleted a batch is dropped (listSeq); batchList() always adds the open batch if the list misses it.
 async function refreshBatchList() {
   if (!cloud.sb) return;
   cloud.listAt = Date.now();
-  const { data, error } = await cloud.sb.from('pr_batches').select('distributor,asins,profit_rows,updated_at,updated_by');
-  if (error) return;
-  const counts = await Promise.all((data || []).map(b => cloud.sb.from('pr_qc').select('asin', { count: 'exact', head: true })
-    .eq('distributor', b.distributor).eq('match', 'Matched').then(r => r.count || 0, () => 0)));
-  cloud.list = (data || []).map((b, i) => ({ name: b.distributor, asins: b.asins || 0, profit: b.profit_rows || 0, matched: counts[i],
-    size: 0, updatedBy: b.updated_by || '', updatedAt: b.updated_at || '' }));
-  renderDistSelect();
+  const my = ++cloud.listSeq;
+  const { data, error } = await cloud.sb.from('pr_batch_list')
+    .select('id,name,distributor,created_at,created_by,asins,profit_rows,updated_at,updated_by,matched')
+    .order('created_at', { ascending: false }).limit(200);
+  if (error || my !== cloud.listSeq) return;
+  cloud.list = (data || []).map(b => ({ id: b.id, name: b.name, distributor: b.distributor || '', createdAt: b.created_at || '', createdBy: b.created_by || '',
+    asins: Number(b.asins) || 0, profit: Number(b.profit_rows) || 0, matched: Number(b.matched) || 0, size: 0, updatedBy: b.updated_by || '', updatedAt: b.updated_at || '' }));
+  renderBatchSelect();
   if (state.view === 'upload') renderSoon();
 }
 
@@ -1166,24 +1514,19 @@ async function readTable(file) {
   return XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: false });
 }
 
-// Files load asynchronously; if the distributor is switched (or its batch cleared) meanwhile, stop.
-function assertDistributor(ctx) {
-  if (state.distributor !== ctx.dist || batchGen !== ctx.gen) throw new Error('Upload stopped: the distributor was changed or its batch was cleared while the file was loading. Upload it again.');
+// Files load asynchronously; if another batch is opened (or this one deleted) meanwhile, stop.
+function assertBatch(ctx) {
+  if (state.batch !== ctx.batch || batchGen !== ctx.gen) throw new Error('Upload stopped: another batch was opened or this batch was deleted while the file was loading. Upload it again.');
 }
 
 async function onUploadFormat(files, ctx) {
   const f = files[0];
   const u = parseUploadFormat(await readTable(f), f.name);
-  assertDistributor(ctx);
-  if (!state.distributor) {
-    // Nothing picked yet: use the distributor named in the file when it is on the list.
-    const m = matchDistributor(u.distributor, state.settings.distributors);
-    if (!m) throw new Error(`Pick a distributor first (${PICK_WHERE}). ` + (u.distributor ? `"${u.distributor}" is not on the distributor list.` : 'This file has no "Distributor:" name.'));
-    if (!(await switchDistributor(m))) return;
-    // The pick loads asynchronously in the shared database; stop if something else took over meanwhile.
-    if (state.distributor !== m || (CLOUD && (cloud.loading || cloud.failed))) return;
-  } else if (u.distributor && distKey(u.distributor) !== distKey(state.distributor) &&
-    !confirm(`This Upload Format is for "${u.distributor}", but the picked distributor is "${state.distributor}".\n\nUse it for "${state.distributor}" anyway?`)) return;
+  assertBatch(ctx);
+  // The file's "Distributor:" should be the batch's (the same name, or one ending with the other); otherwise ask.
+  const dist = state.batchInfo ? state.batchInfo.distributor : '';
+  if (!distMatches(u.distributor, dist) &&
+    !confirm(`This Upload Format is for "${u.distributor}", but the batch "${state.batch}" is for "${dist}".\n\nUse it in "${state.batch}" anyway?`)) return;
   applyOp('setUpload', u);
   derive(); save('upload'); render();
   const withCost = D.keepa.filter(r => r.unitCost != null).length;
@@ -1237,7 +1580,7 @@ async function onKeepa(files, ctx) {
   for (const f of files) {
     let table;
     try { table = await readTable(f); } catch (e) { errors.push(f.name + ': ' + (e.message || e)); continue; }
-    assertDistributor(ctx); // files already merged were saved to this distributor when it was switched
+    assertBatch(ctx); // files already merged were saved to this batch when another one was opened
     try {
       const rows = parseKeepa(table, f.name);
       const { added: fAdded, replaced: fReplaced } = applyOp('addKeepa', f.name, rows, rows.lossy.length);
@@ -1245,7 +1588,7 @@ async function onKeepa(files, ctx) {
       added += fAdded; replaced += fReplaced; lossy.push(...rows.lossy);
     } catch (e) { errors.push(e.message); }
   }
-  assertDistributor(ctx); // also when the last file failed to read: never touch a switched or cleared batch
+  assertBatch(ctx); // also when the last file failed to read: never touch a switched or deleted batch
   derive(); render(); // each merged file was already saved inside the loop
   const lossyMsg = lossy.length ? `\n${plural(lossy.length, 'ASIN')} ${hasHave(lossy.length)} an unreadable UPC (scientific notation, e.g. ${lossy[0]}), so no Unit Cost. Use the original Keepa export.` : '';
   if (errors.length) toast(errors.join('\n\n') + lossyMsg, true);
@@ -1255,7 +1598,7 @@ async function onKeepa(files, ctx) {
 async function onProfit(files, ctx) {
   const f = files[0];
   const pf = parseProfit(await readTable(f), f.name);
-  assertDistributor(ctx);
+  assertBatch(ctx);
   applyOp('setProfit', pf);
   derive(); save('profit'); render();
   const c = countBy(D.profit, 'status');
@@ -1266,16 +1609,32 @@ const HANDLERS = { upload: onUploadFormat, keepa: onKeepa, profit: onProfit };
 async function handleFiles(kind, files) {
   files = Array.from(files || []).filter(f => /\.(xlsx|xls|csv|txt)$/i.test(f.name));
   if (!files.length) { toast('Only xlsx or csv files are accepted.', true); return; }
-  if (!state.distributor && kind !== 'upload') { toast(`Pick a distributor first (${PICK_WHERE}).`, true); return; }
-  if (CLOUD && (cloud.loading || cloud.failed || cloud.error)) { toast(cloud.error || cloud.failed || 'The batch is still loading. Try again in a moment.', true); return; }
-  try { await HANDLERS[kind](files, { dist: state.distributor, gen: batchGen }); }
+  if (CLOUD && cloud.error) { toast(cloud.error, true); return; }
+  if (!state.batch) {
+    // Every file goes into a named batch, so one must be created (or opened) first. An Upload Format still
+    // tells which distributor the new batch is for: it is chosen in the New batch form.
+    let hint = '';
+    if (kind === 'upload') {
+      try {
+        const u = parseUploadFormat(await readTable(files[0]), files[0].name), m = resolveDistributor(u.distributor, state.settings.distributors);
+        if (!state.batch) nbPrefill(m); // (unless a batch was opened while the file was read)
+        hint = m ? `\n"${m}" is chosen in New batch: check the name, then Create batch.`
+          : u.distributor ? `\n"${u.distributor}" is not on the distributor list.` : '';
+      } catch (e) { /* not readable: the message below is enough */ }
+    }
+    toast(`Create or open a batch first (New batch on the Upload page, or the picker ${PICK_WHERE}).` + hint, true);
+    return;
+  }
+  if (CLOUD && (cloud.loading || cloud.failed)) { toast(cloud.failed || 'The batch is still loading. Try again in a moment.', true); return; }
+  try { await HANDLERS[kind](files, { batch: state.batch, gen: batchGen }); }
   catch (e) { console.error(e); toast(e.message || String(e), true); }
 }
 
 /* ============================== EXPORTS ============================== */
 
 function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
-function batchName() { return (state.distributor || 'PR').replace(/[\\/:*?"<>|]+/g, ' ').trim(); }
+// File names: the batch's name (it already has its distributor and date), at most 100 characters of it.
+function batchName() { return cutName((state.batch || 'PR').replace(/[\\/:*?"<>|]+/g, ' ').trim(), 100) || 'PR'; }
 
 function buildKeepaExport() {
   const aoa = [['ASIN', 'UPC', 'Title', 'Brand', 'Sales Rank: Reference', 'Sales Rank: Current', 'BSR Limit',
@@ -1377,7 +1736,7 @@ function matchesSearch(r, q) {
 }
 
 const VIEWS = {
-  upload: { title: 'Upload', sub: 'Upload Format + Keepa export' },
+  upload: { title: 'Upload', sub: 'New batch · Upload Format + Keepa export' },
   keepa: { title: 'Keepa Checking', sub: 'BB% · High BSR · 0 FBA · Asin Not Available' },
   qc: { title: 'QC Checking', sub: 'Enter Bundle Size and Matching for the ASINs that passed' },
   profit: { title: 'Profitability Checking', sub: 'Import the results from the profitability tool' },
@@ -1389,23 +1748,38 @@ function render() {
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('active', a.dataset.view === state.view));
   $('title').textContent = VIEWS[state.view].title;
   $('sub').textContent = VIEWS[state.view].sub;
-  $('distChip').textContent = state.distributor;
-  $('distChip').hidden = !state.distributor;
-  renderDistSelect();
+  $('distChip').textContent = state.batch;
+  $('distChip').title = state.batchInfo ? state.batchInfo.distributor : '';
+  $('distChip').hidden = !state.batch;
+  renderBatchSelect();
   renderBadges();
   writeTab();
   const c = $('content');
   // An unsaved edit in the distributor list survives a re-render of the Settings page.
   const ta = $('setDists'), draft = ta && ta.value !== ta.dataset.saved ? ta.value : null;
-  if (CLOUD && cloud.error) c.innerHTML = `<div class="card empty">${esc(cloud.error)}</div>`;
-  else if (CLOUD && cloud.loading && state.view !== 'settings') c.innerHTML = `<div class="card empty">Loading${state.distributor ? ' ' + esc(state.distributor) : ''}…</div>`;
-  else if (CLOUD && cloud.failed && state.view !== 'settings') c.innerHTML = `<div class="card empty">${esc(cloud.failed)}<br><br><button class="btn primary" type="button" data-act="retryLoad">Try again</button></div>`;
-  else if (!state.distributor && ['keepa', 'qc', 'profit'].includes(state.view)) c.innerHTML = `<div class="card empty">Pick a distributor ${PICK_WHERE} first.</div>`;
-  else if (state.view === 'upload') c.innerHTML = viewUpload();
-  else if (state.view === 'keepa') { c.innerHTML = viewKeepa(); fillKeepa(); }
-  else if (state.view === 'qc') { c.innerHTML = viewQc(); fillQc(); }
-  else if (state.view === 'profit') { c.innerHTML = viewProfit(); fillProfit(); }
-  else c.innerHTML = viewSettings();
+  let html;
+  if (CLOUD && cloud.error) html = `<div class="card empty">${esc(cloud.error)}</div>`;
+  else if (CLOUD && cloud.loading && state.view !== 'settings') html = `<div class="card empty">Loading${state.batch ? ' ' + esc(state.batch) : ''}…</div>`;
+  else if (CLOUD && cloud.failed && state.view !== 'settings') html = `<div class="card empty">${esc(cloud.failed)}<br><br><button class="btn primary" type="button" data-act="retryLoad">Try again</button></div>`;
+  else if (!state.batch && ['keepa', 'qc', 'profit'].includes(state.view)) html = `<div class="card empty">Create or open a batch first: <a href="#" data-go="upload">create one on the Upload page</a>, or open one ${PICK_WHERE}.</div>`;
+  else if (state.view === 'upload') html = viewUpload();
+  else if (state.view === 'keepa') html = viewKeepa();
+  else if (state.view === 'qc') html = viewQc();
+  else if (state.view === 'profit') html = viewProfit();
+  else html = viewSettings();
+  if (state.view === 'upload' && !(CLOUD && (cloud.error || !cloud.ready))) {
+    // The New batch form stays on Upload (also while a batch loads or failed). It is one node that is never taken
+    // out of the page here, so a re-render keeps a half-typed name, an open list and a click in progress. In the
+    // shared database it shows only once sign-in and the shared settings (the distributor list) are in.
+    const card = newBatchCard();
+    [...c.childNodes].forEach(n => { if (n !== card) n.remove(); });
+    if (card.parentNode !== c) c.prepend(card);
+    syncNewBatch();
+    c.insertAdjacentHTML('beforeend', html);
+  } else c.innerHTML = html;
+  if (state.view === 'keepa') fillKeepa(); // each one does nothing when its table is not shown
+  else if (state.view === 'qc') fillQc();
+  else if (state.view === 'profit') fillProfit();
   if (draft != null && $('setDists')) $('setDists').value = draft;
   const si = c.querySelector('.search');
   if (si) si.value = search[state.view] || '';
@@ -1417,7 +1791,7 @@ function renderBadges() {
   const matched = D.qc.filter(r => r.match === 'Matched').length, done = D.qc.filter(r => r.match).length;
   $('bQc').textContent = D.qc.length ? `${done}/${D.qc.length}` : '';
   $('bProfit').textContent = D.profit.length ? String(D.profit.length) : '';
-  $('batchInfo').textContent = !state.distributor ? 'Pick a distributor to start'
+  $('batchInfo').textContent = !state.batch ? 'Create or open a batch to start'
     : D.keepa.length ? `${plural(D.keepa.length, 'ASIN')} · ${matched} Matched` : 'Upload files to start';
   // Inside the desk its own sidebar shows the views; tell it which one is open and the counts.
   if (CLOUD && HOST.onState) {
@@ -1426,41 +1800,40 @@ function renderBadges() {
   }
 }
 
-// Sidebar picker: the whole list, plus any saved batch whose name is not on the list (e.g. after editing it).
-function renderDistSelect() {
+// Sidebar picker (top bar in the desk): every batch, newest first.
+function renderBatchSelect() {
   const sel = $('selDist');
   if (!sel) return;
-  if (document.activeElement === sel) { sel.value = state.distributor; return; } // do not rebuild an open picker
-  const list = state.settings.distributors, saved = {};
-  batchList().forEach(b => { saved[b.name] = b; });
-  const others = Object.keys(saved).filter(n => !list.includes(n));
-  if (state.distributor && !list.includes(state.distributor) && !others.includes(state.distributor)) others.push(state.distributor);
-  const opt = name => {
-    const b = saved[name];
-    return `<option value="${esc(name)}">${esc(name)}${b ? ` · ${b.asins ? plural(b.asins, 'ASIN') : 'started'}` : ''}</option>`;
-  };
-  sel.innerHTML = `<option value="">— Pick a distributor —</option><optgroup label="Distributors">${list.map(opt).join('')}</optgroup>` +
-    (others.length ? `<optgroup label="Other batches">${others.map(opt).join('')}</optgroup>` : '');
-  sel.value = state.distributor;
+  if (document.activeElement === sel) { sel.value = state.batch; return; } // do not rebuild an open picker
+  sel.innerHTML = '<option value="">— Pick a batch —</option>' + batchList().map(b =>
+    `<option value="${esc(b.name)}" title="${esc(b.distributor)}">${esc(b.name)} · ${b.asins ? plural(b.asins, 'ASIN') : 'new'}</option>`).join('');
+  sel.value = state.batch;
 }
 
 function viewBatches() {
-  const order = n => { const i = state.settings.distributors.indexOf(n); return i < 0 ? 1e6 : i; };
-  const list = batchList().sort((a, b) => order(a.name) - order(b.name) || a.name.localeCompare(b.name));
+  const list = batchList(), left = CLOUD ? [] : legacyLeft();
   const pct = CLOUD ? 0 : Math.round(storageUsed() / STORAGE_LIMIT * 100);
   const kb = n => (n < 1024 ? '<1 KB' : Math.round(n / 1024) + ' KB');
-  // Shared database: show who saved last instead of the browser's storage size.
-  const lastCol = b => (b.updatedAt ? `${esc(String(b.updatedBy || '').split('@')[0])} · ${esc(ago(b.updatedAt))}` : '');
+  // Shared database: who saved last. In this browser: when, with the stored size as a tooltip.
+  const lastCol = b => (!b.updatedAt ? '' : CLOUD ? `${esc(String(b.updatedBy || '').split('@')[0])} · ${esc(ago(b.updatedAt))}` : esc(ago(b.updatedAt)));
   return `<div class="card">
-    <h2>Distributor batches</h2>
+    <h2>Batches</h2>
     ${list.length ? `<div class="tablewrap" style="max-height:none;min-height:0"><table>
-      <thead><tr><th>Distributor</th><th class="num">ASINs</th><th class="num">Matched</th><th class="num">Profitability</th><th class="num">${CLOUD ? 'Last saved' : 'Size'}</th><th></th></tr></thead>
-      <tbody>${list.map(b => `<tr class="${b.name === state.distributor ? 'activebatch' : ''}"><td>${esc(b.name)}${b.name === state.distributor ? ' ' + chip('Open', 'info') : ''}</td>
-        <td class="num">${b.asins}</td><td class="num">${b.matched}</td><td class="num">${b.profit}</td><td class="num nowrap">${CLOUD ? lastCol(b) : kb(b.size)}</td>
-        <td class="nowrap">${b.name === state.distributor ? '' : `<button class="btn" type="button" data-act="openBatch" data-name="${esc(b.name)}">Open</button> `}<button class="btn danger" type="button" data-act="clearBatch" data-name="${esc(b.name)}">Clear</button></td></tr>`).join('')}
-      </tbody></table></div>` : `<p style="color:var(--muted);font-size:13px;margin:0">No saved batches yet.</p>`}
-    ${CLOUD ? `<p style="color:var(--muted);font-size:12.5px;margin:10px 0 0">Saved in the shared database: everyone on the team works on the same batches.</p>`
-      : `<p style="color:${pct >= 80 ? 'var(--bad)' : 'var(--muted)'};font-size:12.5px;margin:10px 0 0">Browser storage used: about ${pct}%${pct >= 80 ? '. Clear the batches you no longer need.' : ''}</p>`}
+      <thead><tr><th>Name</th><th>Distributor</th><th class="num">ASINs</th><th class="num">Matched</th><th class="num">Profit rows</th><th class="num">Last saved</th><th></th></tr></thead>
+      <tbody>${list.map(b => `<tr class="${b.name === state.batch ? 'activebatch' : ''}"><td>${esc(b.name)}${b.name === state.batch ? ' ' + chip('Open', 'info') : ''}</td>
+        <td>${esc(b.distributor)}</td><td class="num">${b.asins}</td><td class="num">${b.matched}</td><td class="num">${b.profit}</td>
+        <td class="num nowrap"${CLOUD ? '' : ` title="Stored in this browser: ${kb(b.size)}"`}>${lastCol(b)}</td>
+        <td class="nowrap">${b.name === state.batch ? '' : `<button class="btn" type="button" data-act="openBatch" data-name="${esc(b.name)}">Open</button> `}<button class="btn danger" type="button" data-act="deleteBatch" data-name="${esc(b.name)}">Delete</button></td></tr>`).join('')}
+      </tbody></table></div>` : `<p style="color:var(--muted);font-size:13px;margin:0">No batches yet. Create one in New batch above.</p>`}
+    ${left.length ? `<h2 style="margin:16px 0 4px">Not moved yet (storage full)</h2>
+      <p style="color:var(--muted);font-size:12.5px;margin:0 0 8px">Earlier batches that could not be moved to named batches because browser storage is full. Delete the ones you no longer need; the others are then moved right away.</p>
+      <div class="tablewrap" style="max-height:none;min-height:0"><table>
+      <thead><tr><th>Earlier batch (distributor)</th><th class="num">Stored</th><th></th></tr></thead>
+      <tbody>${left.map(x => `<tr><td>${esc(x.name)}</td><td class="num nowrap">${kb(x.size)}</td>
+        <td class="nowrap"><button class="btn danger" type="button" data-act="deleteLegacy" data-name="${esc(x.name)}">Delete</button></td></tr>`).join('')}
+      </tbody></table></div>` : ''}
+    ${CLOUD ?`<p style="color:var(--muted);font-size:12.5px;margin:10px 0 0">Saved in the shared database: everyone on the team works on the same batches.</p>`
+      : `<p style="color:${pct >= 80 ? 'var(--bad)' : 'var(--muted)'};font-size:12.5px;margin:10px 0 0">Browser storage used: about ${pct}%${pct >= 80 ? '. Delete the batches you no longer need.' : ''}</p>`}
   </div>`;
 }
 function ago(iso) {
@@ -1479,13 +1852,13 @@ function viewUpload() {
   const u = state.upload, k = state.keepa;
   const withCost = D.keepa.filter(r => r.unitCost != null).length;
   return `
-  ${state.distributor ? '' : `<div class="note info"><b>Pick a distributor ${PICK_WHERE}.</b> Each distributor keeps its own batch (Upload Format, Keepa, QC and Profitability). Or drop the Upload Format below: when its "Distributor:" name is on the list, that distributor is picked for you.</div>`}
+  ${state.batch ? '' : `<div class="note info"><b>No batch is open.</b> Create one in New batch above, or open one ${PICK_WHERE}. Each batch keeps its own Upload Format, Keepa, QC and Profitability.</div>`}
   <div class="grid2">
     <div class="card">
       <h2>1. Upload Format</h2>
       ${drop('upload', 'inUpload', u ? 'Replace the Upload Format' : 'Drop a file here or click to choose', 'xlsx or csv · "Distributor:" at the top and a "UPC" + "Unit Price" header')}
       ${u ? `<dl class="kv"><dt>File</dt><dd>${esc(u.fileName)}</dd><dt>Distributor</dt><dd>${esc(u.distributor || '—')}</dd>
-        <dt>UPC</dt><dd>${fmtInt(u.unique)}${u.dups ? ` <span class="chip warn">${plural(u.dups, 'duplicate')}</span>` : ''}${u.noPrice ? ` <span class="chip warn">${u.noPrice} without a price</span>` : ''}</dd>
+        <dt>UPC</dt><dd>${fmtInt(u.unique)}${u.dups ? ` <span class="chip warn">${plural(u.dups, 'duplicate')}</span>` : ''}${u.noPrice ? ` <span class="chip warn">${esc(u.noPrice)} without a price</span>` : ''}</dd>
         ${u.conflicts && u.conflicts.length ? `<dt>Price conflicts</dt><dd class="mono">${esc(u.conflicts.slice(0, 8).join(', '))}${u.conflicts.length > 8 ? '…' : ''} (first price used)</dd>` : ''}
         ${u.badUpc && u.badUpc.length ? `<dt>Unreadable</dt><dd><span class="chip bad">${plural(u.badUpc.length, 'UPC')}</span> in scientific notation (e.g. <span class="mono">${esc(u.badUpc[0])}</span>). The digits are already lost in this file, so use the original file (not a CSV re-saved in Excel).</dd>` : ''}
         ${u.suspect && u.suspect.length ? `<dt>Check</dt><dd><span class="chip warn">${plural(u.suspect.length, 'UPC')}</span> ${u.suspect.length === 1 ? 'ends' : 'end'} in 00000 (e.g. <span class="mono">${esc(u.suspect[0])}</span>). Digits may have been lost; check the original file.</dd>` : ''}
@@ -1494,7 +1867,7 @@ function viewUpload() {
     <div class="card">
       <h2>2. Keepa Export</h2>
       ${drop('keepa', 'inKeepa', D.keepa.length ? 'Add another Keepa export' : 'Drop a file here or click to choose', 'Keepa Product Viewer export (xlsx or csv) · several files allowed')}
-      ${D.keepa.length ? `<dl class="kv"><dt>Files</dt><dd>${k.uploads.map(x => esc(x.name) + (x.rows != null ? ` <span style="color:var(--muted)">· ${plural(x.rows, 'row')}, ${x.added} new${x.replaced ? `, ${x.replaced} updated` : ''}</span>` : '') + (x.lossy ? ` <span class="chip bad">${plural(x.lossy, 'unreadable UPC')}</span>` : '')).join('<br>')}</dd>
+      ${D.keepa.length ? `<dl class="kv"><dt>Files</dt><dd>${k.uploads.map(x => esc(x.name) + (x.rows != null ? ` <span style="color:var(--muted)">· ${plural(x.rows, 'row')}, ${esc(x.added)} new${x.replaced ? `, ${esc(x.replaced)} updated` : ''}</span>` : '') + (x.lossy ? ` <span class="chip bad">${plural(x.lossy, 'unreadable UPC')}</span>` : '')).join('<br>')}</dd>
         <dt>ASIN</dt><dd>${fmtInt(D.keepa.length)}</dd>
         <dt>Passed</dt><dd>${D.qc.length}</dd></dl>
         <div class="toolbar" style="margin:12px 0 0"><button class="btn danger" data-act="clearKeepa" type="button">Remove Keepa files</button>
@@ -1504,15 +1877,108 @@ function viewUpload() {
   <div class="card">
     <h2>How to use</h2>
     <ol class="steps">
-      <li><b>Distributor:</b> pick it ${PICK_WHERE}. Each distributor has its own batch, so you can switch without losing work.</li>
+      <li><b>Batch:</b> create one in <b>New batch</b> above (choose the distributor; the name fills in with today's date and can be changed), or open one ${PICK_WHERE}. Each batch keeps its own work, so you can switch without losing it.</li>
       <li><b>Upload:</b> add the distributor's Upload Format and the Keepa export for its UPCs.</li>
       <li><b>Keepa Checking:</b> automatic. An ASIN fails if it gets <b>BB%</b>, <b>High BSR</b>, <b>0 FBA</b> or <b>Asin Not Available</b>.</li>
       <li><b>QC Checking:</b> enter Bundle Size and Matched/Mismatch for the ASINs that passed, then export (Matched only).</li>
       <li><b>Profitability:</b> run the export through the profitability tool, then import the Profitability Checking file here.</li>
     </ol>
-    <p style="color:var(--muted);font-size:12.5px;margin:10px 0 0">${CLOUD ? 'Batches are saved in the shared database, so the whole team works on the same ones.' : 'Batches are saved in this browser only.'} Use <b>Clear batch</b> to start a distributor over.</p>
+    <p style="color:var(--muted);font-size:12.5px;margin:10px 0 0">${CLOUD ? 'Batches are saved in the shared database, so the whole team works on the same ones.' : 'Batches are saved in this browser only.'} Use <b>Delete batch</b> to remove a batch you no longer need.</p>
   </div>
   ${viewBatches()}`;
+}
+
+// New batch form. Built once and kept across re-renders (render() never takes it out of the page), so polls and
+// other tabs re-rendering the Upload page never wipe a half-typed name or swallow a click.
+// nb.dist/picked: the distributor chosen here (else the open batch's, else the newest batch's); nb.edited: the
+// name was typed (else it is "<Distributor> MM-DD-YYYY", made unique, and follows the distributor).
+const nb = { dist: '', picked: false, edited: false, busy: false, names: [] };
+let nbCard = null;
+function newBatchCard() {
+  if (nbCard) return nbCard;
+  nbCard = document.createElement('div');
+  nbCard.className = 'card';
+  nbCard.innerHTML = `<h2>New batch</h2>
+    <div class="nbform" data-nb="form">
+      <label>Distributor<select id="nbDist"></select></label>
+      <label>Name<input id="nbName" type="text" maxlength="${NAME_MAX}" autocomplete="off" spellcheck="false"></label>
+      <button class="btn primary" type="button" data-act="createBatch" id="nbCreate">Create batch</button>
+    </div>
+    <p class="nbhint warn" data-nb="hint"></p>
+    <p class="nbhint" data-nb="none" hidden>Add distributors in <a href="#" data-go="settings">Settings</a> first.</p>
+    <p class="nbhint" data-nb="store"></p>`;
+  return nbCard;
+}
+const nbEl = k => newBatchCard().querySelector(k.startsWith('#') ? k : `[data-nb="${k}"]`);
+function nbDistOf(list) {
+  if (nb.picked && (!nb.dist || list.includes(nb.dist))) return nb.dist;
+  const open = state.batchInfo && state.batchInfo.distributor;
+  if (open && list.includes(open)) return open;
+  const newest = batchList().find(b => list.includes(b.distributor));
+  return newest ? newest.distributor : '';
+}
+const nbAuto = dist => (dist ? uniqueName(autoName(dist, Date.now()), nb.names) : '');
+// Full refresh (on render, or when the distributor changes): options, names in use, auto name, storage.
+function syncNewBatch() {
+  const list = state.settings.distributors || [], sel = nbEl('#nbDist'), inp = nbEl('#nbName');
+  nbEl('form').hidden = !list.length; nbEl('none').hidden = !!list.length;
+  const key = list.join('\n');
+  if (sel.dataset.list !== key && document.activeElement !== sel) {
+    sel.innerHTML = '<option value="">— Choose a distributor —</option>' + list.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+    sel.dataset.list = key;
+  }
+  const dist = nbDistOf(list);
+  if (document.activeElement !== sel) sel.value = dist;
+  nb.names = batchList().map(b => b.name);
+  const auto = nbAuto(dist);
+  inp.placeholder = auto || 'Distributor MM-DD-YYYY';
+  if (!nb.edited && document.activeElement !== inp && inp.value !== auto) inp.value = auto; // a cleared field fills in again once left
+  const st = nbEl('store');
+  if (CLOUD) st.textContent = '';
+  else {
+    const pct = Math.round(storageUsed() / STORAGE_LIMIT * 100);
+    st.textContent = `Browser storage used: about ${pct}%` + (pct >= 80 ? '. Delete the batches you no longer need.' : '');
+    st.classList.toggle('bad', pct >= 80);
+  }
+  nbUpdate();
+}
+// Light refresh while typing: the "already exists" hint and the button.
+function nbUpdate() {
+  const list = state.settings.distributors || [], dist = nbDistOf(list), inp = nbEl('#nbName');
+  const name = normName(nb.edited ? inp.value : nbAuto(dist)), got = name ? uniqueName(name, nb.names) : '';
+  nbEl('hint').textContent = got && got !== name ? `Already exists — will be created as "${got}".` : '';
+  nbEl('#nbCreate').disabled = nb.busy || !dist || !name;
+}
+async function nbCreate() {
+  if (nb.busy) return;
+  const dist = nbDistOf(state.settings.distributors || []), inp = nbEl('#nbName');
+  if (!dist) { toast('Choose the distributor for the new batch first.', true); return; }
+  nb.names = batchList().map(b => b.name);
+  const name = nb.edited ? inp.value : nbAuto(dist); // the date is taken now, not when the form was drawn
+  nb.busy = true; nbUpdate();
+  try {
+    if (await createBatch(dist, name)) {
+      nb.edited = false; nb.picked = false; inp.value = '';
+      // Focus leaves the form, so another Enter (or one held on the button) cannot make a second batch; leaving
+      // the Name field fills in the automatic name again.
+      const a = document.activeElement;
+      if (a && newBatchCard().contains(a)) a.blur();
+    }
+  } finally {
+    nb.busy = false;
+    if (newBatchCard().isConnected) syncNewBatch();
+  }
+}
+// An Upload Format dropped with no batch open: choose its distributor (when known) in the form and show the form.
+function nbPrefill(dist) {
+  if (dist) { nb.dist = dist; nb.picked = true; }
+  if (state.view !== 'upload') setView('upload'); else syncNewBatch();
+  // syncNewBatch leaves a focused control alone, and a dropped file does not move focus: set both here (a drop
+  // cannot happen while the list is open), so the form shows what Create batch will make.
+  if (dist) nbEl('#nbDist').value = nb.dist;
+  if (!nb.edited) nbEl('#nbName').value = nbAuto(nbDistOf(state.settings.distributors || []));
+  const card = newBatchCard();
+  if (card.isConnected) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 function seg(view, opts) {
@@ -1672,7 +2138,7 @@ function viewSettings() {
     <p style="color:var(--muted);font-size:13px;margin:0 0 10px">High BSR when "Sales Rank: Current" is above the limit. A name matches the Keepa category even when it is shorter (e.g. "Grocery & Gourmet" → "Grocery & Gourmet Food"). No limit = the ASIN passes with the label "No BSR Limit".</p>
     <table class="limits" style="max-width:560px"><thead><tr><th>Category</th><th class="num">Max Sales Rank</th><th></th></tr></thead><tbody>
     ${S.limits.map((L, i) => `<tr><td><input class="cell${L.name ? '' : ' invalid'}" style="width:100%;text-align:left" data-lname="${i}" value="${esc(L.name)}" placeholder="Category name"></td>
-      <td class="num"><input class="cell lim${L.limit == null ? ' invalid' : ''}" type="number" min="1" step="1" data-llimit="${i}" value="${L.limit == null ? '' : L.limit}" placeholder="e.g. 150000"></td>
+      <td class="num"><input class="cell lim${L.limit == null ? ' invalid' : ''}" type="number" min="1" step="1" data-llimit="${i}" value="${esc(L.limit == null ? '' : L.limit)}" placeholder="e.g. 150000"></td>
       <td><button class="btn danger" type="button" data-act="delLimit" data-i="${i}">Remove</button></td></tr>`).join('')}
     </tbody></table>
     <div class="toolbar" style="margin:12px 0 0"><button class="btn" type="button" data-act="addLimit">+ Add category</button>
@@ -1680,7 +2146,7 @@ function viewSettings() {
   </div>
   <div class="card">
     <h2>Distributors</h2>
-    <p style="color:var(--muted);font-size:13px;margin:0 0 10px">One name per line. These are the choices in the distributor picker. Removing a name does not delete its saved batch.</p>
+    <p style="color:var(--muted);font-size:13px;margin:0 0 10px">One name per line. These are the choices in the New batch form. Removing a name does not delete batches made for it.</p>
     <textarea class="cell" id="setDists" rows="14" spellcheck="false" data-saved="${esc(S.distributors.join('\n'))}">${esc(S.distributors.join('\n'))}</textarea>
     <div class="toolbar" style="margin:12px 0 0"><button class="btn primary" type="button" data-act="saveDists">Save list</button>
       ${DEFAULT_DISTRIBUTORS.length ? '<button class="btn danger" type="button" data-act="resetDists">Reset to the original list</button>' : ''}</div>
@@ -1722,9 +2188,11 @@ document.addEventListener('click', e => {
   else if (a === 'addLimit') { state.settings.limits.push({ name: '', limit: null }); saveSettings('limits'); render(); const ins = document.querySelectorAll('[data-lname]'); if (ins.length) ins[ins.length - 1].focus(); }
   else if (a === 'delLimit') { state.settings.limits.splice(+act.dataset.i, 1); derive(); saveSettings('limits'); render(); }
   else if (a === 'resetLimits') { if (confirm('Reset the BB% threshold and BSR limits to the defaults?')) { Object.assign(state.settings, clone(DEFAULT_SETTINGS)); derive(); saveSettings('bbThreshold', 'limits', 'limitsVersion'); render(); } }
-  else if (a === 'openBatch') switchDistributor(act.dataset.name);
-  else if (a === 'retryLoad') cloudOpen(state.distributor);
-  else if (a === 'clearBatch') clearBatch(act.dataset.name);
+  else if (a === 'openBatch') openBatch(act.dataset.name);
+  else if (a === 'retryLoad') cloudOpen(state.batchInfo && state.batchInfo.id ? Object.assign({ name: state.batch }, state.batchInfo) : state.batch);
+  else if (a === 'deleteBatch') deleteBatch(act.dataset.name);
+  else if (a === 'deleteLegacy') deleteLegacy(act.dataset.name);
+  else if (a === 'createBatch') { if (e.detail <= 1) nbCreate(); } // the second click of a double-click would make a second batch
   else if (a === 'saveDists') {
     const list = [];
     $('setDists').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean).forEach(s => { if (!list.includes(s)) list.push(s); });
@@ -1735,13 +2203,14 @@ document.addEventListener('click', e => {
     toast(`Distributor list saved: ${plural(list.length, 'name')}.`);
   }
   else if (a === 'resetDists') {
-    if (!DEFAULT_DISTRIBUTORS.length || !confirm('Reset the distributor list to the original 46 names?')) return;
+    if (!DEFAULT_DISTRIBUTORS.length || !confirm(`Reset the distributor list to the original ${DEFAULT_DISTRIBUTORS.length} names?`)) return;
     state.settings.distributors = DEFAULT_DISTRIBUTORS.slice(); $('setDists').dataset.saved = $('setDists').value; saveSettings('distributors'); render();
   }
 });
 
 document.addEventListener('input', e => {
   const t = e.target;
+  if (t.id === 'nbName') { nb.edited = t.value.trim() !== ''; nbUpdate(); return; } // an emptied name goes back to the automatic one
   if (t.matches('.search')) { const v = t.dataset.search; search[v] = t.value; ({ keepa: fillKeepa, qc: fillQc, profit: fillProfit })[v](); return; }
   if (t.matches('input.bundle')) {
     // Whole numbers from 1 to MAX_BUNDLE only; anything else is flagged red and treated as blank.
@@ -1755,6 +2224,8 @@ document.addEventListener('input', e => {
 
 document.addEventListener('change', e => {
   const t = e.target;
+  if (t.id === 'nbDist') { nb.dist = t.value; nb.picked = true; syncNewBatch(); return; } // the automatic name follows it
+  if (t.id === 'nbName') return;
   if (t.matches('select.match')) { qcEntry(t.dataset.asin).match = t.value; derive(); markQc(t.dataset.asin, 'match'); refreshQcRow(t.dataset.asin); return; }
   if (t.id === 'setBB') {
     const n = parseFloat(t.value);
@@ -1792,6 +2263,7 @@ document.addEventListener('change', e => {
 });
 
 document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.id === 'nbName') { e.preventDefault(); if (!e.repeat) nbCreate(); return; }
   if (e.key === 'Enter' && e.target.matches('input.bundle')) {
     e.preventDefault();
     const all = Array.from(document.querySelectorAll('#tbQc input.bundle'));
@@ -1809,11 +2281,11 @@ document.addEventListener('drop', e => {
   handleFiles(d.dataset.drop, e.dataTransfer.files);
 });
 
-$('btnClear').addEventListener('click', () => {
-  if (!state.distributor) { toast('Pick a distributor first.', true); return; }
-  clearBatch(state.distributor);
+$('btnDelete').addEventListener('click', () => {
+  if (!state.batch) { toast('Open a batch first.', true); return; }
+  deleteBatch(state.batch);
 });
-$('selDist').addEventListener('change', e => switchDistributor(e.target.value));
+$('selDist').addEventListener('change', e => openBatch(e.target.value));
 
 function applyTheme(t) {
   if (CLOUD) t = 'light'; // inside the desk: always its light look
@@ -1832,7 +2304,7 @@ $('btnTheme').addEventListener('click', () => {
 $('ver').textContent = VERSION;
 if (typeof XLSX === 'undefined') toast('SheetJS (the xlsx library) did not load. Check the internet connection and refresh.', true);
 if (CLOUD) {
-  // Inside the desk: its sidebar has the views, so the picker, counts and Clear batch move to the top bar.
+  // Inside the desk: its sidebar has the views, so the batch picker, counts and Delete batch move to the top bar.
   document.documentElement.classList.add('embed');
   const font = document.createElement('link');
   font.rel = 'stylesheet';
@@ -1840,7 +2312,7 @@ if (CLOUD) {
   document.head.appendChild(font);
   const bar = document.createElement('div');
   bar.className = 'embedbar';
-  bar.append(document.querySelector('.distpick'), $('batchInfo'), $('btnClear'));
+  bar.append(document.querySelector('.distpick'), $('batchInfo'), $('btnDelete'));
   document.querySelector('.topbar').appendChild(bar);
   $('saveWarn').innerHTML = '<b>Not saved to the shared database yet</b> (<span id="saveErr"></span>). It tries again every few seconds; keep this page open until this message goes away.';
   // Leaving with changes that are not saved yet: the browser asks first.
@@ -1858,16 +2330,19 @@ if (CLOUD) {
   derive();
   render();
   if (!store('localStorage')) $('saveWarn').hidden = false;
-  if (migrationFailed) toast('Your earlier batch could not be moved to its distributor because browser storage is full. Clear batches you no longer need, then reload.', true);
+  if (migrationFailed) toast(legacyLeft().length
+    ? 'Some earlier batches could not be moved to named batches because browser storage is full. They are listed under "Not moved yet" in Batches on the Upload page: delete the ones you no longer need there (the others are then moved right away), or delete other batches and reload.'
+    : 'Your earlier data could not be moved to a named batch because browser storage is full. Delete batches you no longer need, then reload.', true);
 }
 
 // Debug/test handle (used by tests/run-tests.js).
 window.PR = {
   engine: { parseNum, parseFrac, upcKey, upcShow, isLossyUpc, findLimit, keepaCheck, recQty, statusOf, parseUploadFormat, parseKeepa, parseProfit, r2 },
-  flushSave, switchDistributor, matchDistributor, batchList, DEFAULT_DISTRIBUTORS, setView, cloud, cloudFlush, refreshBatchList,
+  flushSave, openBatch, createBatch, deleteBatch, resolveDistributor, distMatches, migrateV2, batchList, DEFAULT_DISTRIBUTORS, setView,
+  cloud, cloudFlush, refreshBatchList,
   pending: () => ({ dirty: [...dirty], ops: CLOUD ? cloud.ops.length : 0, writing: CLOUD && !!cloud.writing, timer: !!saveTimer }),
   cloudPoll,
-  keys: { LS_V1, LS_META, LS_BATCH, SS_TAB },
+  keys: { LS_V1, LS_META, LS_BATCH, LS_BATCH_V2, SS_TAB, LS_CLOUD_LAST },
   reinit() { initState(); derive(); render(); },
   get state() { return state; }, D, derive, render, handleFiles, buildKeepaExport, buildQcExport, buildFinalExport, DEFAULT_SETTINGS,
   setQc(asin, bundle, match) { const q = qcEntry(asin); q.bundle = bundle; q.match = match; derive(); markQc(asin, 'bundle', 'match'); }

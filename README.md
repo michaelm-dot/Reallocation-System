@@ -171,16 +171,21 @@ you left it.
 A third app in the sidebar (**Apps → Product Research Automation**). It lives in `pr.html` and is
 shown in a frame; it borrows this page's signed-in Supabase client, so there is one sign-in.
 
-The flow, per distributor: **Upload** (Upload Format + Keepa export) → **Keepa Checking** →
+The flow, per batch: **Upload** (Upload Format + Keepa export) → **Keepa Checking** →
 **QC Checking** (Bundle Size, Matched/Mismatch; export for the profitability tool) →
 **Profitability** (import its result; Recommended Sellable Qty, 30D Profit and status) → export.
 
-- Each distributor has its own batch. Batches, QC answers and settings are shared by the whole team
-  in the `pr_batches`, `pr_qc` and `pr_settings` tables (team-only RLS, like the `mos_` tables).
+- Batches are named: each has a distributor and a name, auto-filled as the distributor plus the date
+  and editable. A distributor can have many batches; a name already taken gets a ` (2)` suffix.
+- Shared by the whole team (team-only RLS, like the `mos_` tables): `pr_batches` (one row per batch,
+  keyed by an immutable `id`; names unique case-insensitively), `pr_qc` (one row per batch and ASIN),
+  `pr_settings`, and the `pr_batch_list` view that the batch picker and table read in one query.
 - Teammates' changes appear within a few seconds: every open page checks the revs every 6 seconds
   through RLS. There is no public Realtime channel.
 - A save only goes over the version it read; if a teammate saved first, their version is read and
   this page's changes are applied on top of it, so nobody's upload or answer is overwritten.
+- Delete is final: it removes the batch and its QC answers for everyone, and a page that still has
+  it open closes it instead of saving it back.
 - The distributor list is kept in `pr_settings`, not in this repo (this repo is public).
 - Opened on its own (`pr.html` outside the desk), the page keeps everything in that browser instead.
 
