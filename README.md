@@ -166,6 +166,26 @@ you left it.
 
 ---
 
+## Product Research Automation
+
+A third app in the sidebar (**Apps → Product Research Automation**). It lives in `pr.html` and is
+shown in a frame; it borrows this page's signed-in Supabase client, so there is one sign-in.
+
+The flow, per distributor: **Upload** (Upload Format + Keepa export) → **Keepa Checking** →
+**QC Checking** (Bundle Size, Matched/Mismatch; export for the profitability tool) →
+**Profitability** (import its result; Recommended Sellable Qty, 30D Profit and status) → export.
+
+- Each distributor has its own batch. Batches, QC answers and settings are shared by the whole team
+  in the `pr_batches`, `pr_qc` and `pr_settings` tables (team-only RLS, like the `mos_` tables).
+- Teammates' changes appear within a few seconds: every open page checks the revs every 6 seconds
+  through RLS. There is no public Realtime channel.
+- A save only goes over the version it read; if a teammate saved first, their version is read and
+  this page's changes are applied on top of it, so nobody's upload or answer is overwritten.
+- The distributor list is kept in `pr_settings`, not in this repo (this repo is public).
+- Opened on its own (`pr.html` outside the desk), the page keeps everything in that browser instead.
+
+---
+
 ## Known limits
 
 - The `.xlsx` export cannot carry colours or bold — SheetJS's free build drops cell styling.

@@ -1,0 +1,1878 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PR Tool</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{--bg:#0b0e14;--side:#0d1117;--panel:#151a23;--panel2:#111621;--border:#232b38;--text:#e6edf3;--muted:#8b949e;--muted2:#6b7482;--accent:#14b8a6;--accent-d:#0f9488;
+    --good:#4ade80;--good-bg:#0f2a1a;--warn:#facc15;--warn-bg:#2a2410;--bad:#f87171;--bad-bg:#2c1214;--info:#60a5fa;--info-bg:#0f1e36;--topbar:rgba(11,14,20,.92)}
+  html.light{--bg:#f5f7fa;--side:#ffffff;--panel:#ffffff;--panel2:#eef2f7;--border:#d6dde6;--text:#1a2029;--muted:#5b6472;--muted2:#8a94a3;--accent:#0d9488;--accent-d:#0b7d72;
+    --good:#15803d;--good-bg:#dcfce7;--warn:#a16207;--warn-bg:#fef9c3;--bad:#b91c1c;--bad-bg:#fee2e2;--info:#1d4ed8;--info-bg:#dbeafe;--topbar:rgba(255,255,255,.92)}
+  *{box-sizing:border-box}html,body{margin:0;height:100%}
+  [hidden]{display:none !important}
+  .distpick{padding:14px 14px 2px}
+  .distpick label{display:block;font-size:10.5px;letter-spacing:.14em;color:var(--muted2);text-transform:uppercase;margin:0 4px 6px}
+  .distpick select{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--accent);background:var(--panel2);color:var(--text);font:inherit;font-size:13px}
+  textarea.cell{width:100%;max-width:560px;text-align:left;font:inherit;font-size:13px;resize:vertical}
+  tr.activebatch td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+  body{background:var(--bg);color:var(--text);font:14px/1.45 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+  .app{display:flex;min-height:100vh}
+  .side{width:236px;flex:0 0 236px;background:var(--side);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+  .brand{display:flex;align-items:center;gap:10px;padding:18px;border-bottom:1px solid var(--border)}
+  .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#3b82f6);display:grid;place-items:center;font-weight:800;color:#04121a;font-size:13px}
+  .brand b{font-size:14.5px}.brand span{display:block;font-size:11px;color:var(--muted)}
+  .navlabel{font-size:10.5px;letter-spacing:.14em;color:var(--muted2);text-transform:uppercase;padding:16px 18px 8px}
+  .nav{display:flex;flex-direction:column;gap:2px;padding:0 10px}
+  .nav a{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;color:var(--text);opacity:.85;text-decoration:none;font-size:13.5px;cursor:pointer;border:1px solid transparent}
+  .nav a:hover{background:var(--panel2);opacity:1}
+  .nav a.active{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 35%,transparent);opacity:1}
+  .nav .step{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:11px;font-weight:700;background:var(--panel2);border:1px solid var(--border);flex:0 0 20px}
+  .nav em{margin-left:auto;font-style:normal;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .side .foot{margin-top:auto;padding:14px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+  .batch{font-size:12px;color:var(--muted)}.batch b{color:var(--text);display:block;font-size:13px}
+  .ver{font-size:10.5px;color:var(--muted2)}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .topbar{position:sticky;top:0;z-index:5;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--topbar);backdrop-filter:blur(6px)}
+  .topbar h1{font-size:18px;margin:0}.topbar .sub{color:var(--muted);font-size:13px}
+  .content{padding:20px 24px 60px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+  .card h2{font-size:14px;margin:0 0 10px}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:16px}
+  .stat{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+  .stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .stat .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .stat.good .v{color:var(--good)}.stat.bad .v{color:var(--bad)}.stat.warn .v{color:var(--warn)}.stat.info .v{color:var(--info)}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+  .btn:hover{border-color:var(--muted2)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#04121a;font-weight:600}
+  html.light .btn.primary{color:#fff}
+  .btn.primary:hover{background:var(--accent-d)}
+  .btn.danger{color:var(--bad)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .drop{border:1.5px dashed var(--border);border-radius:12px;padding:22px 16px;text-align:center;cursor:pointer;background:var(--panel2);transition:border-color .15s}
+  .drop:hover,.drop.over{border-color:var(--accent)}
+  .drop b{display:block;margin-bottom:4px}.drop span{color:var(--muted);font-size:12.5px}
+  .drop.compact{padding:12px 14px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px;margin-top:12px}
+  .kv dt{color:var(--muted)}.kv dd{margin:0}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+  .toolbar .spacer{flex:1}
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .seg button{border:0;background:var(--panel2);color:var(--muted);padding:7px 11px;font:inherit;font-size:12.5px;cursor:pointer;border-right:1px solid var(--border)}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--accent);color:#04121a;font-weight:600}
+  html.light .seg button.on{color:#fff}
+  .search{padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font:inherit;font-size:13px;min-width:200px}
+  .tablewrap{overflow:auto;max-height:max(420px,calc(100vh - 150px));min-height:200px;border:1px solid var(--border);border-radius:12px;background:var(--panel)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{position:sticky;top:0;z-index:1;background:var(--panel2);color:var(--muted);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;font-size:12px}
+  thead th.ref{color:var(--muted2);font-weight:500}
+  tbody td{padding:6px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tbody tr:hover{background:color-mix(in srgb,var(--panel2) 70%,transparent)}
+  tbody tr.dim td{opacity:.55}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  td.title{max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  td.nowrap{white-space:nowrap}
+  td.ref{color:var(--muted)}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+  .chip{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap;margin:1px 3px 1px 0;border:1px solid transparent}
+  .chip.good{background:var(--good-bg);color:var(--good)}
+  .chip.bad{background:var(--bad-bg);color:var(--bad)}
+  .chip.warn{background:var(--warn-bg);color:var(--warn)}
+  .chip.info{background:var(--info-bg);color:var(--info)}
+  .chip.muted{background:var(--panel2);color:var(--muted);border-color:var(--border)}
+  .thumb{width:40px;height:40px;object-fit:contain;background:#fff;border-radius:6px;display:block}
+  input.cell,select.cell{padding:5px 7px;border-radius:6px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font:inherit;font-size:13px}
+  input.cell{width:72px;text-align:right}
+  input.cell.invalid{border-color:var(--bad);background:var(--bad-bg)}
+  #saveWarn{margin:16px 24px 0;border-left-color:var(--bad)}
+  select.cell.Matched{border-color:var(--good);color:var(--good)}
+  select.cell.Mismatch{border-color:var(--bad);color:var(--bad)}
+  .note{border:1px solid var(--border);border-left:3px solid var(--warn);background:var(--panel);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px}
+  .note.info{border-left-color:var(--info)}
+  .note .list{color:var(--muted);font-size:12px;margin-top:4px;word-break:break-word}
+  .steps{margin:0;padding-left:20px;color:var(--muted);font-size:13px}.steps li{margin:3px 0}.steps b{color:var(--text)}
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+  .toast{position:fixed;right:20px;bottom:20px;max-width:420px;background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.25);font-size:13px;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none;z-index:50;white-space:pre-line}
+  .toast.show{opacity:1;transform:none}
+  .toast.err{border-left-color:var(--bad)}
+  .limits td{padding:5px 8px}.limits input{width:100%}
+  .limits input.lim{width:120px;text-align:right}
+  @media (max-width:860px){
+    .app{flex-direction:column}
+    .side{width:auto;flex:none;height:auto;position:static;border-right:0;border-bottom:1px solid var(--border)}
+    .nav{flex-direction:row;flex-wrap:wrap}.navlabel{display:none}
+    .side .foot{flex-direction:row;flex-wrap:wrap;align-items:center}
+    .content{padding:16px}.topbar{padding:12px 16px}
+    .search{min-width:0;flex:1}
+  }
+  /* Inside the Reallocation desk: its colours and fonts, and no own sidebar (the desk shows the views). */
+  html.embed{--bg:#EFF2F0;--panel:#FFFFFF;--panel2:#F4F6F5;--border:#DCE1DE;--text:#17201D;--muted:#5D6763;--muted2:#8A938F;
+    --accent:#1F6B4A;--accent-d:#18573C;--good:#1F6B4A;--good-bg:#E7F1EB;--warn:#8A5A0B;--warn-bg:#FBF1DC;--bad:#A33A30;--bad-bg:#F8E9E7;
+    --info:#1D5688;--info-bg:#E6EEF6;--topbar:rgba(239,242,240,.95)}
+  html.embed body{font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:14px}
+  html.embed .side{display:none}
+  html.embed .topbar{padding:18px 28px 14px;align-items:center;border-bottom:1px solid var(--border)}
+  html.embed .topbar h1,html.embed .card h2{font-family:"Archivo",system-ui,sans-serif;letter-spacing:-.01em}
+  html.embed .topbar h1{font-size:21px}
+  html.embed .content{padding:20px 28px 60px}
+  html.embed .card,html.embed .stat,html.embed .tablewrap{border-radius:10px}
+  html.embed .btn.primary,html.embed .seg button.on{color:#fff}
+  html.embed .mono,html.embed td.num{font-family:"IBM Plex Mono",ui-monospace,monospace}
+  .embedbar{margin-left:auto;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .embedbar .distpick{padding:0;display:flex;align-items:center;gap:8px}
+  .embedbar .distpick label{margin:0;letter-spacing:.08em}
+  .embedbar .distpick select{width:auto;min-width:240px;max-width:340px;border-color:var(--border);background:var(--panel)}
+  .embedbar .batch{font-size:12.5px;color:var(--muted)}
+  #saveWarn #saveErr{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><div class="logo">PR</div><div><b>PR Tool</b><span>Product Research</span></div></div>
+    <div class="distpick"><label for="selDist">Distributor</label><select id="selDist"></select></div>
+    <div class="navlabel">Process</div>
+    <nav class="nav" id="nav">
+      <a data-view="upload"><span class="step">1</span>Upload<em id="bUpload"></em></a>
+      <a data-view="keepa"><span class="step">2</span>Keepa Checking<em id="bKeepa"></em></a>
+      <a data-view="qc"><span class="step">3</span>QC Checking<em id="bQc"></em></a>
+      <a data-view="profit"><span class="step">4</span>Profitability<em id="bProfit"></em></a>
+      <a data-view="settings"><span class="step">⚙</span>Settings</a>
+    </nav>
+    <div class="foot">
+      <div class="batch" id="batchInfo"></div>
+      <button class="btn" id="btnTheme" type="button">Light mode</button>
+      <button class="btn danger" id="btnClear" type="button">Clear batch</button>
+      <div class="ver" id="ver"></div>
+    </div>
+  </aside>
+  <main class="main">
+    <header class="topbar"><h1 id="title"></h1><span class="chip info" id="distChip" hidden></span><div class="sub" id="sub"></div></header>
+    <div class="note" id="saveWarn" hidden><b>This batch is not being saved in the browser</b> (storage is full or blocked). The tool still works, but your inputs will be lost if you refresh or close the page. Export what you need first.</div>
+    <div class="content" id="content"></div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+<input type="file" id="inUpload" accept=".xlsx,.xls,.csv" hidden>
+<input type="file" id="inKeepa" accept=".xlsx,.xls,.csv" multiple hidden>
+<input type="file" id="inProfit" accept=".xlsx,.xls,.csv" hidden>
+<script>
+(function () {
+'use strict';
+const VERSION = 'v1.2 · 2026-10-20';
+const LS_THEME = 'prtool.theme';
+// Inside the Reallocation desk this page runs in a frame and the desk lends its signed-in Supabase client
+// (window.PR_HOST). Then batches live in the shared database; opened on its own, the page uses this browser.
+const HOST = (() => { try { return window.parent !== window ? window.parent.PR_HOST || null : null; } catch (e) { return null; } })();
+const CLOUD = !!HOST;
+const PICK_WHERE = CLOUD ? 'at the top of the page' : 'at the top of the sidebar';
+
+/* ============================== RULES ENGINE (pure) ============================== */
+
+// Max Sales Rank per category (from Michael's PR process). Matched to Keepa names by prefix,
+// so "Grocery & Gourmet" covers "Grocery & Gourmet Food" and "Baby" covers "Baby Products".
+const DEFAULT_LIMITS = [
+  ['Grocery & Gourmet', 200000], ['Beauty & Personal Care', 250000], ['Health & Household', 200000], ['Automotive', 400000],
+  ['Home & Kitchen', 500000], ['Industrial & Scientific', 150000], ['Electronics', 100000],
+  ['Pet Supplies', 50000], ['Baby', 45000], ['Office Products', 120000], ['Sports & Outdoors', 130000],
+  ['Patio, Lawn & Garden', 120000], ['Tools & Home Improvement', 130000], ['Toys & Games', 75000]
+].map(([name, limit]) => ({ name, limit }));
+// Categories added to the defaults later, by version, so a browser with saved settings gets them too.
+const LIMITS_VERSION = 2;
+const ADDED_LIMITS = { 2: [['Health & Household', 200000]] }; // 2026-10-20, from Michael
+const DEFAULT_SETTINGS = { bbThreshold: 0.85, limits: DEFAULT_LIMITS, limitsVersion: LIMITS_VERSION };
+
+const MARK_ORDER = ['BB%', 'High BSR', '0 FBA', 'Asin Not Available'];
+const MAX_BUNDLE = 999999; // the database allows the same range
+
+// Keepa Product Viewer export columns.
+const K = {
+  asin: 'ASIN', code: 'Imported by Code', title: 'Title', brand: 'Brand', image: 'Image',
+  bbTop: 'Buy Box: % Top Seller 90 days', ref: 'Sales Rank: Reference', rank: 'Sales Rank: Current',
+  root: 'Categories: Root', fba90: 'New FBA Offer Count: 90 days avg.', win90: 'Buy Box: Winner Count 90 days',
+  bb90: 'Buy Box: 90 days avg.', bought: 'Monthly Sales Trends: Bought in past month',
+  items: 'Number of Items', pkg: 'Package: Quantity',
+  upcs: 'Product Codes: UPC', eans: 'Product Codes: EAN', gtins: 'Product Codes: GTIN'
+};
+const K_REQUIRED = ['asin', 'bbTop', 'ref', 'rank', 'fba90', 'win90', 'bb90', 'bought'];
+
+// Profitability Checking file columns.
+const P = {
+  asin: 'ASIN', profit: 'Net Profit - Peak | FBA', roi: 'ROI Peak | FBA',
+  be: 'Sell Price Estimate - Target ROI 0% - Breakeven | FBA', buy: 'Buy Cost | FBA', sell: 'Sell Price | FBA',
+  restr: 'Restrictions', melt: 'Meltable', tp: 'Transparency'
+};
+const P_REQUIRED = ['asin', 'profit', 'roi', 'be', 'restr', 'melt', 'tp'];
+
+const str = v => (v == null ? '' : String(v).trim());
+const isBlank = v => v == null || (typeof v === 'string' && v.trim() === '');
+const isEmptyLike = v => isBlank(v) || /^(no|false|0|-|n\/a|na|none)$/i.test(String(v).trim());
+const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+// "1 ASIN" / "2 ASINs", and the matching verb.
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const isAre = n => (n === 1 ? 'is' : 'are');
+const hasHave = n => (n === 1 ? 'has' : 'have');
+
+// Round half away from zero to 2 decimals (same as Sheets ROUND).
+function r2(n) { if (n == null || !isFinite(n)) return null; const s = n < 0 ? -1 : 1; return s * Math.round(Math.abs(n) * 100 + 1e-9) / 100; }
+
+// "$1,005.00" -> 1005, "-$0.11" -> -0.11, "($0.11)" -> -0.11, "27,801" -> 27801, "1K+" -> 1000. "%" is stripped, not divided.
+function parseNum(v) {
+  if (v == null) return null;
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  let s = String(v).trim();
+  if (!s) return null;
+  let neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  s = s.replace(/[\s$,%+]/g, '');
+  if (s.startsWith('-')) { neg = !neg; s = s.slice(1); }
+  const m = /^(\d*\.?\d+(?:e-?\d+)?)([km])?$/i.exec(s);
+  if (!m) return null;
+  let n = parseFloat(m[1]);
+  if (m[2]) n *= /k/i.test(m[2]) ? 1e3 : 1e6;
+  return neg ? -n : n;
+}
+
+// Percent as a fraction: "98%" -> 0.98, 0.85 -> 0.85. With over1IsPercent, a bare 85 also means 85%.
+function parseFrac(v, over1IsPercent) {
+  if (isBlank(v)) return null;
+  if (typeof v === 'string' && v.includes('%')) { const n = parseNum(v); return n == null ? null : n / 100; }
+  const n = parseNum(v);
+  if (n == null) return null;
+  return over1IsPercent && Math.abs(n) > 1 ? n / 100 : n;
+}
+
+// UPC/EAN match key: digits only, leading zeros dropped (Excel and Keepa both lose them).
+// Returns '' for codes that cannot be trusted, e.g. "8.51818E+11" from an Excel-saved CSV (digits already lost).
+function upcKey(v) {
+  if (v == null) return '';
+  if (typeof v === 'number') {
+    if (!isFinite(v) || v < 0 || Math.abs(v - Math.round(v)) > 1e-6) return '';
+    return Math.round(v).toFixed(0).replace(/^0+/, '');
+  }
+  let s = String(v).trim().replace(/^=?"(.*)"$/, '$1').replace(/^'/, '').trim();
+  if (/^\d{1,3}(,\d{3})+(\.\d*)?$/.test(s)) s = s.replace(/,/g, ''); // "71,672,001,237.00" (Comma Style)
+  const sci = /^(\d+)(?:\.(\d+))?e\+?(\d+)$/i.exec(s);
+  if (sci) {
+    // Fewer decimals than the exponent means the last digits were padded with zeros, so the real UPC is unknown.
+    if ((sci[2] || '').length < Number(sci[3])) return '';
+    const n = Number(s);
+    if (!Number.isSafeInteger(Math.round(n)) || Math.abs(n - Math.round(n)) > 1e-6) return '';
+    s = Math.round(n).toFixed(0);
+  } else if (/^\d+\.\d*$/.test(s)) {
+    if (!/^\d+\.0*$/.test(s)) return '';
+    s = s.split('.')[0];
+  }
+  if (!/^[\d\s-]+$/.test(s)) return ''; // text such as an ASIN or "Page 1 of 2" is not a UPC
+  return s.replace(/\D/g, '').replace(/^0+/, '');
+}
+const SCI_RE = /^\d+(\.\d+)?e\+?\d+$/i;
+const isLossyUpc = v => typeof v === 'string' && SCI_RE.test(v.trim()) && upcKey(v) === '';
+// A key ending in 5+ zeros is probably a UPC whose digits were already cut by Excel and then re-saved as a number.
+const isSuspectUpc = k => /0{5,}$/.test(k);
+const upcShow = k => (!k ? '' : k.length <= 12 ? k.padStart(12, '0') : k);
+
+const catKey = s => String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]/g, '');
+// Longest matching limit name wins.
+function findLimit(cat, limits) {
+  const k = catKey(cat);
+  if (!k) return null;
+  let best = null, bestLen = 0;
+  for (const L of limits) {
+    const lk = catKey(L.name);
+    if (lk && k.startsWith(lk) && lk.length > bestLen && L.limit != null && isFinite(L.limit)) { best = L; bestLen = lk.length; }
+  }
+  return best;
+}
+
+// Keepa Checking: BB%, High BSR, 0 FBA, Asin Not Available. Any mark = fail. "No BSR Limit" is only a label.
+function keepaCheck(r, S) {
+  const marks = [], labels = [];
+  if (r.bbTop != null && Math.round(r.bbTop * 10000) >= Math.round(S.bbThreshold * 10000)) marks.push('BB%');
+  // The rank belongs to the Reference category; Root is only a fallback when Reference is blank.
+  const L = findLimit(r.ref || r.root, S.limits);
+  if (r.rank == null) marks.push('High BSR');
+  else if (!L) labels.push('No BSR Limit');
+  else if (r.rank > L.limit) marks.push('High BSR');
+  if (r.fba90 == null || r.fba90 < 1) marks.push('0 FBA');
+  if (r.win90 == null || r.win90 === 0) marks.push('Asin Not Available');
+  return { marks, labels, pass: marks.length === 0, limit: L ? L.limit : null, limitName: L ? L.name : '' };
+}
+
+// Recommended Sellable Qty — same logic as the Sheets ARRAYFORMULA (J = ROI, T = Bought in past month).
+// ROI is compared unrounded, exactly like the formula does on column J.
+function recQty(roi, t) {
+  if (roi == null) return null;
+  if (roi < -0.16) return null;
+  if (roi >= -0.15 && roi <= 0) return 12;
+  if (roi > 0) {
+    if (t == null) return 24;
+    if (t === 50) return 36;
+    if (t === 100) return 50;
+    if (t === 200) return 80;
+    if (t === 300) return 120;
+    if (t === 400 || t === 500) return 180;
+    if (t === 600 || t === 700 || t === 800) return 250;
+    if (t >= 900) return 300;
+    return null;
+  }
+  return null;
+}
+
+function statusOf(p30, roi, qty) {
+  if (p30 != null) return p30 < 0 ? 'Negative ROI' : p30 <= 50 ? 'Low Profit' : 'Good to Order';
+  if (qty != null) return 'Check Profit'; // Rec Qty exists but Profit Per Unit is blank
+  if (roi == null) return '';
+  return roi <= 0 ? 'Negative ROI' : 'Check Qty';
+}
+
+function normHeader(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase(); }
+function headerIndex(row, spec) {
+  const norm = (row || []).map(normHeader), idx = {};
+  for (const k in spec) { const i = norm.indexOf(normHeader(spec[k])); if (i >= 0) idx[k] = i; }
+  return idx;
+}
+
+const UPC_HEADERS = ['upc', 'upc code', 'upc/ean', 'barcode', 'gtin', 'ean'];
+const PRICE_HEADERS = ['unit price', 'unit cost', 'price', 'cost']; // in priority order
+function parseUploadFormat(rows, fileName) {
+  let distributor = '', h = -1, cu = -1, cp = -1;
+  const isLabel = x => /[:#]$/.test(x) || UPC_HEADERS.includes(x) || PRICE_HEADERS.includes(x);
+  for (let i = 0; i < Math.min(rows.length, 40) && h < 0; i++) {
+    const row = rows[i] || [], n = row.map(normHeader);
+    const u = n.findIndex(x => UPC_HEADERS.includes(x));
+    let p = -1;
+    for (const ph of PRICE_HEADERS) { p = n.indexOf(ph); if (p >= 0) break; }
+    if (u >= 0 && p >= 0) { h = i; cu = u; cp = p; break; } // the header row itself is never the distributor row
+    n.forEach((x, j) => {
+      if (distributor) return;
+      if (/^distributor\s*:\s*\S/.test(x)) distributor = str(row[j]).replace(/^distributor\s*:\s*/i, '');
+      else if (/^distributor\s*:?$/.test(x)) {
+        const next = row.slice(j + 1).find(v => !isBlank(v));
+        if (next != null && !isLabel(normHeader(next))) distributor = str(next);
+      }
+    });
+  }
+  if (h < 0) throw new Error(fileName + ': no "UPC" and "Unit Price" header found. Is this the Upload Format?');
+  const prices = {}, conflicts = [], badUpc = [];
+  let count = 0, dups = 0, noPrice = 0;
+  for (let i = h + 1; i < rows.length; i++) {
+    const r = rows[i] || [];
+    const key = upcKey(r[cu]);
+    if (!key) { if (isLossyUpc(r[cu])) badUpc.push(str(r[cu])); continue; }
+    const price = parseNum(r[cp]);
+    count++;
+    if (price == null) { noPrice++; continue; }
+    if (hasOwn(prices, key)) { dups++; if (prices[key] !== price) conflicts.push(upcShow(key)); continue; }
+    prices[key] = price;
+  }
+  if (!count && !badUpc.length) throw new Error(fileName + ': no UPCs found under the header.');
+  const suspect = Object.keys(prices).filter(isSuspectUpc).map(upcShow);
+  return { fileName, distributor, prices, count, unique: Object.keys(prices).length, dups, conflicts, noPrice, badUpc, suspect };
+}
+
+function parseKeepa(rows, fileName) {
+  if (!rows.length) throw new Error(fileName + ': the file is empty.');
+  const hi = headerIndex(rows[0], K);
+  const missing = K_REQUIRED.filter(k => !(k in hi)).map(k => K[k]);
+  if (!('code' in hi) && !('upcs' in hi)) missing.push(K.code);
+  if (missing.length) throw new Error(fileName + ': missing columns needed for Keepa Checking:\n' + missing.join('\n'));
+  const out = [];
+  out.lossy = []; // ASINs whose UPC was unreadable scientific notation
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i] || [];
+    const g = k => (k in hi ? row[hi[k]] : null);
+    const asin = str(g('asin')).toUpperCase();
+    if (!/^[A-Z0-9]{10}$/.test(asin)) continue;
+    const codes = [];
+    let sawLossy = false;
+    for (const k of ['code', 'upcs', 'eans', 'gtins']) {
+      const v = g(k);
+      if (isBlank(v)) continue;
+      // Whole cell first ("71,672,001,237" is one code); split only cells that hold several codes.
+      const parts = typeof v === 'number' || upcKey(v) ? [v] : String(v).split(/[,;\s]+/);
+      parts.forEach(c => {
+        const key = upcKey(c);
+        if (key) { if (!codes.includes(key)) codes.push(key); }
+        else if (isLossyUpc(c)) sawLossy = true;
+      });
+    }
+    if (sawLossy && !codes.length) out.lossy.push(asin);
+    const image = String(g('image') == null ? '' : g('image')).split(/[;,\s]+/).find(u => /^https?:\/\//.test(u)) || '';
+    out.push({
+      asin, upc: upcKey(g('code')) || codes[0] || '', codes,
+      title: str(g('title')), brand: str(g('brand')), image,
+      ref: str(g('ref')), root: str(g('root')), rank: parseNum(g('rank')),
+      bbTop: parseFrac(g('bbTop'), true), fba90: parseNum(g('fba90')), win90: parseNum(g('win90')),
+      bb90: parseNum(g('bb90')), bought: parseNum(g('bought')), items: parseNum(g('items')), pkg: parseNum(g('pkg'))
+    });
+  }
+  if (!out.length) throw new Error(fileName + ': no ASINs found.');
+  return out;
+}
+
+function parseProfit(rows, fileName) {
+  const hi = headerIndex(rows[0] || [], P);
+  const missing = P_REQUIRED.filter(k => !(k in hi)).map(k => P[k]);
+  if (missing.length) throw new Error(fileName + ': missing columns in the Profitability Checking file:\n' + missing.join('\n'));
+  const out = [], seen = new Set();
+  let dups = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i] || [];
+    const g = k => (k in hi ? row[hi[k]] : null);
+    const asin = str(g('asin')).toUpperCase();
+    if (!/^[A-Z0-9]{10}$/.test(asin)) continue;
+    if (seen.has(asin)) { dups++; continue; }
+    seen.add(asin);
+    out.push({
+      asin, profit: parseNum(g('profit')), roi: parseFrac(g('roi'), false), be: parseNum(g('be')),
+      buy: parseNum(g('buy')), sell: parseNum(g('sell')),
+      restr: str(g('restr')), melt: str(g('melt')), tp: str(g('tp'))
+    });
+  }
+  if (!out.length) throw new Error(fileName + ': no ASINs found.');
+  return { fileName, rows: out, dups };
+}
+
+/* ============================== STATE ============================== */
+
+const clone = o => JSON.parse(JSON.stringify(o));
+
+// The team's distributor list lives in Supabase (pr_settings), not in this public file.
+const DEFAULT_DISTRIBUTORS = [];
+
+// Storage: shared settings in one key and one key per distributor batch. The picked distributor, view and
+// filters belong to the tab (sessionStorage), so two tabs can work on two distributors at the same time.
+const LS_V1 = 'prtool.v1'; // single-batch save from before distributors; moved once by migrateV1()
+const LS_META = 'prtool.v2.meta';
+const LS_BATCH = 'prtool.v2.batch:';
+const SS_TAB = 'prtool.v2.tab';
+const STORAGE_LIMIT = 5000000; // roughly what a browser allows per site, in characters
+const BATCH_KEYS = ['upload', 'keepa', 'profit', 'qc'];
+const freshBatch = () => ({ upload: null, keepa: { rows: [], uploads: [] }, qc: {}, profit: null, dataRev: '' });
+const freshSettings = () => Object.assign(clone(DEFAULT_SETTINGS), { distributors: DEFAULT_DISTRIBUTORS.slice() });
+const freshFilters = () => ({ keepa: 'all', qc: 'all', profit: 'all' });
+// Same distributor when the names match ignoring case, spaces and punctuation ("ABC DC1" = "Abc dc-1").
+// A name with no letters or digits falls back to its trimmed lowercase text.
+const distKey = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '') || String(s || '').trim().toLowerCase();
+const matchDistributor = (text, list) => (distKey(text) ? list.find(d => distKey(d) === distKey(text)) || '' : '');
+// Adds default categories introduced after `fromVersion`, unless the user already has that category.
+function upgradeLimits(S, fromVersion) {
+  for (let v = fromVersion + 1; v <= LIMITS_VERSION; v++) {
+    (ADDED_LIMITS[v] || []).forEach(([name, limit]) => {
+      if (!S.limits.some(L => catKey(L.name) === catKey(name))) S.limits.push({ name, limit });
+    });
+  }
+  S.limitsVersion = LIMITS_VERSION;
+}
+// With storage blocked (strict privacy settings) even reading `localStorage` throws, so always go through store().
+const store = name => { try { return window[name] || null; } catch (e) { return null; } };
+function readJSON(storeName, key) { try { const s = store(storeName), raw = s && s.getItem(key); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
+function normBatch(b) {
+  b = b || {};
+  const k = b.keepa || {};
+  return {
+    upload: b.upload || null,
+    keepa: { rows: Array.isArray(k.rows) ? k.rows : [], uploads: Array.isArray(k.uploads) ? k.uploads : (k.files || []).map(name => ({ name })) },
+    qc: b.qc && typeof b.qc === 'object' ? b.qc : {}, profit: b.profit || null, dataRev: b.dataRev || ''
+  };
+}
+function loadMeta() {
+  const m = readJSON('localStorage', LS_META);
+  if (!m) return null;
+  const S = Object.assign(freshSettings(), m.settings || {});
+  upgradeLimits(S, (m.settings && m.settings.limitsVersion) || 1);
+  if (!Array.isArray(S.distributors) || !S.distributors.length) S.distributors = DEFAULT_DISTRIBUTORS.slice();
+  return { settings: S, settingsRev: m.settingsRev || '', last: m.last || '', migratedV1: !!m.migratedV1 };
+}
+const loadBatch = name => normBatch(readJSON('localStorage', LS_BATCH + name));
+const batchOf = s => ({ upload: s.upload, keepa: s.keepa, qc: s.qc, profit: s.profit, dataRev: s.dataRev });
+function setBatch(b) { state.upload = b.upload; state.keepa = b.keepa; state.qc = b.qc; state.profit = b.profit; state.dataRev = b.dataRev; }
+
+// One-time move of a v1 save (one batch for everything) into the per-distributor layout. The batch goes to the
+// distributor named in its Upload Format. The v1 key is removed only once the move succeeded (meta.migratedV1);
+// if storage is too full to copy, the data is moved instead, and put back if even that fails.
+let migrationFailed = false;
+function migrateV1() {
+  const ls = store('localStorage');
+  let raw = null;
+  try { raw = ls && ls.getItem(LS_V1); } catch (e) { return; }
+  if (!raw) return;
+  const meta = readJSON('localStorage', LS_META);
+  if (meta && meta.migratedV1) { try { ls.removeItem(LS_V1); } catch (e) { /* ignore */ } return; }
+  let old = null;
+  try { old = JSON.parse(raw); } catch (e) { return; } // unreadable: leave it alone
+  if (!old || typeof old !== 'object') return;
+  let S;
+  if (meta) S = loadMeta().settings; // a meta written after an earlier failed attempt is newer than v1's settings
+  else { S = Object.assign(freshSettings(), old.settings || {}); upgradeLimits(S, (old.settings && old.settings.limitsVersion) || 1); }
+  const b = normBatch(old);
+  const hasData = !!(b.upload || b.keepa.rows.length || b.profit || Object.keys(b.qc).length);
+  const fileDist = b.upload ? b.upload.distributor : '';
+  let name = hasData ? (matchDistributor(fileDist, S.distributors) || str(fileDist) || 'Unassigned') : '';
+  // Never overwrite an existing batch: use "<name> (old)", "<name> (old 2)", … (so the failure path below
+  // only ever removes a key that this call created).
+  if (name && readJSON('localStorage', LS_BATCH + name)) {
+    const base = name;
+    for (let i = 1; readJSON('localStorage', LS_BATCH + name); i++) name = `${base} (old${i > 1 ? ' ' + i : ''})`;
+  }
+  const batchOut = hasData ? JSON.stringify(Object.assign(b, { dataRev: newRev() })) : null;
+  const metaOut = JSON.stringify({ settings: S, settingsRev: newRev(), last: name || (meta && meta.last) || '', migratedV1: true });
+  const write = () => { if (batchOut) ls.setItem(LS_BATCH + name, batchOut); ls.setItem(LS_META, metaOut); ls.removeItem(LS_V1); };
+  try { write(); return; } catch (e) { /* probably full: try moving instead of copying */ }
+  try { ls.removeItem(LS_V1); write(); } catch (e) {
+    try { if (batchOut) ls.removeItem(LS_BATCH + name); ls.setItem(LS_V1, raw); } catch (e2) { /* nothing more to do */ }
+    migrationFailed = true;
+  }
+}
+
+// Distributors that have a saved batch, with counts for the picker and the batch table (parsed once per change).
+const summaryCache = {};
+function batchList() {
+  const out = [];
+  if (CLOUD) cloud.list.forEach(b => out.push(Object.assign({}, b)));
+  else try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(LS_BATCH)) continue;
+      const name = key.slice(LS_BATCH.length), raw = localStorage.getItem(key) || '';
+      let c = summaryCache[name];
+      if (!c || c.raw !== raw) {
+        let b = null;
+        try { b = JSON.parse(raw); } catch (e) { /* unreadable batch: counts stay 0 */ }
+        b = normBatch(b);
+        c = summaryCache[name] = {
+          raw, asins: b.keepa.rows.length, profit: b.profit ? b.profit.rows.length : 0,
+          matched: Object.values(b.qc).filter(q => q && q.match === 'Matched').length
+        };
+      }
+      out.push({ name, size: raw.length, asins: c.asins, matched: c.matched, profit: c.profit });
+    }
+  } catch (e) { /* storage blocked */ }
+  // The picked batch may have changes that are not written yet: show its live counts.
+  if (state && state.distributor) {
+    const live = { asins: state.keepa.rows.length, profit: state.profit ? state.profit.rows.length : 0,
+      matched: Object.values(state.qc).filter(q => q && q.match === 'Matched').length };
+    const cur = out.find(b => b.name === state.distributor);
+    if (cur) Object.assign(cur, live);
+    else if (state.upload || live.asins || live.profit || Object.keys(state.qc).length) out.push(Object.assign({ name: state.distributor, size: 0 }, live));
+  }
+  return out;
+}
+function storageUsed() {
+  let n = 0;
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('prtool.')) n += k.length + (localStorage.getItem(k) || '').length; } } catch (e) { /* blocked */ }
+  return n;
+}
+
+let state = null;
+function initState() {
+  try { migrateV1(); } catch (e) { migrationFailed = true; }
+  const m = loadMeta(), tab = readJSON('sessionStorage', SS_TAB) || {};
+  state = Object.assign({ settings: m ? m.settings : freshSettings(), settingsRev: m ? m.settingsRev : '', migratedV1: !!(m && m.migratedV1),
+    distributor: '', view: 'upload', filters: freshFilters() }, freshBatch());
+  if (tab.view) state.view = tab.view;
+  Object.assign(state.filters, tab.filters || {});
+  state.distributor = (typeof tab.distributor === 'string' ? tab.distributor : (m ? m.last : '')) || '';
+  if (state.distributor) setBatch(loadBatch(state.distributor));
+}
+
+// Saving is debounced. `dirty` remembers what this tab changed since its last write, so a write from
+// another tab can be merged instead of wiping those changes.
+let saveTimer = null, saveFailing = false;
+const dirty = new Set();
+const batchDirty = () => [...dirty].some(k => k !== 'settings' && k !== 'meta');
+const dropBatchDirty = () => [...dirty].forEach(k => { if (k !== 'settings' && k !== 'meta') dirty.delete(k); });
+function writeTab() { try { sessionStorage.setItem(SS_TAB, JSON.stringify({ distributor: state.distributor, view: state.view, filters: state.filters })); } catch (e) { /* ignore */ } }
+// Meta and batch are written separately; each one's dirty marks are cleared only when that write succeeds.
+function writeNow() {
+  clearTimeout(saveTimer); saveTimer = null;
+  const ls = store('localStorage');
+  let ok = !!ls; // no storage at all counts as a failed save, so the warning stays up
+  if (dirty.has('settings') || dirty.has('meta')) {
+    try {
+      // migratedV1 is carried over so a later meta write does not re-arm the v1 migration.
+      ls.setItem(LS_META, JSON.stringify({ settings: state.settings, settingsRev: state.settingsRev, last: state.distributor, migratedV1: state.migratedV1 }));
+      dirty.delete('settings'); dirty.delete('meta');
+    } catch (e) { ok = false; }
+  }
+  if (batchDirty()) {
+    if (!state.distributor) dropBatchDirty();
+    else try { ls.setItem(LS_BATCH + state.distributor, JSON.stringify(batchOf(state))); dropBatchDirty(); } catch (e) { ok = false; }
+  }
+  writeTab();
+  saveFailing = !ok;
+  const w = document.getElementById('saveWarn');
+  if (w) w.hidden = ok;
+}
+// dataRev / settingsRev change with every data change, so another tab can tell a real change from its own echo.
+const newRev = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+// keys: 'upload' | 'keepa' | 'profit' | 'qc:<ASIN>' | 'all' (the picked distributor's batch), 'settings', 'meta'
+function save(...keys) {
+  if (CLOUD && keys.length) cloud.seq++; // a check that is reading right now must not apply what it read
+  keys.forEach(k => dirty.add(k));
+  if (keys.some(k => k !== 'settings' && k !== 'meta')) state.dataRev = newRev();
+  if (keys.includes('settings')) state.settingsRev = newRev();
+  clearTimeout(saveTimer); saveTimer = setTimeout(CLOUD ? cloudWrite : writeNow, CLOUD ? 400 : 250);
+}
+// Also retries a write that failed earlier (e.g. after space was freed).
+function flushSave() {
+  if (!saveTimer && !dirty.size) return;
+  if (CLOUD) cloudWrite(); else writeNow();
+}
+window.addEventListener('pagehide', flushSave);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
+
+// Another tab saved this distributor's batch: put this tab's unsaved parts on top of its copy.
+function mergeRemote(s) {
+  if (dirty.has('all')) BATCH_KEYS.forEach(k => { s[k] = state[k]; });
+  else dirty.forEach(k => {
+    if (k.startsWith('qc:')) { const a = k.slice(3); if (state.qc[a]) s.qc[a] = state.qc[a]; }
+    else if (BATCH_KEYS.includes(k)) s[k] = state[k];
+  });
+  if (batchDirty()) s.dataRev = newRev(); // the merged copy differs from both tabs' versions
+  return s;
+}
+
+// Bumped whenever the picked batch is switched or cleared, so a file that is still loading cannot land in it.
+let batchGen = 0;
+
+// Picking another distributor saves the current batch first, then loads the other one.
+function switchDistributor(name) {
+  if (CLOUD) return cloudSwitch(name); // a Promise of true/false
+  name = name || '';
+  if (name === state.distributor) return true;
+  flushSave();
+  if (batchDirty() && !confirm(`The "${state.distributor}" batch could not be saved. Switch anyway? Its unsaved changes will be lost.`)) {
+    const sel = $('selDist');
+    if (sel) sel.value = state.distributor; // the picker still shows the cancelled choice
+    return false;
+  }
+  dropBatchDirty();
+  batchGen++;
+  state.distributor = name;
+  setBatch(name ? loadBatch(name) : freshBatch());
+  search.keepa = search.qc = search.profit = '';
+  save('meta');
+  derive(); render();
+  return true;
+}
+function clearBatch(name) {
+  if (!name) return;
+  if (!confirm(`Clear the "${name}" batch? This removes its Upload Format, Keepa files, QC inputs and Profitability${CLOUD ? ' for everyone on the team' : ''}. Other distributors and Settings are kept.`)) return;
+  if (CLOUD) { cloudClear(name); return; }
+  try { store('localStorage').removeItem(LS_BATCH + name); } catch (e) { /* blocked */ }
+  delete summaryCache[name];
+  if (name === state.distributor) { dropBatchDirty(); batchGen++; setBatch(freshBatch()); derive(); }
+  if (dirty.size) writeNow(); // space was freed: retry anything that failed to save
+  render();
+  toast(`${name}: batch cleared.`);
+}
+const isEditing = () => { const a = document.activeElement; return !!(a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && a.closest('#content')); };
+let renderPending = false;
+// QC inputs are patched in place, so a full re-render can wait until the user leaves the field.
+// Settings rows are addressed by index, so that page always re-renders at once.
+function renderSoon() { if (isEditing() && state.view !== 'settings') { renderPending = true; renderBadges(); } else render(); }
+document.addEventListener('focusout', () => setTimeout(() => { if (renderPending && !isEditing()) { renderPending = false; render(); } }, 0));
+// After a batch change from another tab: Settings does not show batch data, so only refresh the sidebar there.
+function refreshAfterBatchChange() { if (state.view === 'settings') { renderBadges(); renderDistSelect(); } else renderSoon(); }
+// Another tab saved: take its copy (keeping this tab's unsaved changes) so neither tab overwrites the other.
+window.addEventListener('storage', e => {
+  if (CLOUD || !e.key || !state) return;
+  if (e.key === LS_META) {
+    const m = loadMeta();
+    if (m) state.migratedV1 = state.migratedV1 || m.migratedV1;
+    if (!m || m.settingsRev === state.settingsRev || dirty.has('settings')) return; // our own echo, or ours wins
+    state.settings = m.settings; state.settingsRev = m.settingsRev;
+    derive(); renderSoon();
+    return;
+  }
+  if (!e.key.startsWith(LS_BATCH)) return;
+  const name = e.key.slice(LS_BATCH.length);
+  if (name !== state.distributor) { renderDistSelect(); if (state.view === 'upload') renderSoon(); return; } // another distributor
+  const hadLocal = batchDirty();
+  if (e.newValue == null) { // cleared in another tab
+    if (hadLocal) return; // this tab's edits will be written back
+    batchGen++;
+    setBatch(freshBatch()); derive(); refreshAfterBatchChange();
+    toast(`${name}: batch cleared in another tab.`);
+    return;
+  }
+  const s = loadBatch(name);
+  if (s.dataRev === state.dataRev) return;
+  setBatch(mergeRemote(s));
+  derive();
+  if (hadLocal) writeNow();
+  refreshAfterBatchChange();
+  toast(`${name}: batch updated from another tab.`);
+});
+
+/* ============================== SHARED DATABASE (inside the Reallocation desk) ============================== */
+// Tables (team-only RLS): pr_settings (one row), pr_batches (one row per distributor: upload, keepa, profit, rev,
+// qc_rev), pr_qc (one row per distributor + ASIN; deleted with its batch). Every read goes through RLS: teammates'
+// changes are picked up by a light check every few seconds (revs only), never through a public channel.
+const LS_CLOUD_LAST = 'prtool.cloud.last';
+const POLL_MS = 6000;
+const cloud = { sb: null, me: null, rev: '', qcRev: '', ops: [], loading: false, failed: '', error: '', saveError: '',
+  settingsRev: '', settingsTouched: new Map(), qcFields: {}, inflightQc: new Set(), attempts: [], saves: [], writingBatch: false, seq: 0,
+  list: [], listAt: 0, writing: null, writeAgain: false, retry: null, pollRun: null, pollTimer: null };
+const errText = e => (e && (e.message || e.details || e.hint)) || String(e);
+const nowIso = () => new Date().toISOString();
+const partsDirty = () => ['upload', 'keepa', 'profit'].some(k => dirty.has(k));
+
+// Settings or QC changed here: in the shared database only the touched settings and QC fields are written,
+// so two people editing different things do not undo each other. Each settings key counts its edits, so a key
+// edited again while a save is out stays marked after that save.
+function saveSettings(...fields) {
+  if (CLOUD) fields.forEach(f => cloud.settingsTouched.set(f, (cloud.settingsTouched.get(f) || 0) + 1));
+  save('settings');
+}
+function markQc(asin, ...fields) {
+  if (CLOUD) { const s = cloud.qcFields[asin] || (cloud.qcFields[asin] = new Set()); fields.forEach(f => s.add(f)); }
+  save('qc:' + asin);
+}
+
+async function cloudInit() {
+  cloud.sb = HOST.client ? HOST.client() : null;
+  const tab = readJSON('sessionStorage', SS_TAB) || {};
+  state = Object.assign({ settings: freshSettings(), settingsRev: '', migratedV1: true, distributor: '', view: 'upload', filters: freshFilters() }, freshBatch());
+  if (tab.view) state.view = tab.view;
+  Object.assign(state.filters, tab.filters || {});
+  cloud.loading = true; derive(); render();
+  // The desk may still be finishing its sign-in when this frame loads.
+  for (let i = 0; i < 50 && !(HOST.user && HOST.user()); i++) await new Promise(r => setTimeout(r, 300));
+  cloud.me = HOST.user ? HOST.user() : null;
+  cloud.sb = HOST.client ? HOST.client() : cloud.sb;
+  if (!cloud.sb || !cloud.me) { cloud.loading = false; cloud.error = 'Sign in to the Reallocation desk first, then open Product Research Automation again.'; derive(); render(); return; }
+  try { await cloudLoadSettings(); }
+  catch (e) { cloud.error = 'Could not read the shared settings: ' + errText(e); cloud.loading = false; derive(); render(); return; }
+  refreshBatchList();
+  const last = typeof tab.distributor === 'string' ? tab.distributor : (readJSON('localStorage', LS_CLOUD_LAST) || '');
+  cloud.loading = false;
+  await cloudOpen(typeof last === 'string' ? last : '');
+  cloud.pollTimer = setInterval(() => { if (!cloud.pollRun) cloudPoll(); }, POLL_MS);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) cloudPoll(); });
+}
+
+function normSettings(raw) {
+  raw = raw || {};
+  const S = Object.assign(freshSettings(), raw);
+  upgradeLimits(S, raw.limitsVersion || 1);
+  if (!Array.isArray(S.distributors)) S.distributors = DEFAULT_DISTRIBUTORS.slice();
+  return S;
+}
+async function cloudLoadSettings() {
+  const { data, error } = await cloud.sb.from('pr_settings').select('data,rev').eq('id', 1).maybeSingle();
+  if (error) throw error;
+  state.settings = normSettings(data && data.data);
+  cloud.settingsRev = state.settingsRev = (data && data.rev) || '';
+}
+
+async function fetchBatchRow(name) {
+  const { data, error } = await cloud.sb.from('pr_batches').select('upload,keepa,profit,rev,qc_rev,last_saves').eq('distributor', name).maybeSingle();
+  if (error) throw error;
+  const b = normBatch(data || {});
+  return { exists: !!data, upload: b.upload, keepa: b.keepa, profit: b.profit, rev: (data && data.rev) || '', qcRev: (data && data.qc_rev) || '',
+    saves: (data && Array.isArray(data.last_saves)) ? data.last_saves : [] };
+}
+// All QC rows of a distributor, paged (the API returns at most 1000 rows at a time).
+async function fetchQc(name) {
+  const qc = {};
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await cloud.sb.from('pr_qc').select('asin,bundle,match').eq('distributor', name).order('asin').range(from, from + 999);
+    if (error) throw error;
+    (data || []).forEach(r => { qc[r.asin] = { bundle: r.bundle, match: r.match || '' }; });
+    if (!data || data.length < 1000) return qc;
+  }
+}
+// The database's QC answers replace this tab's (answers of a cleared batch must not linger), except the
+// ones this tab has not saved yet (marked, or being saved right now).
+function mergeQc(qc) {
+  const next = Object.assign({}, qc);
+  Object.keys(state.qc).forEach(a => { if (dirty.has('qc:' + a) || cloud.inflightQc.has(a)) next[a] = state.qc[a]; });
+  state.qc = next;
+}
+
+// Resolves to false when another pick (or a clear) took over while it was loading.
+async function cloudOpen(name) {
+  const gen = ++batchGen;
+  state.distributor = name || '';
+  cloud.rev = ''; cloud.qcRev = ''; cloud.saves = []; cloud.ops = []; cloud.qcFields = {}; cloud.attempts = []; cloud.failed = '';
+  dropBatchDirty();
+  setBatch(freshBatch());
+  cloud.loading = !!name;
+  writeTab(); derive(); render();
+  if (!name) return true;
+  try {
+    // The row first, then the answers: a qc_rev older than the answers only costs one extra read later,
+    // while the other order could miss a teammate's answer.
+    const row = await fetchBatchRow(name);
+    const qc = await fetchQc(name);
+    if (gen !== batchGen) return false;
+    setBatch({ upload: row.upload, keepa: row.keepa, profit: row.profit, qc, dataRev: row.rev });
+    cloud.rev = row.rev; cloud.qcRev = row.qcRev; cloud.saves = row.saves;
+  } catch (e) {
+    if (gen === batchGen) cloud.failed = `Could not load "${name}": ${errText(e)}`;
+  } finally {
+    if (gen === batchGen) { cloud.loading = false; derive(); render(); }
+  }
+  return gen === batchGen && !cloud.failed;
+}
+
+// Saves everything pending first; a batch that cannot be saved is only left behind after asking.
+async function cloudSwitch(name) {
+  name = name || '';
+  if (name === state.distributor) return true;
+  await cloudFlush();
+  if ((batchDirty() || cloud.ops.length) &&
+    !confirm(`The "${state.distributor}" batch could not be saved (${cloud.saveError || 'no connection'}). Switch anyway? Its unsaved changes will be lost.`)) {
+    const sel = $('selDist');
+    if (sel) sel.value = state.distributor;
+    return false;
+  }
+  search.keepa = search.qc = search.profit = '';
+  try { localStorage.setItem(LS_CLOUD_LAST, JSON.stringify(name)); } catch (e) { /* blocked */ }
+  return cloudOpen(name);
+}
+
+async function cloudFlush() {
+  clearTimeout(saveTimer); saveTimer = null;
+  for (let i = 0; i < 4 && (cloud.writing || dirty.size); i++) await cloudWrite();
+}
+
+// One save at a time; anything marked while it runs is saved right after. A failed save keeps its marks
+// and is retried every few seconds (the banner stays up meanwhile).
+function cloudWrite() {
+  clearTimeout(saveTimer); saveTimer = null;
+  if (cloud.writing) { cloud.writeAgain = true; return cloud.writing; }
+  if (!dirty.size) { writeTab(); return Promise.resolve(); } // e.g. only the view changed
+  const run = (async () => {
+    await null; // yield first, so `cloud.writing` below is set before this body can clear it
+    let ok = true;
+    do {
+      cloud.writeAgain = false;
+      const keys = [...dirty], d = state.distributor;
+      dirty.clear();
+      const qcAsins = keys.filter(k => k.startsWith('qc:')).map(k => k.slice(3));
+      const fields = {};
+      qcAsins.forEach(a => { fields[a] = cloud.qcFields[a] || new Set(['bundle', 'match']); delete cloud.qcFields[a]; });
+      cloud.inflightQc = new Set(qcAsins); // not marked any more, but not saved yet either
+      try {
+        if (keys.includes('settings')) await cloudWriteSettings();
+        if (d && keys.some(k => k === 'upload' || k === 'keepa' || k === 'profit')) await cloudWriteBatch(d);
+        if (d && qcAsins.length) await cloudWriteQc(d, qcAsins, fields);
+      } catch (e) {
+        ok = false;
+        cloud.saveError = errText(e);
+        keys.forEach(k => { if (k !== 'meta' && k !== 'all') dirty.add(k); });
+        qcAsins.forEach(a => { const s = cloud.qcFields[a] || (cloud.qcFields[a] = new Set()); fields[a].forEach(f => s.add(f)); });
+      } finally { cloud.inflightQc = new Set(); }
+    } while (ok && cloud.writeAgain && dirty.size);
+    saveFailing = !ok;
+    if (ok) cloud.saveError = '';
+    const w = $('saveWarn');
+    if (w) { w.hidden = ok; const s = $('saveErr'); if (s) s.textContent = cloud.saveError; }
+    clearTimeout(cloud.retry);
+    if (!ok) cloud.retry = setTimeout(() => { if (dirty.size) cloudWrite(); }, 5000);
+    cloud.seq++;
+    cloud.writing = null;
+    writeTab();
+  })();
+  cloud.writing = run;
+  return run;
+}
+
+// Written only over the version this tab last read. If a teammate saved first, their settings are kept
+// except the ones changed here, and the save is tried again.
+async function cloudWriteSettings() {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const rev = newRev(), sent = new Map(cloud.settingsTouched); // keys edited again while the request is out stay marked
+    const body = { data: state.settings, rev, updated_at: nowIso(), updated_by: cloud.me.email || '' };
+    const { data, error } = await (cloud.settingsRev
+      ? cloud.sb.from('pr_settings').update(body).eq('id', 1).eq('rev', cloud.settingsRev).select('rev')
+      : cloud.sb.from('pr_settings').insert(Object.assign({ id: 1 }, body)).select('rev'));
+    if (error && error.code !== '23505') throw error;
+    if (!error && data && data.length) {
+      cloud.settingsRev = state.settingsRev = rev;
+      sent.forEach((n, k) => { if (cloud.settingsTouched.get(k) === n) cloud.settingsTouched.delete(k); });
+      return;
+    }
+    const cur = await cloud.sb.from('pr_settings').select('data,rev').eq('id', 1).maybeSingle();
+    if (cur.error) throw cur.error;
+    const theirs = normSettings(cur.data && cur.data.data);
+    // 'limit:<category>' = only that category's number changed here; other keys are taken whole.
+    cloud.settingsTouched.forEach((n, k) => {
+      if (!k.startsWith('limit:')) { theirs[k] = clone(state.settings[k]); return; }
+      const key = k.slice(6), mine = state.settings.limits.find(L => catKey(L.name) === key);
+      if (!mine || cloud.settingsTouched.has('limits')) return;
+      const i = theirs.limits.findIndex(L => catKey(L.name) === key);
+      if (i >= 0) theirs.limits[i] = Object.assign({}, theirs.limits[i], { limit: mine.limit }); else theirs.limits.push(clone(mine));
+    });
+    state.settings = theirs;
+    cloud.settingsRev = (cur.data && cur.data.rev) || '';
+    derive(); renderSoon();
+  }
+  throw new Error('teammates kept changing the settings at the same moment; it will try again');
+}
+
+// Written only over the version this tab last read (rev). If a teammate saved first, their version is read
+// and this tab's ops are replayed on it, then the save is tried again. Only the ops that were in a saved row
+// are dropped; ops added while the request was out stay for the next save.
+// A save whose answer was lost (network) may still have landed, even under a teammate's later save. Every
+// row keeps its last 20 save revs (last_saves), and this tab remembers each rev it tried until one is
+// confirmed, so a landed save is recognised and its ops are never applied twice.
+async function cloudWriteBatch(d) {
+  cloud.writingBatch = true;
+  try {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const rev = newRev(), n = cloud.ops.length, saves = (cloud.saves || []).concat(rev).slice(-20), tried = { rev, n };
+      cloud.attempts.push(tried);
+      const row = { upload: state.upload, keepa: state.keepa, profit: state.profit, asins: state.keepa.rows.length,
+        profit_rows: state.profit ? state.profit.rows.length : 0, rev, last_saves: saves, updated_at: nowIso(), updated_by: cloud.me.email || '' };
+      const { data, error } = await (cloud.rev
+        ? cloud.sb.from('pr_batches').update(row).eq('distributor', d).eq('rev', cloud.rev).select('rev')
+        : cloud.sb.from('pr_batches').insert(Object.assign({ distributor: d, qc_rev: newRev() }, row)).select('rev'));
+      // 23505: someone created this batch first. Any other error may be a lost answer: this try may have landed.
+      if (error && error.code !== '23505') { tried.unknown = true; throw error; }
+      if (!error && data && data.length) {
+        cloud.ops.splice(0, n); cloud.rev = rev; cloud.saves = saves; state.dataRev = rev; cloud.attempts = [];
+        refreshBatchListSoon();
+        return;
+      }
+      const fresh = await fetchBatchRow(d);
+      if (state.distributor !== d) return;
+      // Did an earlier try of ours land after all? Then its ops are already in the row.
+      const landed = cloud.attempts.filter(a => fresh.saves.includes(a.rev));
+      if (landed.length) {
+        const done = Math.max(...landed.map(a => a.n));
+        cloud.ops.splice(0, done);
+        cloud.attempts = cloud.attempts.filter(a => a.n > done && !landed.includes(a)).map(a => ({ rev: a.rev, n: a.n - done, unknown: a.unknown }));
+      }
+      if (!fresh.exists) {
+        // Cleared by a teammate: start again from an empty batch with this tab's newer changes only. A try whose
+        // answer was lost may have landed before the clear, so the teammate cleared its changes on purpose:
+        // they are dropped, never brought back.
+        const unsure = cloud.attempts.filter(a => a.unknown);
+        if (unsure.length) {
+          cloud.ops.splice(0, Math.max(...unsure.map(a => a.n)));
+          toast(`${d}: a teammate cleared this batch while a save from this page was unconfirmed, so those changes were not saved again.`, true);
+        }
+        cloud.attempts = [];
+        mergeQc({}); cloud.qcRev = '';
+      }
+      const base = { upload: fresh.upload, keepa: fresh.keepa, profit: fresh.profit };
+      cloud.ops.forEach(op => OPS[op.name](base, ...op.args));
+      state.upload = base.upload; state.keepa = base.keepa; state.profit = base.profit;
+      cloud.rev = fresh.rev; cloud.saves = fresh.saves;
+      derive(); refreshAfterBatchChange();
+      if (!cloud.ops.length) { cloud.attempts = []; state.dataRev = fresh.rev; return; } // nothing of ours left to save (never re-create a cleared batch for nothing)
+    }
+    throw new Error('teammates kept saving this batch at the same moment; it will try again');
+  } finally { cloud.writingBatch = false; }
+}
+
+// Only the fields changed here are written (bundle, match or both), then the batch's qc_rev is bumped so
+// teammates re-read the QC answers. A batch cleared meanwhile (23503) drops these answers instead of retrying.
+async function cloudWriteQc(d, asins, fields) {
+  const at = nowIso(), by = cloud.me.email || '', groups = {};
+  asins.forEach(a => {
+    const f = [...fields[a]].sort().join(','), q = state.qc[a] || {}, r = { distributor: d, asin: a, updated_at: at, updated_by: by };
+    if (fields[a].has('bundle')) r.bundle = Number.isInteger(q.bundle) && q.bundle > 0 && q.bundle <= MAX_BUNDLE ? q.bundle : null;
+    if (fields[a].has('match')) r.match = q.match || '';
+    (groups[f] = groups[f] || []).push(r);
+  });
+  for (const rows of Object.values(groups)) {
+    for (let i = 0; i < rows.length; i += 500) {
+      const { error } = await cloud.sb.from('pr_qc').upsert(rows.slice(i, i + 500), { onConflict: 'distributor,asin' });
+      if (error && error.code === '23503') {
+        toast(`${d}: these QC answers were not saved because the batch was cleared.`, true);
+        if (state.distributor === d) { asins.forEach(a => { if (!dirty.has('qc:' + a)) delete state.qc[a]; }); derive(); refreshAfterBatchChange(); }
+        cloudPoll(); return;
+      }
+      if (error) throw error;
+    }
+  }
+  // Bump qc_rev over the value this tab last read. If a teammate bumped it meanwhile, their answers are not
+  // here yet: bump it anyway (so they re-read ours) and forget ours (so the next check re-reads theirs).
+  const qcRev = newRev();
+  const res = await cloud.sb.from('pr_batches').update({ qc_rev: qcRev }).eq('distributor', d).eq('qc_rev', cloud.qcRev).select('qc_rev');
+  if (res.error) throw res.error;
+  if (res.data && res.data.length) cloud.qcRev = qcRev;
+  else {
+    const again = await cloud.sb.from('pr_batches').update({ qc_rev: qcRev }).eq('distributor', d);
+    if (again.error) throw again.error;
+    cloud.qcRev = '';
+  }
+  refreshBatchListSoon();
+}
+
+// Deleting the batch row also deletes its QC answers (foreign key, on delete cascade): one atomic step.
+async function cloudClear(name) {
+  try {
+    if (name === state.distributor) {
+      dropBatchDirty(); cloud.ops = []; cloud.qcFields = {}; cloud.attempts = []; batchGen++;
+      cloud.loading = false; cloud.failed = '';
+      clearTimeout(saveTimer); saveTimer = dirty.size ? setTimeout(cloudWrite, 400) : null; // a pending settings save still goes out
+    }
+    if (cloud.writing) await cloud.writing; // a save still running must not bring the batch back
+    const r = await cloud.sb.from('pr_batches').delete().eq('distributor', name);
+    if (r.error) throw r.error;
+    if (name === state.distributor) { dropBatchDirty(); cloud.ops = []; cloud.rev = ''; cloud.qcRev = ''; cloud.saves = []; setBatch(freshBatch()); derive(); }
+    cloud.list = cloud.list.filter(b => b.name !== name);
+    render();
+    toast(`${name}: batch cleared.`);
+  } catch (e) {
+    toast(`Could not clear "${name}": ${errText(e)}`, true);
+    if (name === state.distributor) cloudOpen(name);
+  }
+}
+
+// Every few seconds (while the page is visible): compare the revs and re-read only what a teammate changed.
+// What was read is only applied if nothing changed or saved here meanwhile (cloud.seq); otherwise the next
+// check reads again, so a read that started before a local edit can never put old values back.
+function cloudPoll() {
+  if (cloud.pollRun) return cloud.pollRun.then(() => cloudPoll()); // let a running check finish, then check fresh
+  cloud.pollRun = pollOnce().catch(() => { /* the next check tries again */ }).finally(() => { cloud.pollRun = null; });
+  return cloud.pollRun;
+}
+async function pollOnce() {
+  if (!state || !cloud.sb || cloud.error || document.hidden) return;
+  const quiet = seq => cloud.seq === seq && !cloud.writing && !dirty.size;
+  let seq = cloud.seq;
+  const s = await cloud.sb.from('pr_settings').select('rev').eq('id', 1).maybeSingle();
+  if (!s.error && s.data && s.data.rev !== cloud.settingsRev && quiet(seq)) {
+    const cur = await cloud.sb.from('pr_settings').select('data,rev').eq('id', 1).maybeSingle();
+    if (!cur.error && quiet(seq)) {
+      state.settings = normSettings(cur.data && cur.data.data);
+      cloud.settingsRev = state.settingsRev = (cur.data && cur.data.rev) || '';
+      derive(); renderSoon();
+    }
+  }
+  const d = state.distributor;
+  if (!d || cloud.loading || cloud.failed) return;
+  seq = cloud.seq;
+  const { data: b, error } = await cloud.sb.from('pr_batches').select('rev,qc_rev').eq('distributor', d).maybeSingle();
+  if (error || d !== state.distributor || cloud.loading) return;
+  const free = () => d === state.distributor && quiet(seq) && !cloud.ops.length;
+  if (!b && cloud.rev && free()) {
+    batchGen++; cloud.rev = ''; cloud.qcRev = ''; cloud.saves = []; cloud.attempts = []; setBatch(freshBatch()); derive(); refreshAfterBatchChange();
+    toast(`${d}: batch cleared by a teammate.`);
+    return;
+  }
+  if (b && b.rev !== cloud.rev && free()) {
+    const fresh = await fetchBatchRow(d);
+    if (fresh.exists && free()) {
+      state.upload = fresh.upload; state.keepa = fresh.keepa; state.profit = fresh.profit;
+      cloud.rev = state.dataRev = fresh.rev; cloud.saves = fresh.saves; // keeps others' save revs in our next save
+      derive(); refreshAfterBatchChange();
+      toast(`${d}: updated by a teammate.`);
+    }
+  }
+  if (b && b.qc_rev !== cloud.qcRev && free()) {
+    const qc = await fetchQc(d);
+    if (free()) { mergeQc(qc); cloud.qcRev = b.qc_rev; derive(); refreshAfterBatchChange(); }
+  }
+  if (state.view === 'upload' && Date.now() - cloud.listAt > 30000) refreshBatchList();
+}
+
+let listTimer = null;
+function refreshBatchListSoon() { clearTimeout(listTimer); listTimer = setTimeout(refreshBatchList, 1500); }
+async function refreshBatchList() {
+  if (!cloud.sb) return;
+  cloud.listAt = Date.now();
+  const { data, error } = await cloud.sb.from('pr_batches').select('distributor,asins,profit_rows,updated_at,updated_by');
+  if (error) return;
+  const counts = await Promise.all((data || []).map(b => cloud.sb.from('pr_qc').select('asin', { count: 'exact', head: true })
+    .eq('distributor', b.distributor).eq('match', 'Matched').then(r => r.count || 0, () => 0)));
+  cloud.list = (data || []).map((b, i) => ({ name: b.distributor, asins: b.asins || 0, profit: b.profit_rows || 0, matched: counts[i],
+    size: 0, updatedBy: b.updated_by || '', updatedAt: b.updated_at || '' }));
+  renderDistSelect();
+  if (state.view === 'upload') renderSoon();
+}
+
+// Derived data, rebuilt from state by derive().
+const D = { keepa: [], keepaMap: {}, qc: [], qcMap: {}, profit: [], profitMissing: [] };
+
+function qcEntry(asin) { return state.qc[asin] || (state.qc[asin] = { bundle: null, match: '' }); }
+
+function derive() {
+  const S = state.settings, prices = state.upload ? state.upload.prices : {};
+  D.keepa = state.keepa.rows.map(r => {
+    const c = keepaCheck(r, S);
+    let unitCost = null, costUpc = '';
+    for (const code of r.codes) if (hasOwn(prices, code) && prices[code] != null) { unitCost = prices[code]; costUpc = code; break; }
+    return Object.assign({}, r, c, { unitCost, costUpc });
+  });
+  D.keepaMap = {};
+  D.keepa.forEach(r => { D.keepaMap[r.asin] = r; });
+  D.qc = D.keepa.filter(r => r.pass).map(r => {
+    const q = state.qc[r.asin] || {};
+    const bundle = Number.isInteger(q.bundle) && q.bundle > 0 && q.bundle <= MAX_BUNDLE ? q.bundle : null;
+    return Object.assign({}, r, { bundle, match: q.match || '', bundleCost: bundle != null && r.unitCost != null ? r2(bundle * r.unitCost) : null });
+  });
+  D.qcMap = {};
+  D.qc.forEach(r => { D.qcMap[r.asin] = r; });
+  D.profit = state.profit ? state.profit.rows.map(profitRow) : [];
+  const inProfit = new Set(D.profit.map(p => p.asin));
+  D.profitMissing = state.profit ? D.qc.filter(r => r.match === 'Matched' && !inProfit.has(r.asin)) : [];
+}
+
+function profitRow(p) {
+  const k = D.keepaMap[p.asin] || null, q = D.qcMap[p.asin] || null;
+  const bought = k ? k.bought : null;
+  // Once a Keepa file is loaded, only Keepa passers marked Matched in QC can get an order status.
+  const excluded = D.keepa.length > 0 && !(k && k.pass && q && q.match === 'Matched');
+  const qty = excluded ? null : recQty(p.roi, bought);
+  const p30 = qty != null && p.profit != null ? r2(p.profit * qty) : null;
+  // Bundle Size or Unit Cost changed (or was cleared) after the QC export, so the imported profit no longer matches the cost.
+  const costChanged = !excluded && q && p.buy != null && (q.bundleCost == null || Math.abs(q.bundleCost - p.buy) > 0.005);
+  const restrictedBy = [];
+  if (!isBlank(p.restr) && p.restr.toLowerCase() !== 'sell') restrictedBy.push('Restrictions: ' + p.restr);
+  if (!isEmptyLike(p.melt)) restrictedBy.push('Meltable: ' + p.melt);
+  const tp = !isEmptyLike(p.tp);
+  const notes = [];
+  if (!k) notes.push('Not in the Keepa file');
+  else if (!k.pass) notes.push('Failed Keepa: ' + k.marks.join(', '));
+  else if (!q || q.match !== 'Matched') notes.push(q && q.match === 'Mismatch' ? 'Mismatch in QC' : 'Not yet Matched in QC');
+  if (costChanged) notes.push(q.bundleCost == null
+    ? `Bundle Size or Unit Cost is now blank in QC; profitability used ${fmtMoney(p.buy)}. Fix it in QC and re-run.`
+    : `Bundle Cost changed: QC now has ${fmtMoney(q.bundleCost)}, profitability used ${fmtMoney(p.buy)}. Re-export and re-run.`);
+  if (restrictedBy.length) notes.push(restrictedBy.join('; '));
+  if (tp) notes.push('Transparency: ' + p.tp);
+  const bundle = q ? q.bundle : null, unitCost = k ? k.unitCost : null;
+  const bundleCost = costChanged || !q || q.bundleCost == null ? p.buy : q.bundleCost;
+  const status = excluded ? 'Excluded' : costChanged ? 'Cost Changed' : statusOf(p30, p.roi, qty);
+  return Object.assign({}, p, {
+    upc: k ? k.upc : '', title: k ? k.title : '', brand: k ? k.brand : '', category: k ? (k.ref || k.root) : '',
+    rank: k ? k.rank : null, bbTop: k ? k.bbTop : null, bb90: k ? k.bb90 : null,
+    unitCost, bundle, bundleCost, bought, qty, p30, excluded, costChanged, status,
+    restricted: restrictedBy.length > 0, restrictedBy, tpFlag: tp, notes
+  });
+}
+
+/* ============================== FILES ============================== */
+
+async function readTable(file) {
+  const buf = await file.arrayBuffer();
+  let wb;
+  if (/\.(csv|txt)$/i.test(file.name)) wb = XLSX.read(new TextDecoder('utf-8').decode(buf), { type: 'string', raw: true });
+  else wb = XLSX.read(new Uint8Array(buf), { type: 'array' }); // a Uint8Array also works for a File from another frame
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: false });
+}
+
+// Files load asynchronously; if the distributor is switched (or its batch cleared) meanwhile, stop.
+function assertDistributor(ctx) {
+  if (state.distributor !== ctx.dist || batchGen !== ctx.gen) throw new Error('Upload stopped: the distributor was changed or its batch was cleared while the file was loading. Upload it again.');
+}
+
+async function onUploadFormat(files, ctx) {
+  const f = files[0];
+  const u = parseUploadFormat(await readTable(f), f.name);
+  assertDistributor(ctx);
+  if (!state.distributor) {
+    // Nothing picked yet: use the distributor named in the file when it is on the list.
+    const m = matchDistributor(u.distributor, state.settings.distributors);
+    if (!m) throw new Error(`Pick a distributor first (${PICK_WHERE}). ` + (u.distributor ? `"${u.distributor}" is not on the distributor list.` : 'This file has no "Distributor:" name.'));
+    if (!(await switchDistributor(m))) return;
+    // The pick loads asynchronously in the shared database; stop if something else took over meanwhile.
+    if (state.distributor !== m || (CLOUD && (cloud.loading || cloud.failed))) return;
+  } else if (u.distributor && distKey(u.distributor) !== distKey(state.distributor) &&
+    !confirm(`This Upload Format is for "${u.distributor}", but the picked distributor is "${state.distributor}".\n\nUse it for "${state.distributor}" anyway?`)) return;
+  applyOp('setUpload', u);
+  derive(); save('upload'); render();
+  const withCost = D.keepa.filter(r => r.unitCost != null).length;
+  let warn = '';
+  if (u.badUpc.length) warn += `\n${plural(u.badUpc.length, 'UPC')} could not be read (scientific notation, e.g. ${u.badUpc[0]}). Use the original file, not a CSV re-saved in Excel.`;
+  if (u.suspect.length) warn += `\n${plural(u.suspect.length, 'UPC')} ${u.suspect.length === 1 ? 'ends' : 'end'} in 00000 (e.g. ${u.suspect[0]}). Digits may have been lost; check the original file.`;
+  toast(`Upload Format: ${u.distributor || '(no distributor)'} · ${plural(u.unique, 'UPC')}` + (D.keepa.length ? `\nASINs with a Unit Cost: ${withCost} / ${D.keepa.length}` : '') + warn, !!warn);
+}
+
+// Fields that are not used by the checks: a later file without these columns keeps the older values.
+const KEEP_IF_BLANK = ['title', 'brand', 'image', 'root', 'items', 'pkg'];
+
+// Every change to a batch's Upload Format, Keepa files or Profitability goes through an op. In the shared
+// database an op is kept until it is saved, so when a teammate saved first, this tab's ops are replayed on
+// top of their version instead of overwriting it. `b` is any object with upload/keepa/profit (state, or a copy).
+const OPS = {
+  setUpload(b, u) { b.upload = u; },
+  setProfit(b, pf) { b.profit = pf; },
+  clearKeepa(b) { b.keepa = { rows: [], uploads: [] }; },
+  clearProfit(b) { b.profit = null; },
+  // A later upload wins: its numbers replace the older row's, and their UPC codes are combined.
+  addKeepa(b, fileName, rows, lossy) {
+    const byAsin = {};
+    b.keepa.rows.forEach(r => { byAsin[r.asin] = r; });
+    let added = 0, replaced = 0;
+    for (const src of rows) {
+      const r = Object.assign({}, src, { codes: src.codes.slice() }); // ops can be replayed: never change the parsed rows
+      const old = byAsin[r.asin];
+      if (old) {
+        const codes = r.codes.concat(old.codes.filter(c => !r.codes.includes(c)));
+        KEEP_IF_BLANK.forEach(k => { if (isBlank(r[k])) r[k] = old[k]; });
+        Object.assign(old, r, { codes, upc: r.upc || old.upc });
+        replaced++;
+        continue;
+      }
+      byAsin[r.asin] = r; b.keepa.rows.push(r); added++;
+    }
+    b.keepa.uploads.push({ name: fileName, rows: rows.length, added, replaced, lossy });
+    return { added, replaced };
+  }
+};
+function applyOp(name, ...args) {
+  const out = OPS[name](state, ...args);
+  if (CLOUD) cloud.ops.push({ name, args });
+  return out;
+}
+
+async function onKeepa(files, ctx) {
+  let added = 0, replaced = 0;
+  const errors = [], lossy = [];
+  for (const f of files) {
+    let table;
+    try { table = await readTable(f); } catch (e) { errors.push(f.name + ': ' + (e.message || e)); continue; }
+    assertDistributor(ctx); // files already merged were saved to this distributor when it was switched
+    try {
+      const rows = parseKeepa(table, f.name);
+      const { added: fAdded, replaced: fReplaced } = applyOp('addKeepa', f.name, rows, rows.lossy.length);
+      save('keepa'); // mark it now, before the next await, so a write from another tab cannot drop this file
+      added += fAdded; replaced += fReplaced; lossy.push(...rows.lossy);
+    } catch (e) { errors.push(e.message); }
+  }
+  assertDistributor(ctx); // also when the last file failed to read: never touch a switched or cleared batch
+  derive(); render(); // each merged file was already saved inside the loop
+  const lossyMsg = lossy.length ? `\n${plural(lossy.length, 'ASIN')} ${hasHave(lossy.length)} an unreadable UPC (scientific notation, e.g. ${lossy[0]}), so no Unit Cost. Use the original Keepa export.` : '';
+  if (errors.length) toast(errors.join('\n\n') + lossyMsg, true);
+  else toast(`Keepa: +${plural(added, 'ASIN')}` + (replaced ? ` · ${plural(replaced, 'existing ASIN')} updated with new data` : '') + `\nPassed: ${D.qc.length} / ${D.keepa.length}` + lossyMsg, !!lossyMsg);
+}
+
+async function onProfit(files, ctx) {
+  const f = files[0];
+  const pf = parseProfit(await readTable(f), f.name);
+  assertDistributor(ctx);
+  applyOp('setProfit', pf);
+  derive(); save('profit'); render();
+  const c = countBy(D.profit, 'status');
+  toast(`Profitability: ${D.profit.length} ASIN\nGood to Order ${c['Good to Order'] || 0} · Low Profit ${c['Low Profit'] || 0} · Negative ROI ${c['Negative ROI'] || 0}`);
+}
+
+const HANDLERS = { upload: onUploadFormat, keepa: onKeepa, profit: onProfit };
+async function handleFiles(kind, files) {
+  files = Array.from(files || []).filter(f => /\.(xlsx|xls|csv|txt)$/i.test(f.name));
+  if (!files.length) { toast('Only xlsx or csv files are accepted.', true); return; }
+  if (!state.distributor && kind !== 'upload') { toast(`Pick a distributor first (${PICK_WHERE}).`, true); return; }
+  if (CLOUD && (cloud.loading || cloud.failed || cloud.error)) { toast(cloud.error || cloud.failed || 'The batch is still loading. Try again in a moment.', true); return; }
+  try { await HANDLERS[kind](files, { dist: state.distributor, gen: batchGen }); }
+  catch (e) { console.error(e); toast(e.message || String(e), true); }
+}
+
+/* ============================== EXPORTS ============================== */
+
+function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function batchName() { return (state.distributor || 'PR').replace(/[\\/:*?"<>|]+/g, ' ').trim(); }
+
+function buildKeepaExport() {
+  const aoa = [['ASIN', 'UPC', 'Title', 'Brand', 'Sales Rank: Reference', 'Sales Rank: Current', 'BSR Limit',
+    'Buy Box: % Top Seller 90 days', 'New FBA Offer Count: 90 days avg.', 'Buy Box: Winner Count 90 days',
+    'Buy Box: 90 days avg.', 'Unit Cost', 'Result', 'Marks', 'Labels']];
+  D.keepa.forEach(r => aoa.push([r.asin, upcShow(r.upc), r.title, r.brand, r.ref || r.root || null, r.rank, r.limit,
+    r.bbTop, r.fba90, r.win90, r.bb90, r.unitCost, r.pass ? 'Pass' : 'Fail', r.marks.join(', ') || null, r.labels.join(', ') || null]));
+  return { aoa, formats: { 5: '#,##0', 6: '#,##0', 7: '0%', 10: '$#,##0.00', 11: '$#,##0.00' } };
+}
+
+// What the profitability tool needs: Matched only, Bundle Cost = Bundle Size x Unit Cost.
+function buildQcExport() {
+  const aoa = [['ASIN', 'Bundle Cost', 'Buy Box: 90 days avg.']], skipped = [];
+  D.qc.forEach(r => {
+    if (r.match !== 'Matched') return;
+    if (r.bundleCost == null) { skipped.push(r.asin + (r.unitCost == null ? ' (no Unit Cost)' : ' (no Bundle Size)')); return; }
+    aoa.push([r.asin, r.bundleCost, r.bb90]);
+  });
+  return { aoa, skipped };
+}
+
+// Columns are placed so J = ROI % and T = Bought in past month, like the Sheets ARRAYFORMULA expects.
+const FINAL_HEADER = ['ASIN', 'UPC', 'Title', 'Brand', 'Category', 'Unit Cost', 'Bundle Size', 'Bundle Cost',
+  'Profit Per Unit', 'ROI %', 'Break Even', 'Buy Box: 90 days avg.', 'Restricted', 'TP', 'Recommended Sellable Qty',
+  '30D Profit', 'Status', 'Sales Rank: Current', 'Buy Box: % Top Seller 90 days', 'Bought in past month', 'Notes'];
+// Excluded rows go to their own sheet, so pasting the ARRAYFORMULA on the PR Result sheet cannot give them a quantity.
+function buildFinalExport() {
+  const aoa = [FINAL_HEADER.slice()], excluded = [FINAL_HEADER.slice()];
+  D.profit.forEach(p => (p.excluded ? excluded : aoa).push([p.asin, upcShow(p.upc) || null, p.title || null, p.brand || null, p.category || null,
+    p.unitCost, p.bundle, p.bundleCost, p.profit, p.roi, p.be, p.bb90, p.restricted ? 'Restricted' : null, p.tpFlag ? 'TP' : null,
+    p.qty, p.p30, p.status || null, p.rank, p.bbTop, p.bought, p.notes.join(' | ') || null]));
+  return { aoa, excluded, formats: { 5: '$#,##0.00', 7: '$#,##0.00', 8: '$#,##0.00', 9: '0%', 10: '$#,##0.00', 11: '$#,##0.00', 15: '$#,##0.00', 17: '#,##0', 18: '0%' } };
+}
+
+function makeSheet(aoa, formats) {
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  if (formats) for (let R = 1; R < aoa.length; R++) for (const c in formats) {
+    const cell = ws[XLSX.utils.encode_cell({ r: R, c: +c })];
+    if (cell && cell.t === 'n') cell.z = formats[c];
+  }
+  ws['!cols'] = aoa[0].map((h, i) => ({ wch: Math.min(48, Math.max(String(h).length, ...aoa.slice(1, 200).map(r => (r[i] == null ? 0 : String(r[i]).length))) + 2) }));
+  return ws;
+}
+function downloadXlsx(aoa, formats, sheet, name, extraSheets) {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, makeSheet(aoa, formats), sheet);
+  (extraSheets || []).forEach(([sname, saoa]) => XLSX.utils.book_append_sheet(wb, makeSheet(saoa, formats), sname));
+  XLSX.writeFile(wb, name);
+}
+function downloadCsv(aoa, name) {
+  const csv = XLSX.utils.sheet_to_csv(XLSX.utils.aoa_to_sheet(aoa));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+function exportQc(kind) {
+  const { aoa, skipped } = buildQcExport();
+  if (aoa.length === 1) { toast('No Matched ASINs with a Bundle Size and Unit Cost yet.', true); return; }
+  if (skipped.length && !confirm(`${plural(skipped.length, 'Matched ASIN')} will be left out:\n\n${skipped.slice(0, 15).join('\n')}${skipped.length > 15 ? '\n…' : ''}\n\nContinue with the export?`)) return;
+  const name = `QC Export - ${batchName()} - ${today()}`;
+  if (kind === 'csv') downloadCsv(aoa, name + '.csv');
+  else downloadXlsx(aoa, { 1: '0.00', 2: '0.00' }, 'QC Export', name + '.xlsx');
+  toast(`Exported ${plural(aoa.length - 1, 'ASIN')}`);
+}
+
+/* ============================== UI ============================== */
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nf0 = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const nf2 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtMoney = n => (n == null ? '' : (n < 0 ? '-$' : '$') + nf2.format(Math.abs(n)));
+const fmtPct = n => { if (n == null) return ''; const p = Math.round(n * 1000) / 10; return p + '%'; };
+const fmtInt = n => (n == null ? '' : nf0.format(n));
+const fmtNum = n => (n == null ? '' : Number.isInteger(n) ? nf0.format(n) : String(Math.round(n * 100) / 100));
+const countBy = (arr, k) => arr.reduce((m, r) => { m[r[k]] = (m[r[k]] || 0) + 1; return m; }, {});
+const asinLink = a => `<a class="mono" href="https://www.amazon.com/dp/${esc(a)}" target="_blank" rel="noopener">${esc(a)}</a>`;
+const MARK_CLS = { 'BB%': 'warn', 'High BSR': 'bad', '0 FBA': 'bad', 'Asin Not Available': 'muted' };
+const STATUS_CLS = { 'Good to Order': 'good', 'Low Profit': 'warn', 'Negative ROI': 'bad', 'Check Qty': 'info', 'Check Profit': 'info', 'Cost Changed': 'info', Excluded: 'muted' };
+const chip = (t, cls) => `<span class="chip ${cls}">${esc(t)}</span>`;
+
+let toastTimer = null;
+function toast(msg, err) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast' + (err ? ' err' : ''); }, err ? 9000 : 4500);
+}
+
+const search = { keepa: '', qc: '', profit: '' };
+function matchesSearch(r, q) {
+  if (!q) return true;
+  q = q.toLowerCase();
+  return [r.asin, r.title, r.brand, upcShow(r.upc)].some(v => String(v || '').toLowerCase().includes(q));
+}
+
+const VIEWS = {
+  upload: { title: 'Upload', sub: 'Upload Format + Keepa export' },
+  keepa: { title: 'Keepa Checking', sub: 'BB% · High BSR · 0 FBA · Asin Not Available' },
+  qc: { title: 'QC Checking', sub: 'Enter Bundle Size and Matching for the ASINs that passed' },
+  profit: { title: 'Profitability Checking', sub: 'Import the results from the profitability tool' },
+  settings: { title: 'Settings', sub: 'BB% threshold and BSR limits per category' }
+};
+
+function render() {
+  if (!VIEWS[state.view]) state.view = 'upload';
+  document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('active', a.dataset.view === state.view));
+  $('title').textContent = VIEWS[state.view].title;
+  $('sub').textContent = VIEWS[state.view].sub;
+  $('distChip').textContent = state.distributor;
+  $('distChip').hidden = !state.distributor;
+  renderDistSelect();
+  renderBadges();
+  writeTab();
+  const c = $('content');
+  // An unsaved edit in the distributor list survives a re-render of the Settings page.
+  const ta = $('setDists'), draft = ta && ta.value !== ta.dataset.saved ? ta.value : null;
+  if (CLOUD && cloud.error) c.innerHTML = `<div class="card empty">${esc(cloud.error)}</div>`;
+  else if (CLOUD && cloud.loading && state.view !== 'settings') c.innerHTML = `<div class="card empty">Loading${state.distributor ? ' ' + esc(state.distributor) : ''}…</div>`;
+  else if (CLOUD && cloud.failed && state.view !== 'settings') c.innerHTML = `<div class="card empty">${esc(cloud.failed)}<br><br><button class="btn primary" type="button" data-act="retryLoad">Try again</button></div>`;
+  else if (!state.distributor && ['keepa', 'qc', 'profit'].includes(state.view)) c.innerHTML = `<div class="card empty">Pick a distributor ${PICK_WHERE} first.</div>`;
+  else if (state.view === 'upload') c.innerHTML = viewUpload();
+  else if (state.view === 'keepa') { c.innerHTML = viewKeepa(); fillKeepa(); }
+  else if (state.view === 'qc') { c.innerHTML = viewQc(); fillQc(); }
+  else if (state.view === 'profit') { c.innerHTML = viewProfit(); fillProfit(); }
+  else c.innerHTML = viewSettings();
+  if (draft != null && $('setDists')) $('setDists').value = draft;
+  const si = c.querySelector('.search');
+  if (si) si.value = search[state.view] || '';
+}
+
+function renderBadges() {
+  $('bUpload').textContent = (state.upload ? '✓' : '·') + ' ' + (D.keepa.length ? '✓' : '·');
+  $('bKeepa').textContent = D.keepa.length ? `${D.qc.length}/${D.keepa.length}` : '';
+  const matched = D.qc.filter(r => r.match === 'Matched').length, done = D.qc.filter(r => r.match).length;
+  $('bQc').textContent = D.qc.length ? `${done}/${D.qc.length}` : '';
+  $('bProfit').textContent = D.profit.length ? String(D.profit.length) : '';
+  $('batchInfo').textContent = !state.distributor ? 'Pick a distributor to start'
+    : D.keepa.length ? `${plural(D.keepa.length, 'ASIN')} · ${matched} Matched` : 'Upload files to start';
+  // Inside the desk its own sidebar shows the views; tell it which one is open and the counts.
+  if (CLOUD && HOST.onState) {
+    try { HOST.onState({ view: state.view, badges: { upload: $('bUpload').textContent, keepa: $('bKeepa').textContent, qc: $('bQc').textContent, profit: $('bProfit').textContent } }); }
+    catch (e) { /* the desk is reloading */ }
+  }
+}
+
+// Sidebar picker: the whole list, plus any saved batch whose name is not on the list (e.g. after editing it).
+function renderDistSelect() {
+  const sel = $('selDist');
+  if (!sel) return;
+  if (document.activeElement === sel) { sel.value = state.distributor; return; } // do not rebuild an open picker
+  const list = state.settings.distributors, saved = {};
+  batchList().forEach(b => { saved[b.name] = b; });
+  const others = Object.keys(saved).filter(n => !list.includes(n));
+  if (state.distributor && !list.includes(state.distributor) && !others.includes(state.distributor)) others.push(state.distributor);
+  const opt = name => {
+    const b = saved[name];
+    return `<option value="${esc(name)}">${esc(name)}${b ? ` · ${b.asins ? plural(b.asins, 'ASIN') : 'started'}` : ''}</option>`;
+  };
+  sel.innerHTML = `<option value="">— Pick a distributor —</option><optgroup label="Distributors">${list.map(opt).join('')}</optgroup>` +
+    (others.length ? `<optgroup label="Other batches">${others.map(opt).join('')}</optgroup>` : '');
+  sel.value = state.distributor;
+}
+
+function viewBatches() {
+  const order = n => { const i = state.settings.distributors.indexOf(n); return i < 0 ? 1e6 : i; };
+  const list = batchList().sort((a, b) => order(a.name) - order(b.name) || a.name.localeCompare(b.name));
+  const pct = CLOUD ? 0 : Math.round(storageUsed() / STORAGE_LIMIT * 100);
+  const kb = n => (n < 1024 ? '<1 KB' : Math.round(n / 1024) + ' KB');
+  // Shared database: show who saved last instead of the browser's storage size.
+  const lastCol = b => (b.updatedAt ? `${esc(String(b.updatedBy || '').split('@')[0])} · ${esc(ago(b.updatedAt))}` : '');
+  return `<div class="card">
+    <h2>Distributor batches</h2>
+    ${list.length ? `<div class="tablewrap" style="max-height:none;min-height:0"><table>
+      <thead><tr><th>Distributor</th><th class="num">ASINs</th><th class="num">Matched</th><th class="num">Profitability</th><th class="num">${CLOUD ? 'Last saved' : 'Size'}</th><th></th></tr></thead>
+      <tbody>${list.map(b => `<tr class="${b.name === state.distributor ? 'activebatch' : ''}"><td>${esc(b.name)}${b.name === state.distributor ? ' ' + chip('Open', 'info') : ''}</td>
+        <td class="num">${b.asins}</td><td class="num">${b.matched}</td><td class="num">${b.profit}</td><td class="num nowrap">${CLOUD ? lastCol(b) : kb(b.size)}</td>
+        <td class="nowrap">${b.name === state.distributor ? '' : `<button class="btn" type="button" data-act="openBatch" data-name="${esc(b.name)}">Open</button> `}<button class="btn danger" type="button" data-act="clearBatch" data-name="${esc(b.name)}">Clear</button></td></tr>`).join('')}
+      </tbody></table></div>` : `<p style="color:var(--muted);font-size:13px;margin:0">No saved batches yet.</p>`}
+    ${CLOUD ? `<p style="color:var(--muted);font-size:12.5px;margin:10px 0 0">Saved in the shared database: everyone on the team works on the same batches.</p>`
+      : `<p style="color:${pct >= 80 ? 'var(--bad)' : 'var(--muted)'};font-size:12.5px;margin:10px 0 0">Browser storage used: about ${pct}%${pct >= 80 ? '. Clear the batches you no longer need.' : ''}</p>`}
+  </div>`;
+}
+function ago(iso) {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (!isFinite(mins)) return '';
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const h = Math.floor(mins / 60);
+  return h < 24 ? h + 'h ago' : Math.floor(h / 24) + 'd ago';
+}
+
+const drop = (kind, input, title, hint, compact) =>
+  `<div class="drop${compact ? ' compact' : ''}" data-drop="${kind}" data-pick="${input}"><b>${title}</b><span>${hint}</span></div>`;
+
+function viewUpload() {
+  const u = state.upload, k = state.keepa;
+  const withCost = D.keepa.filter(r => r.unitCost != null).length;
+  return `
+  ${state.distributor ? '' : `<div class="note info"><b>Pick a distributor ${PICK_WHERE}.</b> Each distributor keeps its own batch (Upload Format, Keepa, QC and Profitability). Or drop the Upload Format below: when its "Distributor:" name is on the list, that distributor is picked for you.</div>`}
+  <div class="grid2">
+    <div class="card">
+      <h2>1. Upload Format</h2>
+      ${drop('upload', 'inUpload', u ? 'Replace the Upload Format' : 'Drop a file here or click to choose', 'xlsx or csv · "Distributor:" at the top and a "UPC" + "Unit Price" header')}
+      ${u ? `<dl class="kv"><dt>File</dt><dd>${esc(u.fileName)}</dd><dt>Distributor</dt><dd>${esc(u.distributor || '—')}</dd>
+        <dt>UPC</dt><dd>${fmtInt(u.unique)}${u.dups ? ` <span class="chip warn">${plural(u.dups, 'duplicate')}</span>` : ''}${u.noPrice ? ` <span class="chip warn">${u.noPrice} without a price</span>` : ''}</dd>
+        ${u.conflicts && u.conflicts.length ? `<dt>Price conflicts</dt><dd class="mono">${esc(u.conflicts.slice(0, 8).join(', '))}${u.conflicts.length > 8 ? '…' : ''} (first price used)</dd>` : ''}
+        ${u.badUpc && u.badUpc.length ? `<dt>Unreadable</dt><dd><span class="chip bad">${plural(u.badUpc.length, 'UPC')}</span> in scientific notation (e.g. <span class="mono">${esc(u.badUpc[0])}</span>). The digits are already lost in this file, so use the original file (not a CSV re-saved in Excel).</dd>` : ''}
+        ${u.suspect && u.suspect.length ? `<dt>Check</dt><dd><span class="chip warn">${plural(u.suspect.length, 'UPC')}</span> ${u.suspect.length === 1 ? 'ends' : 'end'} in 00000 (e.g. <span class="mono">${esc(u.suspect[0])}</span>). Digits may have been lost; check the original file.</dd>` : ''}
+        ${D.keepa.length ? `<dt>With Unit Cost</dt><dd>${withCost} / ${plural(D.keepa.length, 'ASIN')}</dd>` : ''}</dl>` : ''}
+    </div>
+    <div class="card">
+      <h2>2. Keepa Export</h2>
+      ${drop('keepa', 'inKeepa', D.keepa.length ? 'Add another Keepa export' : 'Drop a file here or click to choose', 'Keepa Product Viewer export (xlsx or csv) · several files allowed')}
+      ${D.keepa.length ? `<dl class="kv"><dt>Files</dt><dd>${k.uploads.map(x => esc(x.name) + (x.rows != null ? ` <span style="color:var(--muted)">· ${plural(x.rows, 'row')}, ${x.added} new${x.replaced ? `, ${x.replaced} updated` : ''}</span>` : '') + (x.lossy ? ` <span class="chip bad">${plural(x.lossy, 'unreadable UPC')}</span>` : '')).join('<br>')}</dd>
+        <dt>ASIN</dt><dd>${fmtInt(D.keepa.length)}</dd>
+        <dt>Passed</dt><dd>${D.qc.length}</dd></dl>
+        <div class="toolbar" style="margin:12px 0 0"><button class="btn danger" data-act="clearKeepa" type="button">Remove Keepa files</button>
+        <button class="btn primary" data-go="keepa" type="button">View Keepa Checking →</button></div>` : ''}
+    </div>
+  </div>
+  <div class="card">
+    <h2>How to use</h2>
+    <ol class="steps">
+      <li><b>Distributor:</b> pick it ${PICK_WHERE}. Each distributor has its own batch, so you can switch without losing work.</li>
+      <li><b>Upload:</b> add the distributor's Upload Format and the Keepa export for its UPCs.</li>
+      <li><b>Keepa Checking:</b> automatic. An ASIN fails if it gets <b>BB%</b>, <b>High BSR</b>, <b>0 FBA</b> or <b>Asin Not Available</b>.</li>
+      <li><b>QC Checking:</b> enter Bundle Size and Matched/Mismatch for the ASINs that passed, then export (Matched only).</li>
+      <li><b>Profitability:</b> run the export through the profitability tool, then import the Profitability Checking file here.</li>
+    </ol>
+    <p style="color:var(--muted);font-size:12.5px;margin:10px 0 0">${CLOUD ? 'Batches are saved in the shared database, so the whole team works on the same ones.' : 'Batches are saved in this browser only.'} Use <b>Clear batch</b> to start a distributor over.</p>
+  </div>
+  ${viewBatches()}`;
+}
+
+function seg(view, opts) {
+  // A saved filter whose button is not shown anymore (e.g. no Excluded rows left) falls back to "all".
+  if (!opts.some(([v]) => v === state.filters[view])) state.filters[view] = 'all';
+  const cur = state.filters[view];
+  return `<div class="seg">${opts.map(([v, label]) => `<button type="button" data-filter="${view}" data-val="${v}" class="${cur === v ? 'on' : ''}">${label}</button>`).join('')}</div>`;
+}
+const stat = (k, v, cls, id) => `<div class="stat ${cls || ''}"><div class="k">${k}</div><div class="v"${id ? ` id="${id}"` : ''}>${v}</div></div>`;
+
+function viewKeepa() {
+  if (!D.keepa.length) return `<div class="card empty">No Keepa export yet. <a href="#" data-go="upload">Upload one first</a>.</div>`;
+  const marks = {};
+  D.keepa.forEach(r => r.marks.forEach(m => { marks[m] = (marks[m] || 0) + 1; }));
+  const noLimit = D.keepa.filter(r => r.pass && r.labels.includes('No BSR Limit'));
+  const noLimitCats = [...new Set(noLimit.map(r => r.ref || r.root || '(no category)'))];
+  return `
+  <div class="stats">
+    ${stat('ASIN', fmtInt(D.keepa.length))}${stat('Passed', fmtInt(D.qc.length), 'good')}${stat('Failed', fmtInt(D.keepa.length - D.qc.length), 'bad')}
+    ${MARK_ORDER.map(m => stat(m, fmtInt(marks[m] || 0), m === 'BB%' ? 'warn' : '')).join('')}
+  </div>
+  ${noLimit.length ? `<div class="note"><b>${plural(noLimit.length, 'ASIN')} ${hasHave(noLimit.length)} no BSR limit</b> (passed with the label "No BSR Limit"): ${esc(noLimitCats.join(', '))}. Add a limit in <a href="#" data-go="settings">Settings</a>.</div>` : ''}
+  <div class="toolbar">
+    ${seg('keepa', [['all', 'All'], ['pass', 'Passed'], ['fail', 'Failed']])}
+    <input class="search" data-search="keepa" placeholder="Search ASIN, UPC, title…">
+    <span class="spacer"></span>
+    <button class="btn" data-act="exportKeepa" type="button">Export Keepa Checking (.xlsx)</button>
+    <button class="btn primary" data-go="qc" type="button">QC Checking →</button>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>ASIN</th><th>UPC</th><th>Title</th><th>Category</th><th class="num">BB % Top Seller</th><th class="num">Sales Rank</th><th class="num">BSR Limit</th><th class="num">FBA 90d</th><th class="num">BB Winners 90d</th><th class="num">BB 90d avg</th><th>Result</th></tr></thead>
+    <tbody id="tbKeepa"></tbody></table></div>`;
+}
+function fillKeepa() {
+  const tb = $('tbKeepa');
+  if (!tb) return;
+  const f = state.filters.keepa, q = search.keepa;
+  const rows = D.keepa.filter(r => (f === 'all' || (f === 'pass') === r.pass) && matchesSearch(r, q));
+  tb.innerHTML = rows.length ? rows.map((r, i) => `<tr class="${r.pass ? '' : 'dim'}">
+    <td class="ref">${i + 1}</td><td>${asinLink(r.asin)}</td><td class="mono">${esc(upcShow(r.upc))}</td>
+    <td class="title" title="${esc(r.title)}">${esc(r.title)}</td><td class="nowrap">${esc(r.ref || r.root)}</td>
+    <td class="num">${fmtPct(r.bbTop)}</td><td class="num">${fmtInt(r.rank)}</td><td class="num">${fmtInt(r.limit)}</td>
+    <td class="num">${fmtNum(r.fba90)}</td><td class="num">${fmtNum(r.win90)}</td><td class="num">${fmtMoney(r.bb90)}</td>
+    <td>${r.pass ? chip('Pass', 'good') : ''}${r.marks.map(m => chip(m, MARK_CLS[m])).join('')}${r.labels.map(l => chip(l, 'info')).join('')}</td></tr>`).join('')
+    : `<tr><td colspan="12" class="empty">No matches.</td></tr>`;
+}
+
+function qcCounts() {
+  const c = { matched: 0, mismatch: 0, pending: 0, noCost: 0, ready: 0 };
+  D.qc.forEach(r => {
+    if (r.match === 'Matched') { c.matched++; if (r.bundleCost != null) c.ready++; } else if (r.match === 'Mismatch') c.mismatch++; else c.pending++;
+    if (r.unitCost == null) c.noCost++;
+  });
+  return c;
+}
+function viewQc() {
+  if (!D.qc.length) return `<div class="card empty">${D.keepa.length ? 'No ASINs passed Keepa Checking.' : 'No Keepa export yet. <a href="#" data-go="upload">Upload one first</a>.'}</div>`;
+  const c = qcCounts();
+  return `
+  <div class="stats">
+    ${stat('For QC', fmtInt(D.qc.length))}${stat('Matched', c.matched, 'good', 'sMatched')}${stat('Mismatch', c.mismatch, 'bad', 'sMismatch')}
+    ${stat('Pending', c.pending, 'warn', 'sPending')}${stat('No Unit Cost', c.noCost, c.noCost ? 'bad' : '', 'sNoCost')}${stat('Ready to export', c.ready, 'info', 'sReady')}
+  </div>
+  ${!state.upload ? `<div class="note">No Upload Format yet, so there is no Unit Cost. <a href="#" data-go="upload">Upload it first</a>.</div>` : ''}
+  <div class="toolbar">
+    ${seg('qc', [['all', 'All'], ['pending', 'Pending'], ['Matched', 'Matched'], ['Mismatch', 'Mismatch']])}
+    <input class="search" data-search="qc" placeholder="Search ASIN, UPC, title…">
+    <span class="spacer"></span>
+    <button class="btn" data-act="exportQcCsv" type="button">Export .csv</button>
+    <button class="btn primary" data-act="exportQcXlsx" type="button">Export for Profitability (.xlsx)</button>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>ASIN</th><th class="ref"></th><th class="ref">Title</th><th class="ref num">Items</th><th class="ref num">Pkg Qty</th>
+      <th class="num">Unit Cost</th><th class="num">Bundle Size</th><th>Matching</th><th class="num">Bundle Cost</th><th class="ref num">BB 90d avg</th><th class="ref">Keepa</th></tr></thead>
+    <tbody id="tbQc"></tbody></table></div>
+  <p style="color:var(--muted);font-size:12px;margin-top:8px">Tip: press Enter in Bundle Size to jump to the next row. Every input is saved automatically.</p>`;
+}
+function fillQc() {
+  const tb = $('tbQc');
+  if (!tb) return;
+  const f = state.filters.qc, q = search.qc;
+  const rows = D.qc.filter(r => (f === 'all' || (f === 'pending' ? !r.match : r.match === f)) && matchesSearch(r, q));
+  tb.innerHTML = rows.length ? rows.map((r, i) => `<tr data-asin="${esc(r.asin)}" class="${r.match === 'Mismatch' ? 'dim' : ''}">
+    <td class="ref">${i + 1}</td><td>${asinLink(r.asin)}</td>
+    <td>${r.image ? `<img class="thumb" loading="lazy" src="${esc(r.image)}" alt="">` : ''}</td>
+    <td class="title ref" title="${esc(r.title)}">${esc(r.title)}</td><td class="num ref">${fmtNum(r.items)}</td><td class="num ref">${fmtNum(r.pkg)}</td>
+    <td class="num">${r.unitCost == null ? chip('No Unit Cost', 'bad') : fmtMoney(r.unitCost)}</td>
+    <td class="num"><input class="cell bundle" type="number" min="1" step="1" inputmode="numeric" value="${r.bundle == null ? '' : r.bundle}" data-asin="${esc(r.asin)}"></td>
+    <td><select class="cell match ${esc(r.match)}" data-asin="${esc(r.asin)}"><option value=""${!r.match ? ' selected' : ''}>—</option><option${r.match === 'Matched' ? ' selected' : ''}>Matched</option><option${r.match === 'Mismatch' ? ' selected' : ''}>Mismatch</option></select></td>
+    <td class="num bcost">${fmtMoney(r.bundleCost)}</td>
+    <td class="num ref">${fmtMoney(r.bb90)}</td><td><a href="https://keepa.com/#!product/1-${esc(r.asin)}" target="_blank" rel="noopener">Keepa</a></td></tr>`).join('')
+    : `<tr><td colspan="12" class="empty">No matches.</td></tr>`;
+}
+function refreshQcRow(asin) {
+  const r = D.qcMap[asin], tr = document.querySelector(`#tbQc tr[data-asin="${asin}"]`);
+  if (tr && r) { tr.querySelector('.bcost').textContent = fmtMoney(r.bundleCost); tr.classList.toggle('dim', r.match === 'Mismatch'); const s = tr.querySelector('select.match'); s.className = 'cell match ' + r.match; }
+  const c = qcCounts();
+  [['sMatched', c.matched], ['sMismatch', c.mismatch], ['sPending', c.pending], ['sNoCost', c.noCost], ['sReady', c.ready]].forEach(([id, v]) => { const el = $(id); if (el) el.textContent = v; });
+  renderBadges();
+}
+
+function viewProfit() {
+  const pf = state.profit;
+  const head = `<div class="card">${drop('profit', 'inProfit', pf ? 'Replace the Profitability Checking file' : 'Import the Profitability Checking file', 'csv or xlsx from the profitability tool', true)}
+    ${pf ? `<dl class="kv"><dt>File</dt><dd>${esc(pf.fileName)}</dd><dt>ASINs</dt><dd>${D.profit.length}${pf.dups ? ` <span class="chip warn">${plural(pf.dups, 'duplicate')} skipped</span>` : ''}</dd></dl>` : ''}</div>`;
+  if (!pf) return head;
+  const c = countBy(D.profit, 'status');
+  const excluded = D.profit.filter(p => p.excluded);
+  const extra = ['Check Qty', 'Check Profit', 'Cost Changed', 'Excluded'].filter(s => c[s]);
+  return `${head}
+  <div class="stats">
+    ${stat('Good to Order', c['Good to Order'] || 0, 'good')}${stat('Low Profit', c['Low Profit'] || 0, 'warn')}${stat('Negative ROI', c['Negative ROI'] || 0, 'bad')}
+    ${extra.map(s => stat(s, c[s], s === 'Excluded' ? '' : 'info')).join('')}
+    ${stat('Restricted', D.profit.filter(p => p.restricted).length, 'bad')}${stat('TP', D.profit.filter(p => p.tpFlag).length, 'warn')}
+  </div>
+  ${excluded.length ? `<div class="note"><b>${plural(excluded.length, 'ASIN')} ${isAre(excluded.length)} Excluded</b>: in the Profitability file but failed Keepa Checking or not Matched in QC for this batch. Excluded ASINs get no Rec. Qty or 30D Profit.<div class="list mono">${excluded.map(p => esc(p.asin) + ' – ' + esc(p.notes[0])).join('<br>')}</div></div>` : ''}
+  ${D.profitMissing.length ? `<div class="note info"><b>${plural(D.profitMissing.length, 'Matched ASIN')} ${isAre(D.profitMissing.length)} missing from the Profitability file:</b><div class="list mono">${D.profitMissing.map(r => esc(r.asin)).join(', ')}</div></div>` : ''}
+  ${c['Check Qty'] ? `<div class="note info"><b>Check Qty:</b> ROI is positive but "Bought in past month" does not match any value in the formula, so there is no Recommended Qty.</div>` : ''}
+  ${c['Check Profit'] ? `<div class="note info"><b>Check Profit:</b> there is a Recommended Qty but "Net Profit - Peak | FBA" is blank, so there is no 30D Profit.</div>` : ''}
+  ${c['Cost Changed'] ? `<div class="note"><b>${plural(c['Cost Changed'], 'ASIN')} ${isAre(c['Cost Changed'])} Cost Changed:</b> the Bundle Size or Unit Cost changed after the QC export, so the profit no longer matches. Export QC again and re-run profitability.</div>` : ''}
+  <div class="toolbar">
+    ${seg('profit', [['all', 'All'], ['Good to Order', 'Good to Order'], ['Low Profit', 'Low Profit'], ['Negative ROI', 'Negative ROI'], ['restricted', 'Restricted'], ['tp', 'TP']].concat(extra.map(s => [s, s])))}
+    <input class="search" data-search="profit" placeholder="Search ASIN, UPC, title…">
+    <span class="spacer"></span>
+    <button class="btn danger" data-act="clearProfit" type="button">Remove</button>
+    <button class="btn primary" data-act="exportFinal" type="button">Export PR Result (.xlsx)</button>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>ASIN</th><th>Title</th><th class="num">Bundle Cost</th><th class="num">Profit Per Unit</th><th class="num">ROI %</th><th class="num">Break Even</th>
+      <th>Restricted</th><th>TP</th><th class="num">Bought/mo</th><th class="num">Rec. Qty</th><th class="num">30D Profit</th><th>Status</th><th>Notes</th></tr></thead>
+    <tbody id="tbProfit"></tbody></table></div>`;
+}
+function fillProfit() {
+  const tb = $('tbProfit');
+  if (!tb) return;
+  const f = state.filters.profit, q = search.profit;
+  const rows = D.profit.filter(p => (f === 'all' || (f === 'restricted' ? p.restricted : f === 'tp' ? p.tpFlag : p.status === f)) && matchesSearch(p, q));
+  tb.innerHTML = rows.length ? rows.map((p, i) => `<tr>
+    <td class="ref">${i + 1}</td><td>${asinLink(p.asin)}</td><td class="title" title="${esc(p.title)}">${esc(p.title)}</td>
+    <td class="num">${fmtMoney(p.bundleCost)}</td><td class="num">${fmtMoney(p.profit)}</td><td class="num">${fmtPct(p.roi)}</td><td class="num">${fmtMoney(p.be)}</td>
+    <td>${p.restricted ? `<span title="${esc(p.restrictedBy.join('; '))}">${chip('Restricted', 'bad')}</span>` : ''}</td><td>${p.tpFlag ? chip('TP', 'warn') : ''}</td>
+    <td class="num">${fmtInt(p.bought)}</td><td class="num">${p.qty == null ? '' : p.qty}</td><td class="num">${fmtMoney(p.p30)}</td>
+    <td>${p.status ? chip(p.status, STATUS_CLS[p.status] || 'muted') : ''}</td><td class="ref" style="font-size:12px">${esc(p.notes.join(' · '))}</td></tr>`).join('')
+    : `<tr><td colspan="14" class="empty">No matches.</td></tr>`;
+}
+
+function viewSettings() {
+  const S = state.settings;
+  return `
+  <div class="card">
+    <h2>BB% threshold</h2>
+    <p style="color:var(--muted);font-size:13px;margin:0 0 8px">An ASIN fails (BB%) when "Buy Box: % Top Seller 90 days" is at or above this value.</p>
+    <input class="cell" style="width:90px" type="number" min="1" max="100" step="1" id="setBB" value="${Math.round(S.bbThreshold * 100)}"> %
+  </div>
+  <div class="card">
+    <h2>BSR limits</h2>
+    <p style="color:var(--muted);font-size:13px;margin:0 0 10px">High BSR when "Sales Rank: Current" is above the limit. A name matches the Keepa category even when it is shorter (e.g. "Grocery & Gourmet" → "Grocery & Gourmet Food"). No limit = the ASIN passes with the label "No BSR Limit".</p>
+    <table class="limits" style="max-width:560px"><thead><tr><th>Category</th><th class="num">Max Sales Rank</th><th></th></tr></thead><tbody>
+    ${S.limits.map((L, i) => `<tr><td><input class="cell${L.name ? '' : ' invalid'}" style="width:100%;text-align:left" data-lname="${i}" value="${esc(L.name)}" placeholder="Category name"></td>
+      <td class="num"><input class="cell lim${L.limit == null ? ' invalid' : ''}" type="number" min="1" step="1" data-llimit="${i}" value="${L.limit == null ? '' : L.limit}" placeholder="e.g. 150000"></td>
+      <td><button class="btn danger" type="button" data-act="delLimit" data-i="${i}">Remove</button></td></tr>`).join('')}
+    </tbody></table>
+    <div class="toolbar" style="margin:12px 0 0"><button class="btn" type="button" data-act="addLimit">+ Add category</button>
+      <button class="btn danger" type="button" data-act="resetLimits">Reset to defaults</button></div>
+  </div>
+  <div class="card">
+    <h2>Distributors</h2>
+    <p style="color:var(--muted);font-size:13px;margin:0 0 10px">One name per line. These are the choices in the distributor picker. Removing a name does not delete its saved batch.</p>
+    <textarea class="cell" id="setDists" rows="14" spellcheck="false" data-saved="${esc(S.distributors.join('\n'))}">${esc(S.distributors.join('\n'))}</textarea>
+    <div class="toolbar" style="margin:12px 0 0"><button class="btn primary" type="button" data-act="saveDists">Save list</button>
+      ${DEFAULT_DISTRIBUTORS.length ? '<button class="btn danger" type="button" data-act="resetDists">Reset to the original list</button>' : ''}</div>
+  </div>`;
+}
+
+/* ============================== EVENTS ============================== */
+
+function setView(v) { state.view = v; save(); render(); window.scrollTo(0, 0); }
+
+document.addEventListener('click', e => {
+  const nav = e.target.closest('#nav a');
+  if (nav) { e.preventDefault(); setView(nav.dataset.view); return; }
+  const go = e.target.closest('[data-go]');
+  if (go) { e.preventDefault(); setView(go.dataset.go); return; }
+  const pick = e.target.closest('[data-pick]');
+  if (pick) { $(pick.dataset.pick).click(); return; }
+  const fb = e.target.closest('[data-filter]');
+  if (fb) {
+    const v = fb.dataset.filter;
+    state.filters[v] = fb.dataset.val; save();
+    fb.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === fb));
+    ({ keepa: fillKeepa, qc: fillQc, profit: fillProfit })[v]();
+    return;
+  }
+  const act = e.target.closest('[data-act]');
+  if (!act) return;
+  const a = act.dataset.act;
+  if (a === 'exportKeepa') { const x = buildKeepaExport(); downloadXlsx(x.aoa, x.formats, 'Keepa Checking', `Keepa Checking - ${batchName()} - ${today()}.xlsx`); }
+  else if (a === 'exportQcXlsx') exportQc('xlsx');
+  else if (a === 'exportQcCsv') exportQc('csv');
+  else if (a === 'exportFinal') {
+    const x = buildFinalExport();
+    downloadXlsx(x.aoa, x.formats, 'PR Result', `PR Result - ${batchName()} - ${today()}.xlsx`, x.excluded.length > 1 ? [['Excluded', x.excluded]] : []);
+    toast(`Exported ${plural(x.aoa.length - 1, 'ASIN')}` +(x.excluded.length > 1 ? `\n${x.excluded.length - 1} Excluded, on a separate sheet` : ''));
+  }
+  else if (a === 'clearKeepa') { if (confirm('Remove all Keepa files from this batch? (QC inputs are kept.)')) { applyOp('clearKeepa'); derive(); save('keepa'); render(); } }
+  else if (a === 'clearProfit') { if (confirm('Remove the Profitability Checking file?')) { applyOp('clearProfit'); derive(); save('profit'); render(); } }
+  else if (a === 'addLimit') { state.settings.limits.push({ name: '', limit: null }); saveSettings('limits'); render(); const ins = document.querySelectorAll('[data-lname]'); if (ins.length) ins[ins.length - 1].focus(); }
+  else if (a === 'delLimit') { state.settings.limits.splice(+act.dataset.i, 1); derive(); saveSettings('limits'); render(); }
+  else if (a === 'resetLimits') { if (confirm('Reset the BB% threshold and BSR limits to the defaults?')) { Object.assign(state.settings, clone(DEFAULT_SETTINGS)); derive(); saveSettings('bbThreshold', 'limits', 'limitsVersion'); render(); } }
+  else if (a === 'openBatch') switchDistributor(act.dataset.name);
+  else if (a === 'retryLoad') cloudOpen(state.distributor);
+  else if (a === 'clearBatch') clearBatch(act.dataset.name);
+  else if (a === 'saveDists') {
+    const list = [];
+    $('setDists').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean).forEach(s => { if (!list.includes(s)) list.push(s); });
+    if (!list.length) { toast('The distributor list cannot be empty.', true); return; }
+    const long = list.find(s => s.length > 200);
+    if (long) { toast(`A distributor name can have at most 200 characters: "${long.slice(0, 40)}…"`, true); return; }
+    state.settings.distributors = list; $('setDists').dataset.saved = $('setDists').value; saveSettings('distributors'); render();
+    toast(`Distributor list saved: ${plural(list.length, 'name')}.`);
+  }
+  else if (a === 'resetDists') {
+    if (!DEFAULT_DISTRIBUTORS.length || !confirm('Reset the distributor list to the original 46 names?')) return;
+    state.settings.distributors = DEFAULT_DISTRIBUTORS.slice(); $('setDists').dataset.saved = $('setDists').value; saveSettings('distributors'); render();
+  }
+});
+
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.matches('.search')) { const v = t.dataset.search; search[v] = t.value; ({ keepa: fillKeepa, qc: fillQc, profit: fillProfit })[v](); return; }
+  if (t.matches('input.bundle')) {
+    // Whole numbers from 1 to MAX_BUNDLE only; anything else is flagged red and treated as blank.
+    const v = t.value.trim(), ok = /^\d{1,6}$/.test(v) && Number(v) > 0 && Number(v) <= MAX_BUNDLE;
+    t.classList.toggle('invalid', v !== '' && !ok);
+    t.title = v !== '' && !ok ? `Whole numbers only (1 to ${MAX_BUNDLE})` : '';
+    qcEntry(t.dataset.asin).bundle = ok ? Number(v) : null;
+    derive(); markQc(t.dataset.asin, 'bundle'); refreshQcRow(t.dataset.asin);
+  }
+});
+
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.matches('select.match')) { qcEntry(t.dataset.asin).match = t.value; derive(); markQc(t.dataset.asin, 'match'); refreshQcRow(t.dataset.asin); return; }
+  if (t.id === 'setBB') {
+    const n = parseFloat(t.value);
+    if (isFinite(n) && n >= 1 && n <= 100) { state.settings.bbThreshold = n / 100; derive(); saveSettings('bbThreshold'); renderBadges(); toast(`BB% threshold: ${n}%`); }
+    else { t.value = Math.round(state.settings.bbThreshold * 100); toast('BB% threshold must be from 1 to 100.', true); }
+    return;
+  }
+  if ((t.dataset.lname != null && !state.settings.limits[+t.dataset.lname]) || (t.dataset.llimit != null && !state.settings.limits[+t.dataset.llimit])) {
+    render(); toast('The list was changed in another tab. Please make the edit again.', true); return; // stale row
+  }
+  if (t.dataset.lname != null) {
+    state.settings.limits[+t.dataset.lname].name = t.value.trim();
+    t.classList.toggle('invalid', !t.value.trim());
+    derive(); saveSettings('limits'); renderBadges();
+    return;
+  }
+  if (t.dataset.llimit != null) {
+    // A bad entry never wipes a saved limit; to drop a category use "Remove".
+    const n = parseNum(t.value), L = state.settings.limits[+t.dataset.llimit];
+    if (n != null && n >= 1) {
+      L.limit = Math.round(n);
+      t.classList.remove('invalid');
+      derive(); saveSettings(L.name ? 'limit:' + catKey(L.name) : 'limits'); renderBadges(); // only this category's number
+    } else {
+      t.value = L.limit == null ? '' : L.limit;
+      t.classList.toggle('invalid', L.limit == null);
+      toast('Max Sales Rank must be a number of 1 or more. To drop a category, use "Remove".', true);
+    }
+    return;
+  }
+  if (t.type === 'file' && t.files.length) {
+    const kind = { inUpload: 'upload', inKeepa: 'keepa', inProfit: 'profit' }[t.id];
+    handleFiles(kind, t.files).finally(() => { t.value = ''; });
+  }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.matches('input.bundle')) {
+    e.preventDefault();
+    const all = Array.from(document.querySelectorAll('#tbQc input.bundle'));
+    const next = all[all.indexOf(e.target) + 1];
+    if (next) { next.focus(); next.select(); }
+  }
+});
+
+document.addEventListener('dragover', e => { const d = e.target.closest('[data-drop]'); if (d) { e.preventDefault(); d.classList.add('over'); } });
+document.addEventListener('dragleave', e => { const d = e.target.closest('[data-drop]'); if (d) d.classList.remove('over'); });
+document.addEventListener('drop', e => {
+  const d = e.target.closest('[data-drop]');
+  if (!d) return;
+  e.preventDefault(); d.classList.remove('over');
+  handleFiles(d.dataset.drop, e.dataTransfer.files);
+});
+
+$('btnClear').addEventListener('click', () => {
+  if (!state.distributor) { toast('Pick a distributor first.', true); return; }
+  clearBatch(state.distributor);
+});
+$('selDist').addEventListener('change', e => switchDistributor(e.target.value));
+
+function applyTheme(t) {
+  if (CLOUD) t = 'light'; // inside the desk: always its light look
+  document.documentElement.classList.toggle('light', t === 'light');
+  $('btnTheme').textContent = t === 'light' ? 'Dark mode' : 'Light mode';
+}
+let theme = 'dark';
+try { theme = localStorage.getItem(LS_THEME) || 'dark'; } catch (e) { /* storage blocked */ }
+applyTheme(theme);
+$('btnTheme').addEventListener('click', () => {
+  theme = theme === 'light' ? 'dark' : 'light';
+  applyTheme(theme);
+  try { localStorage.setItem(LS_THEME, theme); } catch (e) { /* storage blocked */ }
+});
+
+$('ver').textContent = VERSION;
+if (typeof XLSX === 'undefined') toast('SheetJS (the xlsx library) did not load. Check the internet connection and refresh.', true);
+if (CLOUD) {
+  // Inside the desk: its sidebar has the views, so the picker, counts and Clear batch move to the top bar.
+  document.documentElement.classList.add('embed');
+  const font = document.createElement('link');
+  font.rel = 'stylesheet';
+  font.href = 'https://fonts.googleapis.com/css2?family=Archivo:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap';
+  document.head.appendChild(font);
+  const bar = document.createElement('div');
+  bar.className = 'embedbar';
+  bar.append(document.querySelector('.distpick'), $('batchInfo'), $('btnClear'));
+  document.querySelector('.topbar').appendChild(bar);
+  $('saveWarn').innerHTML = '<b>Not saved to the shared database yet</b> (<span id="saveErr"></span>). It tries again every few seconds; keep this page open until this message goes away.';
+  // Leaving with changes that are not saved yet: the browser asks first.
+  window.addEventListener('beforeunload', e => { if (dirty.size || cloud.ops.length || cloud.writing) { e.preventDefault(); e.returnValue = ''; } });
+  // Working in this frame counts as being active in the desk (its "away" marker only sees its own page).
+  let lastPing = 0;
+  ['mousedown', 'keydown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, () => {
+    if (Date.now() - lastPing < 10000 || !HOST.activity) return;
+    lastPing = Date.now();
+    try { HOST.activity(); } catch (e) { /* the desk is reloading */ }
+  }, { passive: true }));
+  cloudInit().catch(e => { cloud.error = errText(e); render(); });
+} else {
+  initState();
+  derive();
+  render();
+  if (!store('localStorage')) $('saveWarn').hidden = false;
+  if (migrationFailed) toast('Your earlier batch could not be moved to its distributor because browser storage is full. Clear batches you no longer need, then reload.', true);
+}
+
+// Debug/test handle (used by tests/run-tests.js).
+window.PR = {
+  engine: { parseNum, parseFrac, upcKey, upcShow, isLossyUpc, findLimit, keepaCheck, recQty, statusOf, parseUploadFormat, parseKeepa, parseProfit, r2 },
+  flushSave, switchDistributor, matchDistributor, batchList, DEFAULT_DISTRIBUTORS, setView, cloud, cloudFlush, refreshBatchList,
+  pending: () => ({ dirty: [...dirty], ops: CLOUD ? cloud.ops.length : 0, writing: CLOUD && !!cloud.writing, timer: !!saveTimer }),
+  cloudPoll,
+  keys: { LS_V1, LS_META, LS_BATCH, SS_TAB },
+  reinit() { initState(); derive(); render(); },
+  get state() { return state; }, D, derive, render, handleFiles, buildKeepaExport, buildQcExport, buildFinalExport, DEFAULT_SETTINGS,
+  setQc(asin, bundle, match) { const q = qcEntry(asin); q.bundle = bundle; q.match = match; derive(); markQc(asin, 'bundle', 'match'); }
+};
+})();
+</script>
+</body>
+</html>
