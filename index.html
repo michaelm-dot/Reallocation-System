@@ -2990,6 +2990,7 @@ let allHidden = (()=>{
   return new Set(["target","profit","breakeven"]);
 })();
 let allColsOpen = false;
+let allOnScreen = new Set();   /* first O2I id of each row renderAll last drew */
 function hiddenLine(){
   const off = ALL_HIDEABLE.filter(([k])=>allHidden.has(k)).map(([,label])=>label);
   return off.length ? "Hidden columns: " + off.join(", ") : "All columns shown";
@@ -3012,6 +3013,22 @@ function wherePill(w){
   return `<span class="ui-pill ${c}">${esc(liqLabel(w.k))}</span>`;
 }
 
+/* the chip and the search box on All items */
+function allMatch(r){
+  const q = allQuery.trim().toUpperCase();
+  return (allFilter === "all" || r.w.k === allFilter) &&
+    (!q || String(r.v.id).toUpperCase().includes(q) || (r.it.brand||"").toUpperCase().includes(q)
+        || (r.v.title||"").toUpperCase().includes(q) || (r.it.tracking||"").toUpperCase().includes(q));
+}
+/* Still unplaced = the Amount column added up over every item in the queue. A row
+   leaves the queue once it is allocated, so the figure drops as items go. With a chip
+   or a search on, what is left on screen is added up underneath. */
+function allTotalCard(rows, shown){
+  const sum = list => list.reduce((a,r)=>a + (Number(r.v.amount) || 0), 0);
+  return `<i>Still unplaced</i><b>${money(sum(rows))}</b>${shown.length !== rows.length
+    ? `<small>${money(sum(shown))} in this view</small>` : ""}`;
+}
+
 function renderAll(){
   const keep = gridScroll("#view-all");
   const el = document.getElementById("allitems");
@@ -3024,7 +3041,6 @@ function renderAll(){
   const rows = allGroups();
   const tally = {};
   rows.forEach(r=>{ tally[r.w.k] = (tally[r.w.k]||0) + 1; });
-  const q = allQuery.trim().toUpperCase();
   const sortKey = allSort.key;
   const sortVal = (r)=>{
     const {it,w,v} = r;
@@ -3049,10 +3065,8 @@ function renderAll(){
       default:          return null;
     }
   };
-  const shown = rows.filter(r=>
-    (allFilter === "all" || r.w.k === allFilter) &&
-    (!q || String(r.v.id).toUpperCase().includes(q) || (r.it.brand||"").toUpperCase().includes(q)
-        || (r.v.title||"").toUpperCase().includes(q) || (r.it.tracking||"").toUpperCase().includes(q)));
+  const shown = rows.filter(allMatch);
+  allOnScreen = new Set(shown.map(r=>r.ids[0]));
   if(sortKey){
     shown.sort((a,b)=>{
       const x = sortVal(a), y = sortVal(b);
@@ -3060,9 +3074,6 @@ function renderAll(){
       return String(x).localeCompare(String(y), undefined, {numeric:true}) * allSort.dir;
     });
   }
-  const openTotal = rows.filter(r=>r.w.k !== "Offer sheet" && r.w.k !== "Walmart offer")
-                        .reduce((a,r)=>a + r.v.amount, 0);
-
   const toCheck = tally["To check"] || 0;
   /* brand and product share one cell; the ac-* classes are what the Columns toggle hides */
   const HEAD = [["tracking","Tracking","ac-tracking"],["product","Product",""],["listing","Listing",""],
@@ -3089,7 +3100,7 @@ function renderAll(){
         ? `<small>${tally["Dom"]} for liquidation</small>` : ""}</div>
       <div class="ui-stat${toCheck ? " hot" : ""}"><i>Still to check</i><b>${toCheck}</b>${tally["Accumulating"]
         ? `<small>${tally["Accumulating"]} accumulating</small>` : ""}</div>
-      <div class="ui-stat"><i>Still unplaced</i><b>${money(openTotal)}</b></div>
+      <div class="ui-stat" id="all-total">${allTotalCard(rows, shown)}</div>
     </div>
     <div class="ui-card all-card">
     <div class="ui-tools">
@@ -4096,12 +4107,17 @@ document.addEventListener("input", e=>{
     const ids = ed.ids.split(",");
     ids.forEach(id=>{ wmRec(id)[ed.ed] = e.target.value; touch("ovr", id); });
     recompute(); saveMarks(); renderLedger();
-    const g = allGroups().find(x=>x.ids[0] === ids[0]);
+    const groups = allGroups();
+    const g = groups.find(x=>x.ids[0] === ids[0]);
     if(g){
       const q = document.getElementById("aq_"+ids[0]); if(q) q.textContent = g.v.sellable;
       const a = document.getElementById("aa_"+ids[0]); if(a) a.textContent = money(g.v.amount);
       const n = document.getElementById("an_"+ids[0]); if(n) n.innerHTML = esc(liqLabel(g.w.d)) + (g.w.back ? " " + g.w.back : "");
     }
+    /* the rows still on screen, not a fresh filter: a new cost can move a whole basket
+       between Accumulating and Offer sheet without the table being redrawn */
+    const t = document.getElementById("all-total");
+    if(t) t.innerHTML = allTotalCard(groups, groups.filter(x=>allOnScreen.has(x.ids[0])));
     return;
   }
   if(e.target.id==="allq"){
