@@ -1605,6 +1605,9 @@ body:not(.mos-on) #mos-tabs, body:not(.mos-on) #mos-main{display:none}
 <script>
 const MIN_SHEET = 100;
 const LS_OPTIONS = ["No Error","Not Available","T-Code","Generic Brand","Can't Test List","with C&D"];
+/* a research file's ROI at or under NEG_ROI_AT % sets this Amazon listing status (off to Walmart) */
+const NEG_ROI_LS = "Negative ROI", NEG_ROI_AT = -6;
+const AZ_LS_OPTIONS = LS_OPTIONS.concat(NEG_ROI_LS);
 const money = n => "$" + (Number(n)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 const uid = () => Math.random().toString(36).slice(2,9);
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -2178,14 +2181,28 @@ function pickCol(header, ...cands){
   for(const c of cands){ const i = header.findIndex(h=>norm(h).includes(norm(c))); if(i>=0) return i; }
   return -1;
 }
-function readWorkbook(file, done){
+/* A cell shown with % comes back in percent units: SheetJS reads a CSV's "-42.00%", and a
+   percent-formatted cell, as -0.42. Every other value stays as stored (the shown text can
+   be rounded, or drop the minus sign in a red-negatives format). */
+function pctRows(rows, shown){
+  rows.forEach((row, r)=>row.forEach((v, c)=>{
+    if(typeof v === "number" && /%/.test(String((shown[r] || [])[c]))) row[c] = Math.round(v * 1e8) / 1e6;
+  }));
+  return rows;
+}
+/* opts.pct: percent cells in percent units (see pctRows) */
+function readWorkbook(file, done, opts){
   if(typeof XLSX === "undefined"){ toast("The spreadsheet reader didn't load. Check your connection and reopen this file."); return; }
   const r = new FileReader();
   r.onload = e => {
     try {
       const wb = XLSX.read(e.target.result, {type:"array", cellDates:true});
       const out = {};
-      wb.SheetNames.forEach(n => out[n] = XLSX.utils.sheet_to_json(wb.Sheets[n], {header:1, blankrows:false, defval:""}));
+      wb.SheetNames.forEach(n => {
+        const ws = wb.Sheets[n], o = {header:1, blankrows:false, defval:""};
+        const rows = XLSX.utils.sheet_to_json(ws, o);
+        out[n] = opts && opts.pct ? pctRows(rows, XLSX.utils.sheet_to_json(ws, Object.assign({}, o, {raw:false}))) : rows;
+      });
       done(out);
     } catch(err){ console.error(err); toast("Could not read that file — is it an .xlsx or .csv?"); }
   };
@@ -2778,7 +2795,7 @@ function renderGrid(){
     ${rows.map((r,n)=>{
       const m = markOf(r.asin), res = resultFor(r.asin);
       const lsClass = !m.listing ? "none" : (/^no error$/i.test(m.listing) ? "" : "bad");
-      const opts = LS_OPTIONS.concat(m.listing && !LS_OPTIONS.includes(m.listing) ? [m.listing] : []);
+      const opts = AZ_LS_OPTIONS.concat(m.listing && !AZ_LS_OPTIONS.includes(m.listing) ? [m.listing] : []);
       return `<tr>
         <td class="stick c0">${n+2}</td>
         <td class="stick c1"><span class="asincell"><a class="asinlink"
@@ -2840,8 +2857,12 @@ function liveRow(it){
   const bsz  = num(rec.bsize, it.bsize || 0);
   const unit = num(rec.uprice, it.uprice || 0);
   const oq = Number(it.qty) || 0;
+  /* a Walmart row shows its Walmart listing status; until that is set, the Amazon one
+     that sent it there (Negative ROI, Not Available...) */
+  const azLs = it.stage === "walmart" && !rec.listing && /^B0/i.test(it.asin) ? ((marks[it.asin] || {}).listing || "") : "";
+  const azWhy = !!azLs && !/^no error$/i.test(azLs);
   return {
-    rec, bsz, unit, oq,
+    rec, bsz, unit, oq, azWhy,
     id: it.stage === "walmart" ? txt(rec.wmnum, it.asin) : it.asin,
     sellable: bsz > 0 ? r2(oq / bsz) : (it.sellable || 0),
     amount: r2(unit * oq),
@@ -2849,7 +2870,7 @@ function liveRow(it){
     breakeven: num(rec.breakeven, it.breakeven || 0),
     roi: num(rec.roi, it.roi || 0),
     profit: num(rec.profit, it.profit || 0),
-    listing: it.stage === "walmart" ? (rec.listing || "") : (markOf(it.asin).listing || ""),
+    listing: it.stage === "walmart" ? (rec.listing || (azWhy ? azLs : "")) : (markOf(it.asin).listing || ""),
     title: (it.stage === "walmart" && rec.title) ? rec.title : (it.title || "")
   };
 }
@@ -2926,7 +2947,9 @@ const BULK_FIELDS = [
   ["target",    ["Sell Price | FBA", "Sell Price"],                                              "90d average"]
 ];
 function bulkNum(v){
-  const t = String(v == null ? "" : v).replace(/[$,%\s]/g, "").trim();
+  let t = String(v == null ? "" : v).replace(/[$,%\s ]/g, "").trim();
+  /* accounting style, as a spreadsheet shows it: (0.91) is -0.91 */
+  const par = /^\((.+)\)$/.exec(t); if(par) t = "-" + par[1];
   if(!t) return null;
   const n = Number(t);
   return isNaN(n) ? null : n;
@@ -2973,9 +2996,26 @@ function applyBulk(sheetsObj, filename){
   byAsin.forEach((_,a)=>{ if(!items.some(i=>String(i.asin).toUpperCase() === a)) unknown++; });
 
   if(!touchedRows) return toast("None of those ASINs are in the queue");
+  /* ROI at or under -6% has no place on Amazon: the listing status becomes Negative ROI,
+     which sends the ASIN to Walmart like any other listing problem. One already off
+     Amazon for another listing reason keeps it; a finalised row stays with its client. */
+  const negRoi = new Set();
+  items.forEach(it=>{
+    const vals = byAsin.get(String(it.asin).toUpperCase());
+    if(!vals || vals.roi == null || vals.roi > NEG_ROI_AT || !/^B0/i.test(it.asin)) return;
+    const m = markOf(it.asin);
+    if(m.listing && !/^no error$/i.test(m.listing)) return;
+    m.listing = NEG_ROI_LS;
+    touchMark(it.asin, null);
+    negRoi.add(it.asin);
+  });
   recompute(); saveMarks(); render();
+  const stayed = items.filter(it=>negRoi.has(it.asin) && it.stage !== "walmart").length;
   const bits = found.filter(c=>perField[c.key]).map(c=>c.label);
   toast(matched.size + " ASIN" + (matched.size===1?"":"s") + " updated \u2014 " + bits.join(", ")
+    + (negRoi.size ? " \u00b7 " + negRoi.size + " at " + NEG_ROI_AT + "% ROI or lower set to " + NEG_ROI_LS
+      + " and moved to Walmart" + (stayed ? " (" + stayed + " finalised or taken-off row" + (stayed===1?"":"s")
+      + " stay where they are)" : "") : "")
     + (unknown ? " \u00b7 " + unknown + " ASINs in the file are not in the queue" : ""));
 }
 
@@ -3003,8 +3043,9 @@ function paintAllCols(){
   const f = document.getElementById("all-hidden"); if(f) f.textContent = hiddenLine();
 }
 /* pills for Listing and Where. w.k stays the data key ("Dom" included); only the label changes */
-function listingPill(ls){
-  return ls ? `<span class="ui-pill ${/^no error$/i.test(ls) ? "good" : "bad"}">${esc(ls)}</span>`
+function listingPill(ls, az){
+  return ls ? `<span class="ui-pill ${/^no error$/i.test(ls) ? "good" : "bad"}"${az
+              ? ` title="Amazon listing status — the Walmart one is not set yet"` : ""}>${esc(ls)}</span>`
             : `<span class="ui-pill gray">Not set</span>`;
 }
 function wherePill(w){
@@ -3127,7 +3168,7 @@ function renderAll(){
       ${shown.length ? shown.map(r=>{ const {it,w,v} = r; return `<tr>
         <td class="tight ac-tracking">${esc(it.tracking)}</td>
         <td class="ui-prod" title="${esc(v.title)}">${it.brand ? `<b>${esc(it.brand)}</b>` : ""}<span>${esc(v.title)}</span></td>
-        <td>${listingPill(v.listing)}</td>
+        <td>${listingPill(v.listing, v.azWhy)}</td>
         <td>${wherePill(w)}</td>
         <td class="tight ac-client">${esc(w.client || "")}</td>
         <td class="tight">${esc(v.id)}${r.n > 1
@@ -3826,7 +3867,8 @@ document.addEventListener("change", e=>{
   }
   if(e.target.id === "bulk-file"){
     const f = e.target.files[0];
-    if(f) readWorkbook(f, s=>applyBulk(s, f.name));
+    /* ROI in percent units: a CSV's "-42.00%" would otherwise arrive as -0.42 */
+    if(f) readWorkbook(f, s=>applyBulk(s, f.name), {pct:true});
     e.target.value = "";
     return;
   }
