@@ -2417,7 +2417,7 @@ function visibleStores(){
 }
 
 /* ---------------- routing ---------------- */
-/* the amount the $100 test works from - follows any edit */
+/* the amount a sheet adds up (and the $100 note on it) - follows any edit */
 /* people paste "$26.44", "3%", "1,200" and even "$ 7.579.57" into these boxes.
    strip the decoration, and treat anything still unreadable as not set. */
 function typedNum(v, fallback){
@@ -2514,24 +2514,19 @@ function recompute(){
       date: new Date().toISOString().slice(0,10) });
   });
 
+  /* Only rows given to a client (green in Result: picked there, or a finalised sheet) go
+     on an Amazon sheet, and they are already "allocated" above. A suggested client stays a
+     suggestion: the row waits as "basket" (Suggested) until someone picks it, whatever
+     that client's total comes to. */
   const groups = {};
-  items.filter(i=>i.stage==="basket").forEach(i=>{ (groups[i.client]=groups[i.client]||[]).push(i); });
-  /* finalised rows join their client's group whatever the basket total */
   items.forEach(it=>{
     const lk = wm[it.id];
-    if(lk && lk.locked && !lk.excluded && lk.lockedCh !== "walmart" && canAllocate(lk.locked)){
-      (groups[lk.locked] = groups[lk.locked] || []);
-      if(!groups[lk.locked].includes(it)) groups[lk.locked].push(it);
-    }
+    if(lk && lk.locked && !lk.excluded && lk.lockedCh !== "walmart" && canAllocate(lk.locked))
+      (groups[lk.locked] = groups[lk.locked] || []).push(it);
   });
   Object.entries(groups).forEach(([code,list])=>{
-    const total = list.reduce((a,i)=>a+liveAmount(i),0);
-    const anyLocked = list.some(i=>{ const l = wm[i.id]; return l && l.locked; });
-    if(total >= MIN_SHEET || anyLocked){
-      sheets.push({id:uid(), channel:"amazon", client:code, itemIds:list.map(i=>i.id), total,
-        date:new Date().toISOString().slice(0,10)});
-      list.forEach(i=>i.stage="allocated");
-    }
+    sheets.push({id:uid(), channel:"amazon", client:code, itemIds:list.map(i=>i.id),
+      total:list.reduce((a,i)=>a+liveAmount(i),0), date:new Date().toISOString().slice(0,10)});
   });
 }
 
@@ -2973,10 +2968,11 @@ function whereOf(it){
     return {k:"Walmart", c:"wm", d:r.t};
   }
   if(it.stage === "allocated") return {k:"Offer sheet", c:"az", d:it.sweep ? it.pending + " newer to check" : "", client:it.client};
-  if(it.stage === "basket")    return {k:"Accumulating", c:"", d:it.sweep ? it.pending + " newer to check" : "", client:it.client};
+  if(it.stage === "basket")    return {k:"Suggested", c:"", d:it.sweep ? it.pending + " newer to check"
+                                        : "Pick it in Result to put it on the sheet", client:it.client};
   return {k:"To check", c:"", d:it.reason};
 }
-const ALL_TABS = ["all","To check","Accumulating","Offer sheet","Walmart offer","Walmart","Dom"];
+const ALL_TABS = ["all","To check","Suggested","Offer sheet","Walmart offer","Walmart","Dom"];
 
 /* one row per ASIN - repeat rows are folded in and the quantities added */
 function allGroups(){
@@ -3007,7 +3003,8 @@ function allGroups(){
 /* a price-research export: only Amazon offer-sheet rows that still have no 90d average */
 function bulkExportRows(){
   return allGroups()
-    .filter(g=> g.w.k === "Offer sheet" && !(Number(g.v.target) > 0))
+    /* suggested rows too: they are researched before anyone picks them */
+    .filter(g=> (g.w.k === "Offer sheet" || g.w.k === "Suggested") && !(Number(g.v.target) > 0))
     .map(g=>[g.it.asin, r2(g.v.unit * (g.v.bsz || 1)), ""]);
 }
 
@@ -3134,7 +3131,7 @@ function listingPill(ls, az){
 }
 function wherePill(w){
   const c = w.c === "off" ? "thin" : w.c === "flag" ? "bad" : (w.c === "az" || w.k === "Walmart offer") ? "good"
-          : w.c === "wm" ? "info" : w.k === "Accumulating" ? "thin" : "gray";
+          : w.c === "wm" ? "info" : w.k === "Suggested" ? "thin" : "gray";
   return `<span class="ui-pill ${c}">${esc(liqLabel(w.k))}</span>`;
 }
 
@@ -3215,7 +3212,7 @@ function renderAll(){
         <button class="btn" id="rem-out" title="Everything with no client yet, in the results layout">Remaining to reallocate</button>
         <button class="btn" id="bulk-pick">Import research file</button>
         <input type="file" id="bulk-file" accept=".xlsx,.xlsm,.xls,.csv" hidden>
-        <button class="btn go" id="bulk-out" title="Amazon offer-sheet rows with no 90d average">Export for research</button>
+        <button class="btn go" id="bulk-out" title="Amazon offer-sheet and suggested rows with no 90d average">Export for research</button>
       </div>
     </div>
     <div class="ui-stats">
@@ -3223,8 +3220,8 @@ function renderAll(){
         ? `<small>+ ${tally["Walmart offer"]} on a Walmart offer</small>` : ""}</div>
       <div class="ui-stat"><i>Walmart</i><b>${tally["Walmart"]||0}</b>${tally["Dom"]
         ? `<small>${tally["Dom"]} for liquidation</small>` : ""}</div>
-      <div class="ui-stat${toCheck ? " hot" : ""}"><i>Still to check</i><b>${toCheck}</b>${tally["Accumulating"]
-        ? `<small>${tally["Accumulating"]} accumulating</small>` : ""}</div>
+      <div class="ui-stat${toCheck ? " hot" : ""}"><i>Still to check</i><b>${toCheck}</b>${tally["Suggested"]
+        ? `<small>${tally["Suggested"]} suggested, not picked yet</small>` : ""}</div>
       <div class="ui-stat" id="all-total">${allTotalCard(rows, shown)}</div>
     </div>
     <div class="ui-card all-card">
@@ -3286,7 +3283,7 @@ function renderLedger(){
   const el = document.getElementById("ledger");
   /* label above the number; "To check" turns amber while anything is waiting there */
   if(!items.length){ el.innerHTML = `<div class="stat"><span class="k">Rows loaded</span><span class="n">0</span></div>`; return; }
-  const cells = [["To check", count("unchecked")],["Accumulating", count("basket")],
+  const cells = [["To check", count("unchecked")],["Suggested", count("basket")],
     ["Walmart", count("walmart")],["For Liquidation", domRows().length]];
   el.innerHTML = `<div class="stat"><span class="k">O2I rows</span><span class="n">${items.length}</span></div><span class="sep">&rsaquo;</span>`
     + cells.map(([k,n],i)=>`<div class="stat${i===0 && n ? " hot" : ""}"><span class="k">${k}</span><span class="n">${n}</span></div>`
@@ -3487,9 +3484,10 @@ const osStatus = p => p < 0 ? "Not Profitable" : p < 50 ? "Low Profit" : "Profit
 const osNotes  = p => p < 0 ? "Negative ROI"   : p < 50 ? "Low Profit" : "Good to Order";
 const osDate = () => new Date().toISOString().slice(0,10);
 
+/* only the rows given to a client: a suggestion is not on any sheet, not even as a preview */
 function amazonGroups(){
   const g = {};
-  items.filter(i=>i.stage==="basket"||i.stage==="allocated")
+  items.filter(i=>i.stage==="allocated")
        .forEach(i=>{ (g[i.client]=g[i.client]||[]).push(i); });
   return g;
 }
@@ -3761,7 +3759,7 @@ function renderSheets(){
   if(!books.length){
     if(sum) sum.textContent = "One sheet per client and channel, ready to send.";
     el.innerHTML = strandedBar() + `<div class="ui-card ui-empty"><h3>No offer sheet yet</h3>
-      <p>An Amazon sheet appears once a store picks up items;
+      <p>An Amazon sheet appears once a client is picked in Result on the Amazon ungating tab;
       a Walmart sheet appears once a row has a WM # and an ungated client.</p></div>`;
     restoreScroll("#view-sheets", keep);
     return;
@@ -4018,7 +4016,7 @@ document.addEventListener("click", e=>{
   }
   if(t.id==="bulk-out"){
     const rows = bulkExportRows();
-    if(!rows.length) return toast("Every Amazon offer-sheet row already has a 90d average \u2014 nothing to look up");
+    if(!rows.length) return toast("Every Amazon offer-sheet and suggested row already has a 90d average \u2014 nothing to look up");
     csv("Research list.csv", ["ASIN","Bundle Price","90d average"], rows);
     return toast(rows.length + " ASIN" + (rows.length===1?"":"s") + " with no 90d average");
   }
@@ -4115,7 +4113,8 @@ document.addEventListener("click", e=>{
     const ids = hit.b.rows.flatMap(r=>r.ids || [r.id]);
     const locked = ids.length && ids.every(id=>(wm[id]||{}).locked);
     if(locked){
-      if(!confirm("Unlock " + hit.b.code + "? These rows can then move to another client again.")) return;
+      if(!confirm("Unlock " + hit.b.code + "? These rows can then move to another client again."
+        + (hit.ch === "amazon" ? "\n\nOn Amazon they leave this sheet and go back to Suggested until someone picks them." : ""))) return;
       ids.forEach(id=>{ const rr = wmRec(id); rr.locked = ""; rr.lockedCh = ""; touch("ovr", id); });
       toast(hit.b.code + " unlocked");
     } else {
@@ -4240,8 +4239,8 @@ document.addEventListener("input", e=>{
       const a = document.getElementById("aa_"+ids[0]); if(a) a.textContent = money(g.v.amount);
       const n = document.getElementById("an_"+ids[0]); if(n) n.innerHTML = esc(liqLabel(g.w.d)) + (g.w.back ? " " + g.w.back : "");
     }
-    /* the rows still on screen, not a fresh filter: a new cost can move a whole basket
-       between Accumulating and Offer sheet without the table being redrawn */
+    /* the rows still on screen, not a fresh filter: the table is not redrawn while
+       typing, so the line under the total adds up what is actually shown */
     const t = document.getElementById("all-total");
     if(t) t.innerHTML = allTotalCard(groups, groups.filter(x=>allOnScreen.has(x.ids[0])));
     return;
@@ -4357,7 +4356,7 @@ document.addEventListener("change", e=>{
    writes a realloc_* table.
 
    Where the two differ, deliberately:
-     Reallocation desk        newest G&G date wins, $100 floor
+     Reallocation desk        roster order suggests, a picked client goes on the sheet
      Manual offer sheet       spread evenly, $500 floor, three clients per ASIN
    =========================================================================== */
 (function(){
