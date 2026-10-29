@@ -1271,11 +1271,14 @@ body{padding-left:214px}
         <span class="ui-meta" id="rosternote"></span><span class="ui-spacer"></span>
         <input type="search" class="ui-search" id="roster-q" placeholder="Find a store" aria-label="Find a store"></div>
       <div class="ui-tw tall"><table class="ui-tbl">
-        <thead><tr><th class="num">#</th><th>Store</th><th class="num">Allocated to Amazon</th><th>Account</th><th>In the queue</th></tr></thead>
+        <thead><tr><th class="num">#</th><th>Store</th><th class="num">Allocated to Amazon</th>
+          <th title="Allocated = Waiting for invoice or Allocated to Amazon; any other result is a fall off">Manual offer sheet</th>
+          <th>Account</th><th>In the queue</th></tr></thead>
         <tbody id="roster-body"></tbody>
       </table></div>
-      <div class="ui-foot"><span>Fewest allocated to Amazon (counted from the OMS portal) go first. Anyone not
-        allocatable in O2I is out of the queue. Store codes are three letters; anything else is ignored.</span>
+      <div class="ui-foot"><span>This order is who gets an item first: no manual offer sheet this month, then the
+        largest share fallen off, the most allocated last; ties go fewest allocated to Amazon (counted from the OMS
+        portal) first. Anyone not allocatable in O2I is out of the queue. Store codes are three letters; anything else is ignored.</span>
         <span id="roster-foot"></span></div>
     </div>
     <div class="panel" id="readreport" hidden></div>
@@ -1629,7 +1632,7 @@ let allFilter = "all", allQuery = "";
 let resPick = new Set();          /* which clients the results download covers */
 let allSort = { key: "", dir: 1 };
 let osEdit = {};                /* item id -> { status, notes } typed over the auto value */
-let stores = [];                /* [{code,name,allocatable,allocated}] fewest allocated first */
+let stores = [];                /* [{code,name,allocatable,allocated}] in rosterCmp order */
 let colMode = "split";          /* split | rand | all | hits */
 let randomCols = null, oldPick = null, randPool = 50;
 let gridQuery = "", lastFile = "", lastSheetNames = [], pickedO2I = "";
@@ -1740,10 +1743,78 @@ function canAllocate(code){
   const r = liveRoster[code];
   return r ? r.allocatable !== false : true;   /* unknown to the portal: allow */
 }
+/* Where each client stands on the Manual offer sheet this month, read the way its
+   Clients tab reads it: every line booked this month (released ones too), "good" once
+   OMS says Waiting for invoice or Allocated to Amazon, a fall off for any other result
+   (a released line by the result it was released on), no result yet counts as neither.
+   null until read, or while it cannot be read: the order is then the old one. */
+let mosStand = null, mosStandNote = "";
+const MOS_GOOD = /^(waiting for invoice|allocated to amazon)$/i;
+async function loadMosStanding(){
+  const month = new Date().toISOString().slice(0,7);
+  const [y, m] = month.split("-").map(Number);
+  const next = new Date(Date.UTC(y, m, 1)).toISOString().slice(0,10);
+  const lines = [];
+  for(let after = 0; ; ){
+    const { data, error } = await sb.from("mos_allocations")
+      .select("id,store_code,batch_id,tracking_code,released_at,release_reason")
+      .gte("sheet_date", month + "-01").lt("sheet_date", next)
+      .gt("id", after).order("id").limit(1000);
+    if(error) throw new Error(error.message);
+    lines.push(...data);
+    if(data.length < 1000) break;
+    after = data[data.length - 1].id;
+  }
+  const codes = [...new Set(lines.filter(r=>!r.released_at).map(r=>r.tracking_code).filter(Boolean))];
+  let states = {};
+  if(codes.length){
+    const { data, error } = await sb.functions.invoke("oms-status", { body: { codes } });
+    if(error){ let d = ""; try{ d = (await error.context.json()).error; }catch(e){} throw new Error(d || error.message); }
+    if(!data || !data.ok) throw new Error((data && data.error) || "OMS did not answer");
+    states = data.states || {};
+  }
+  return standingOf(lines, states);
+}
+function standingOf(lines, states){
+  const by = {};
+  lines.forEach(r=>{
+    const s = by[r.store_code] || (by[r.store_code] = { runs: new Set(), lines: 0, good: 0, fall: 0 });
+    s.runs.add(r.batch_id); s.lines++;
+    const f = String((r.released_at ? r.release_reason : (states[r.tracking_code] || {}).final_result) || "").trim();
+    if(r.released_at || f){ if(MOS_GOOD.test(f)) s.good++; else s.fall++; }
+  });
+  const out = {};
+  Object.entries(by).forEach(([code, s])=>{
+    out[code] = { sheets: s.runs.size, lines: s.lines, good: s.good, fall: s.fall, fallPct: s.fall / s.lines };
+  });
+  return out;
+}
+function byAllocated(a, b){ return (a.allocated - b.allocated) || a.code.localeCompare(b.code); }
+/* The client order, which is also who gets an item (the first Ungated client in it)
+   and who has to be checked before that one (everyone ahead of it). Owner's call,
+   2026-10-29: no manual offer sheet this month first, then the largest share of the
+   month's lines fallen off, the most allocated (Waiting for invoice / Allocated to
+   Amazon) last; ties, and the whole order while the standing is unread, go fewest
+   allocated to Amazon first. */
+function rosterCmp(a, b){
+  const x = mosStand && mosStand[a.code], y = mosStand && mosStand[b.code];
+  if(mosStand){
+    if(!x !== !y) return x ? 1 : -1;
+    if(x && x.fallPct !== y.fallPct) return y.fallPct - x.fallPct;
+    if(x && x.good !== y.good) return x.good - y.good;
+  }
+  return byAllocated(a, b);
+}
+function standLine(code){
+  if(!mosStand) return "";
+  const s = mosStand[code];
+  return s ? s.sheets + " sheet" + (s.sheets===1?"":"s") + " this month · " + Math.round(s.fallPct * 100)
+             + "% fell off · " + s.good + " allocated"
+           : "No manual offer sheet this month";
+}
 function rebuildStores(){
-  /* the roster comes from O2I, ordered by fewest already allocated to Amazon */
-  stores = Object.values(liveRoster).slice().sort((a,b)=>
-    (a.allocated - b.allocated) || a.code.localeCompare(b.code));
+  /* the roster comes from O2I, in rosterCmp order */
+  stores = Object.values(liveRoster).slice().sort(rosterCmp);
   const dl = document.getElementById("store-opts");
   if(dl) dl.innerHTML = stores.map(s=>`<option value="${esc(s.code)}">${esc(s.name)}</option>`).join("");
   const n = document.getElementById("rosternote");
@@ -1753,6 +1824,7 @@ function rebuildStores(){
     ? stores.length + " stores from O2I \u00b7 " + (stores.length - blocked) + " in the queue"
       + (blocked ? " \u00b7 " + blocked + " on hold" : "")
       + (omsNote ? " \u00b7 " + omsNote : "")
+      + (mosStandNote ? " \u00b7 " + mosStandNote : "")
     : "Waiting for the roster from O2I.";
 }
 
@@ -1793,6 +1865,8 @@ async function refreshQueue(){
   try {
     const { data: s } = await sb.auth.getSession();
     if(!s || !s.session) throw new Error("Not signed in");
+    /* read alongside the queue; it orders the roster below */
+    const standing = loadMosStanding().then(v=>({v}), e=>({e}));
     const res = await fetch(QUEUE_FN, {
       method: "POST",
       headers: { Authorization: "Bearer " + s.session.access_token, "Content-Type": "application/json" },
@@ -1814,6 +1888,10 @@ async function refreshQueue(){
     liveRoster = {};
     (body.roster || []).forEach(r=>{ liveRoster[r.code] = r; });
     omsNote = body.oms_ok ? "" : (body.oms_note || "");
+    const st = await standing;
+    if(st.v){ mosStand = st.v; mosStandNote = ""; }
+    else mosStandNote = "Manual offer sheet standing not read (" + st.e.message + ")"
+      + (mosStand ? ", ordered by the last one read" : ", ordered by fewest allocated");
     rebuildStores();
     queueCounts = body.counts || {};
     queueSkipped = body.missing_raw_info || 0;
@@ -2141,7 +2219,7 @@ function renderRoster(){
   if(rosterDrawn && rosterDrawn.s === stores && rosterDrawn.q === rosterQuery && rosterDrawn.all === rosterAll) return;
   rosterDrawn = { s: stores, q: rosterQuery, all: rosterAll };
   if(!stores.length){
-    body.innerHTML = `<tr><td colspan="5" class="ui-dim">Waiting for the roster from O2I.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" class="ui-dim">Waiting for the roster from O2I.</td></tr>`;
     foot.innerHTML = "";
     return;
   }
@@ -2155,9 +2233,10 @@ function renderRoster(){
       <td><span class="ui-code">${esc(s.code)}</span>${s.name && s.name !== s.code
         ? `<span class="rname" title="${esc(s.name)}">${esc(s.name)}</span>` : ""}</td>
       <td class="num">${allocCount(s.code)}</td>
+      <td class="ui-dim">${esc(standLine(s.code))}</td>
       <td>${acctPill(s.status_account)}</td>
       <td>${inQ ? "Yes" : `<span class="ui-dim" title="Not allocatable in O2I">Out</span>`}</td></tr>`;
-  }).join("") : `<tr><td colspan="5" class="ui-dim">No store matches that.</td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="ui-dim">No store matches that.</td></tr>`;
   foot.innerHTML = (q ? hits.length + " of " + stores.length + " match" : "Showing " + shown.length + " of " + stores.length)
     + (!q && stores.length > ROSTER_CAP
         ? ` \u00b7 <button type="button" class="ui-link" id="roster-more">${rosterAll ? "Show fewer" : "Show all " + stores.length}</button>` : "");
@@ -2277,7 +2356,8 @@ function splitCols(){
   return {first: a.slice(0,5), last: oldPick};
 }
 function poolSplit(){
-  const a = activeStores(), n = a.length;
+  /* the old five are drawn from the clients most allocated to Amazon, whatever the column order */
+  const a = activeStores().slice().sort(byAllocated), n = a.length;
   const p = Math.max(5, Math.min(randPool, Math.floor(n/2)));
   return { newPool: a.slice(0,p), oldPool: a.slice(n-p) };
 }
@@ -2491,9 +2571,9 @@ function wmResult(it){
 function wmUngCount(it){ const r = wmRec(it.id); return wmClients.filter(c=>r.st[c]==="Ungated").length; }
 
 /* ---------------- ungating grid ---------------- */
-/* the ungated clients for an ASIN, fewest already allocated first */
+/* the ungated clients for an ASIN, in the roster order: the first is who recompute gives it to */
 function ungatedPick(asin){
-  return ungatedCodes(asin).slice().sort((a,b)=> allocCount(a) - allocCount(b) || a.localeCompare(b));
+  return ungatedCodes(asin);
 }
 function idsFor(asin){ return items.filter(i=>i.asin === asin).map(i=>i.id); }
 function lockedFor(asin){
@@ -2790,7 +2870,7 @@ function renderGrid(){
           checking[st.code]
             ? `<button class="onit" data-check="${esc(st.code)}" title="Being checked, started ${esc(since(checking[st.code].at))} ago \u2014 click to clear">&#9679;</button>`
             : `<button class="prob dot" data-check="${esc(st.code)}" title="Mark ${esc(st.code)} as being checked">&bull;</button>`}</span>
-        <span class="d">${allocCount(st.code)} alloc</span></th>`).join("")}
+        <span class="d" title="${esc(standLine(st.code))}">${allocCount(st.code)} alloc</span></th>`).join("")}
     </tr></thead><tbody>
     ${rows.map((r,n)=>{
       const m = markOf(r.asin), res = resultFor(r.asin);
