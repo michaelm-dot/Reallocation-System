@@ -1277,8 +1277,8 @@ body{padding-left:214px}
         <tbody id="roster-body"></tbody>
       </table></div>
       <div class="ui-foot"><span>This order is who gets an item first: no manual offer sheet this month, then the
-        largest share fallen off, the most allocated last; ties go fewest allocated to Amazon (counted from the OMS
-        portal) first. Anyone not allocatable in O2I is out of the queue. Store codes are three letters; anything else is ignored.</span>
+        most fallen off (fall offs minus allocated, as a share of the month's lines), the most allocated last; ties go
+        fewest allocated to Amazon (counted from the OMS portal) first. Anyone not allocatable in O2I is out of the queue. Store codes are three letters; anything else is ignored.</span>
         <span id="roster-foot"></span></div>
     </div>
     <div class="panel" id="readreport" hidden></div>
@@ -1785,21 +1785,25 @@ function standingOf(lines, states){
   });
   const out = {};
   Object.entries(by).forEach(([code, s])=>{
-    out[code] = { sheets: s.runs.size, lines: s.lines, good: s.good, fall: s.fall, fallPct: s.fall / s.lines };
+    out[code] = { sheets: s.runs.size, lines: s.lines, good: s.good, fall: s.fall, fallPct: s.fall / s.lines,
+                  net: (s.fall - s.good) / s.lines };
   });
   return out;
 }
 function byAllocated(a, b){ return (a.allocated - b.allocated) || a.code.localeCompare(b.code); }
 /* The client order, which is also who gets an item (the first Ungated client in it)
    and who has to be checked before that one (everyone ahead of it). Owner's call,
-   2026-10-29: no manual offer sheet this month first, then the largest share of the
-   month's lines fallen off, the most allocated (Waiting for invoice / Allocated to
-   Amazon) last; ties, and the whole order while the standing is unread, go fewest
-   allocated to Amazon first. */
+   2026-10-29: no manual offer sheet this month first, then many fall offs, the most
+   allocated (Waiting for invoice / Allocated to Amazon) last. Among clients with a
+   sheet: fallen off minus allocated, as a share of the month's lines, highest first
+   (all fell off 1, nothing back yet 0, all allocated -1); then the larger share fallen
+   off, then fewer allocated. Ties, and the whole order while the standing is unread,
+   go fewest allocated to Amazon first. */
 function rosterCmp(a, b){
   const x = mosStand && mosStand[a.code], y = mosStand && mosStand[b.code];
   if(mosStand){
     if(!x !== !y) return x ? 1 : -1;
+    if(x && x.net !== y.net) return y.net - x.net;
     if(x && x.fallPct !== y.fallPct) return y.fallPct - x.fallPct;
     if(x && x.good !== y.good) return x.good - y.good;
   }
