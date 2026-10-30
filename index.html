@@ -1750,8 +1750,25 @@ function canAllocate(code){
    null until read, or while it cannot be read: the order is then the old one. */
 let mosStand = null, mosStandNote = "";
 const MOS_GOOD = /^(waiting for invoice|allocated to amazon)$/i;
+/* Manual offer sheet days are New York days (owner, 2026-10-30): a run's sheet date,
+   its tracking code date, the budget month and the 30-day slot, whoever records it
+   and wherever. The MOS script uses these too. They used to be UTC dates. */
+const MOS_TZ = "America/New_York";
+const mosDayFmt = new Intl.DateTimeFormat("en-US", { timeZone: MOS_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
+function mosDay(t){
+  const p = {};
+  for(const x of mosDayFmt.formatToParts(t)) p[x.type] = x.value;
+  return p.year + "-" + p.month + "-" + p.day;
+}
+/* Today, worked out at most once a second: the slot check asks once per ledger line. */
+let mosTodayAt = -Infinity, mosTodayIs = "";
+function mosToday(){
+  const t = Date.now();
+  if(t - mosTodayAt >= 1000 || t < mosTodayAt){ mosTodayAt = t; mosTodayIs = mosDay(t); }
+  return mosTodayIs;
+}
 async function loadMosStanding(){
-  const month = new Date().toISOString().slice(0,7);
+  const month = mosToday().slice(0,7);
   const [y, m] = month.split("-").map(Number);
   const next = new Date(Date.UTC(y, m, 1)).toISOString().slice(0,10);
   const lines = [];
@@ -1771,16 +1788,42 @@ async function loadMosStanding(){
     const { data, error } = await sb.functions.invoke("oms-status", { body: { codes } });
     if(error){ let d = ""; try{ d = (await error.context.json()).error; }catch(e){} throw new Error(d || error.message); }
     if(!data || !data.ok) throw new Error((data && data.error) || "OMS did not answer");
-    states = data.states || {};
+    states = mosLineStates(data, lines);
   }
   return standingOf(lines, states);
+}
+/* OMS answers per offer sheet line: a tracking code and the client together
+   (mosLineKey), never the code alone. The two runs of 2026-10-23 both numbered
+   from _M1, so 49 codes belong to two clients each, and reading by code gave one
+   client the other's result. oms-status sends every OMS row of a code with its
+   client (rows). One deployed before that sends a single row per code (states)
+   without saying whose it is; that answer is used only for a code that no other
+   line in `ledger` has. If one code has two OMS rows for the same client, the row
+   with a result wins, as before. The MOS script reads answers through these too. */
+function mosLineKey(code, store){ return String(code || "").trim() + "|" + String(store || "").trim().toUpperCase(); }
+function mosLineStates(data, ledger){
+  const out = {};
+  if(data && data.rows){
+    for(const code in data.rows) for(const x of data.rows[code] || []){
+      const k = mosLineKey(code, x.store_code), f = String(x.final_result || "").trim();
+      if(out[k] && out[k].final_result && !f) continue;
+      out[k] = { final_result: f || null, stage: x.stage == null ? null : x.stage, asin: x.asin || null };
+    }
+    return out;
+  }
+  const by = {};
+  for(const r of ledger || []) if(r.tracking_code) (by[r.tracking_code] = by[r.tracking_code] || []).push(r);
+  const states = (data && data.states) || {};
+  for(const code in states)
+    if(by[code] && by[code].length === 1) out[mosLineKey(code, by[code][0].store_code)] = states[code];
+  return out;
 }
 function standingOf(lines, states){
   const by = {};
   lines.forEach(r=>{
     const s = by[r.store_code] || (by[r.store_code] = { runs: new Set(), lines: 0, good: 0, fall: 0 });
     s.runs.add(r.batch_id); s.lines++;
-    const f = String((r.released_at ? r.release_reason : (states[r.tracking_code] || {}).final_result) || "").trim();
+    const f = String((r.released_at ? r.release_reason : (states[mosLineKey(r.tracking_code, r.store_code)] || {}).final_result) || "").trim();
     if(r.released_at || f){ if(MOS_GOOD.test(f)) s.good++; else s.fall++; }
   });
   const out = {};
@@ -1833,10 +1876,13 @@ function rebuildStores(){
 }
 
 /* ---------------- the live queue ---------------- */
+/* the lock a locked_at belongs to: client and channel, "" when not locked */
+function lockKey(client, ch){ return client ? client + "|" + (ch || "") : ""; }
 function overrideFromRow(r){
   return { wmnum: r.wm_number || "", upc: r.upc == null ? undefined : r.upc,
     title: r.product_name == null ? undefined : r.product_name,
     locked: r.locked_client || "", lockedCh: r.locked_channel || "", excluded: !!r.excluded,
+    lockedAt: r.locked_at || null, lockedKey: lockKey(r.locked_client, r.locked_channel),
     link: r.walmart_link || "", listing: r.listing_status || "",
     bsize: r.bundle_size || "", uprice: r.unit_price == null ? undefined : r.unit_price,
     target: r.target_sell_price || "", breakeven: r.breakeven || "",
@@ -1845,12 +1891,18 @@ function overrideFromRow(r){
 }
 function overrideToRow(id, rec){
   const it = items.find(x=>x.id === id);
+  /* locked_at is when the row was finalised. Any other edit of a finalised row (a typed
+     value, a research-file import) keeps it; only a new lock, or a lock to another client
+     or channel, takes the time now. The record keeps what was written, so the next save
+     before the database echoes it back does not stamp it again. */
+  const key = lockKey(rec.locked, rec.lockedCh);
+  if(key !== rec.lockedKey){ rec.lockedAt = key ? new Date().toISOString() : null; rec.lockedKey = key; }
   return { source_id: Number(id), asin: it ? it.asin : "",
     wm_number: rec.wmnum || "", upc: rec.upc == null ? null : String(rec.upc),
     product_name: rec.title == null ? null : String(rec.title),
     locked_client: rec.locked || null,
     locked_channel: rec.lockedCh || null,
-    locked_at: rec.locked ? new Date().toISOString() : null,
+    locked_at: key ? rec.lockedAt || null : null,
     excluded: !!rec.excluded,
     walmart_link: rec.link || "", listing_status: rec.listing || "",
     bundle_size: String(rec.bsize || ""), unit_price: rec.uprice == null ? null : String(rec.uprice),
@@ -4397,24 +4449,27 @@ const inRun = c => M.picked===null || M.picked.has(c);
 
 /* A client holds an ASIN for thirty days from the sheet date. After that the
    slot comes back on its own, so an ASIN given to three clients on the same
-   day is 3/3 for a month and 0/3 the day after. */
+   day is 3/3 for a month and 0/3 the day after. Days are New York days
+   (mosToday, in the desk script), like the sheet date, so every teammate's
+   tab frees a slot on the same day. */
 const SLOT_DAYS = 30;
+const dayNum = d => Date.parse(d+"T00:00:00Z")/86400000;
 function slotLive(row){
   var d = row.sheet_date || (row.allocated_at||"").slice(0,10);
   if(!d) return true;
-  return (Date.now() - new Date(d+"T00:00:00").getTime()) / 86400000 < SLOT_DAYS;
+  return dayNum(mosToday()) - dayNum(d) < SLOT_DAYS;
 }
 function slotsUsed(asin){ return (M.counts[asin] ? M.counts[asin].size : 0); }
 function slotExpiry(asin){
-  /* When the first of the held slots comes back. */
+  /* The day the first of the held slots comes back, as YYYY-MM-DD. */
   var best=null;
   for(var i=0;i<M.ledger.length;i++){
     var r=M.ledger[i];
     if(r.asin!==asin || !slotLive(r)) continue;
-    var d=new Date((r.sheet_date||(r.allocated_at||"").slice(0,10))+"T00:00:00").getTime()+SLOT_DAYS*86400000;
+    var d=r.sheet_date||(r.allocated_at||"").slice(0,10);
     if(best===null || d<best) best=d;
   }
-  return best;
+  return best===null ? null : new Date((dayNum(best)+SLOT_DAYS)*86400000).toISOString().slice(0,10);
 }
 
 let noteTimer;
@@ -4618,8 +4673,7 @@ async function _loadAll(){
     M.cfg={method:s.method, minOrder:Number(s.min_order),
            minRoi:(s.min_roi===null||s.min_roi===undefined) ? 0.10 : Number(s.min_roi),
            maxClients:s.max_clients, pendingOn:s.pending_on,
-           year:s.year, quarter:s.quarter, channel:s.channel,
-           sheetDate:M.cfg.sheetDate};
+           year:s.year, quarter:s.quarter, channel:s.channel};
   }
   recompute();
   M.ready=true;
@@ -4646,7 +4700,12 @@ function recompute(){
    for. A client's budget starts again on the first of each month, so a sheet
    dated October is charged against October however much September used. */
 function monthOf(r){ return String(r.sheet_date || (r.allocated_at||"")).slice(0,7); }
-function curMonth(){ return String(M.cfg.sheetDate || new Date().toISOString().slice(0,10)).slice(0,7); }
+function curMonth(){ return runDate().slice(0,7); }
+/* The date a run goes out under (sheet date, batch and tracking codes): today
+   on the New York calendar, read when the plan is made and again when it is
+   recorded. It used to be fixed once, in UTC, when the page loaded, so a tab
+   left open for days dated its runs the day it was opened. */
+function runDate(){ return mosToday(); }
 function spentIn(code, month){ return (M.byMonth[code] && M.byMonth[code][month]) || 0; }
 
 function remainingFor(code, month){
@@ -5003,7 +5062,7 @@ function allocate(excluded, banned){
   excluded = excluded || new Set();
   banned = banned || new Set();
   const cap=M.cfg.maxClients, spread=M.cfg.method==="spread";
-  const date=M.cfg.sheetDate || new Date().toISOString().slice(0,10);
+  const date=runDate();
   const remaining={}, assigned={}, skips={}, before={}, after={};
   const pos={}; M.stores.forEach((c,i)=>{ pos[c]=i; });
   const live=M.stores.filter(c=>!excluded.has(c) && inRun(c));
@@ -5043,13 +5102,17 @@ function allocate(excluded, banned){
   for(const c of M.stores) after[c]=remaining[c];
   /* Tracking codes run once through the batch rather than restarting per
      client, so the first sheet might be 2026-10-16_M1 to _M12 and the next
-     one picks up at _M13. Client order decides who gets which stretch. */
-  const offset={}; let run=0;
+     one picks up at _M13. Client order decides who gets which stretch. A
+     later run on the same date carries on after the highest number that date
+     already has: both runs of 2026-10-23 started at _M1, and OMS answers for
+     _M1.._M49 were read as the other client's. */
+  const base=lastTrackNum(M.ledger, date);
+  const offset={}; let run=base;
   for(const c of M.stores){ offset[c]=run; run+=assigned[c].length; }
   const lines=Object.values(assigned).reduce((s,v)=>s+v.length,0);
   const value=Object.values(assigned).reduce((s,v)=>s+v.reduce((t,r)=>t+r.total,0),0);
   return {date, cap, assigned, skips, before, after, countsAfter, exhausted, lines, value,
-          offset, served:Object.values(assigned).filter(v=>v.length).length};
+          base, offset, served:Object.values(assigned).filter(v=>v.length).length};
 }
 /* A sheet is worth sending only if it clears both bars: the minimum value,
    and a blended ROI at least as good as the target. The two pull against each
@@ -5124,6 +5187,30 @@ const MONEY_FMT='$#,##0.00;($#,##0.00);-';
 function trackCode(date, n){ return date+"_M"+n; }
 /* The running number at the end of a code, in either style. */
 function trackNum(code){ const m=String(code||"").match(/_M?(\d+)$/); return m ? Number(m[1]) : NaN; }
+/* The highest {date}_M<n> among these lines, 0 when the date has none yet. A
+   new run numbers on from it, so no two lines share a code (oms-status is
+   asked by code). Only the current style counts: M2026-10-09_13 is another
+   name altogether. */
+function lastTrackNum(rows, date){
+  const re=new RegExp("^"+String(date).replace(/[^0-9-]/g,"")+"_M(\\d+)$");
+  let hi=0;
+  for(const r of rows||[]){ const m=re.exec(r.tracking_code||""); if(m && +m[1]>hi) hi=+m[1]; }
+  return hi;
+}
+/* The same, read from the database right before recording: the ledger in this
+   tab may not have a teammate's run of a moment ago yet. */
+async function dbLastTrackNum(date){
+  const rows=[];
+  for(let after=0;;){
+    const {data,error}=await sb.from("mos_allocations").select("id,tracking_code")
+      .like("tracking_code", date+"_M%").gt("id", after).order("id").limit(1000);
+    if(error) throw new Error(error.message);
+    rows.push(...data);
+    if(data.length<1000) break;
+    after=data[data.length-1].id;
+  }
+  return lastTrackNum(rows, date);
+}
 
 function fillSheet(ws, code, items, date, offset){
   offset = offset || 0;
@@ -5272,17 +5359,22 @@ function _samePlan(a, b){
 }
 async function commit(){
   let R=M.result; if(!R||!R.lines) return;
+  /* The run is dated when it is recorded. A preview made before midnight New
+     York time is planned again on the new date below (the month, and so the
+     budget, or a slot may have changed with it) and recorded under that date. */
+  const newDay=R.date!==runDate();
   /* Never record a plan made on older data: a teammate may have taken the
      same slots or budget meanwhile. When something changed, read it, plan
      again, and record only if the plan comes out the same (with the latest
      tracking numbers); otherwise show the new plan to check first. */
-  if(R.stale || liveDue || liveRunning){
+  if(R.stale || newDay || liveDue || liveRunning){
     await mosLiveFlush();
     if(liveDue || liveRunning){ note("The latest changes are still loading. Try again in a moment.", true); return; }
     const fresh=allocateWithMinimum();
     if(!_samePlan(R, fresh)){
       M.result=fresh; renderMos();
-      note("The data changed and so did the plan. Check the new preview, then record.", true);
+      note(newDay ? `The date is now ${fresh.date} and the plan changed with it. Check the new preview, then record.`
+                  : "The data changed and so did the plan. Check the new preview, then record.", true);
       return;
     }
     M.result=R=fresh;
@@ -5296,11 +5388,14 @@ async function commit(){
     /* Recording and handing the file over are separate jobs. Sheets are
        downloaded from the Offer sheets tab when they are actually needed, so
        nothing lands in Downloads unasked. */
+    /* A run recorded since this plan was made (another tab, not read here yet)
+       moves the numbers on past it rather than sharing its codes. */
+    const shift=Math.max(0, await dbLastTrackNum(R.date) - (R.base||0));
     const rows=[];
     for(const code of M.stores){
       (R.assigned[code]||[]).forEach((r,i)=>rows.push({
         batch_id:batch, asin:r.asin, store_code:code,
-        tracking_code:trackCode(R.date, R.offset[code]+i+1),
+        tracking_code:trackCode(R.date, R.offset[code]+shift+i+1),
         sheet_date:R.date, year:M.cfg.year, quarter:M.cfg.quarter, channel:M.cfg.channel,
         total_price:+r.total.toFixed(2), unit_cost:+r.unitCost.toFixed(2),
         qty:r.qty, distributor:r.dist, brand:r.brand,
@@ -5311,7 +5406,9 @@ async function commit(){
     M.ledger.push(...rows); recompute();
     note(`Recorded ${rows.length.toLocaleString()} line${rows.length===1?"":"s"} across `+
       `${R.served} client${R.served===1?"":"s"}. They are on the Offer sheets tab now, `+
-      `ready to download or cancel.`);
+      `ready to download or cancel.`+
+      (shift ? ` Another run was recorded on ${R.date} meanwhile, so the tracking codes moved on to `+
+               `start after it: download the sheets from the Offer sheets tab, not an earlier preview.` : ""));
     M.lastBatch=batch;
     M.result=null;
   }catch(e){
@@ -5824,8 +5921,7 @@ function _ungPaint2(which){
       var used=slotsUsed(a), cap=(M.cfg&&M.cfg.maxClients)||3;
       var back=used?slotExpiry(a):null;
       slotTd='<th class="slot s'+used+'" title="'+
-        (used ? used+' of '+cap+' taken. The first frees up '+
-                new Date(back).toISOString().slice(0,10)
+        (used ? used+' of '+cap+' taken. The first frees up '+back
               : 'Nobody holds this ASIN')+
         '">'+used+'/'+cap+'</th>';
     }
@@ -6650,7 +6746,7 @@ const monthName=(m)=>{
 const CL_GOOD=/^(waiting for invoice|allocated to amazon)$/i;
 function clResult(r){
   if(r.released_at) return CL_GOOD.test(String(r.release_reason||"").trim()) ? "good" : "fall";
-  const s=r.tracking_code && (M.oms[r.tracking_code] || M.omsSeen[r.tracking_code]);
+  const s=r.tracking_code && (M.oms[lineKey(r)] || M.omsSeen[lineKey(r)]);
   const f=String((s && s.final_result) || "").trim();
   if(!f) return "wait";
   return CL_GOOD.test(f) ? "good" : "fall";
@@ -6989,15 +7085,20 @@ function showClientRuns(code){
 }
 
 /* What OMS currently says about lines we have already sent out. Held per
-   tracking code, refreshed while a sheet is open, because the status there
-   moves after the order is placed. */
+   line, by tracking code and client together (lineKey; mosLineStates in the
+   desk script), refreshed while a sheet is open, because the status there
+   moves after the order is placed. A code alone is not one line: the two runs
+   of 2026-10-23 share _M1.._M49. */
 M.oms = M.oms || {};
 M.omsAt = null;
+function lineKey(r){ return mosLineKey(r.tracking_code, r.store_code); }
 
-/* The last answer seen for each code, kept in this browser so a sheet can
+/* The last answer seen for each line, kept in this browser so a sheet can
    show it the moment it opens instead of "checking". For showing only:
-   releases still wait for an answer fetched in this visit (M.oms). */
-const OMS_SEEN_KEY = "mos.oms.v1";
+   releases still wait for an answer fetched in this visit (M.oms). v1 was
+   kept per code. */
+const OMS_SEEN_KEY = "mos.oms.v2";
+try{ localStorage.removeItem("mos.oms.v1"); }catch(e){}
 M.omsSeen = (()=>{
   try{
     const v=JSON.parse(localStorage.getItem(OMS_SEEN_KEY)||"{}");
@@ -7005,29 +7106,33 @@ M.omsSeen = (()=>{
   }catch(e){ return {}; }
 })();
 function omsRemember(states, asked){
-  /* A code OMS was asked about and does not have is remembered as "no result
+  /* A line OMS was asked about and does not have is remembered as "no result
      yet", so it is not shown as checking on every visit. */
-  for(const c of asked||[]) M.omsSeen[c]=states[c] || {final_result:null};
+  const ask=new Set(asked||[]);
+  for(const r of M.ledger||[]) if(ask.has(r.tracking_code)) M.omsSeen[lineKey(r)]=states[lineKey(r)] || {final_result:null};
   Object.assign(M.omsSeen, states);
-  /* Codes that left the ledger (a cancelled sheet) are not kept forever. */
-  const keep=new Set((M.ledger||[]).map(r=>r.tracking_code));
-  if(keep.size) for(const c in M.omsSeen) if(!keep.has(c)) delete M.omsSeen[c];
+  /* Lines that left the ledger (a cancelled sheet), and other clients' rows
+     under a code that was asked about, are not kept. */
+  const keep=new Set((M.ledger||[]).map(lineKey));
+  if(keep.size) for(const k in M.omsSeen) if(!keep.has(k)) delete M.omsSeen[k];
   try{ localStorage.setItem(OMS_SEEN_KEY, JSON.stringify(M.omsSeen)); }catch(e){}
 }
 
+/* Asks OMS about these codes; returns the answers per line (lineKey). */
 async function omsFetch(codes){
   codes=[...new Set(codes.filter(Boolean))];
-  if(!codes.length) return {asked:0, found:0};
+  if(!codes.length) return {};
   const {data,error}=await sb.functions.invoke("oms-status",{body:{codes}});
   if(error){
     let detail=""; try{ detail=(await error.context.json()).error; }catch(e){}
     throw new Error(detail||error.message);
   }
   if(!data||!data.ok) throw new Error((data&&data.error)||"OMS did not answer.");
-  Object.assign(M.oms, data.states||{});
-  omsRemember(data.states||{}, codes);
+  const states=mosLineStates(data, M.ledger);
+  Object.assign(M.oms, states);
+  omsRemember(states, codes);
   M.omsAt=new Date();
-  return data;
+  return states;
 }
 
 /* One reading of a status, used by both the badge and the count, so the two
@@ -7038,8 +7143,8 @@ async function omsFetch(codes){
    Every other answer ends it, and the ASIN goes back to the pool
    for somebody else. Gated ends it too, and additionally records that this
    client cannot sell it at all. */
-function omsBand(code){
-  const s=M.oms[code] || M.omsSeen[code];
+function omsBand(r){
+  const s=M.oms[lineKey(r)] || M.omsSeen[lineKey(r)];
   /* The final result only. The tracker's order status reads Not Yet Ordered
      or Ungate Checking while an order is still being worked, and treating
      that as a result would release lines nobody has finished with. */
@@ -7049,7 +7154,7 @@ function omsBand(code){
    which is on the ledger. M.oms holds only answers fetched from OMS, because
    omsReleases acts on whatever is in it. */
 function lineBand(r){
-  return r.released_at && r.release_reason ? bandOf(String(r.release_reason).trim()) : omsBand(r.tracking_code);
+  return r.released_at && r.release_reason ? bandOf(String(r.release_reason).trim()) : omsBand(r);
 }
 function lineBadge(r){
   const b=lineBand(r);
@@ -7071,8 +7176,8 @@ function bandOf(f){
 function omsReleases(rows){
   const out=[];
   for(const r of rows){
-    if(!M.oms[r.tracking_code]) continue;            // nothing back yet
-    const b=omsBand(r.tracking_code);
+    if(!M.oms[lineKey(r)]) continue;                 // nothing back yet for this client's line
+    const b=omsBand(r);
     if(b.held) continue;
     const live=M.ledger.find(x=>x.batch_id===r.batch_id
       && x.store_code===r.store_code && x.asin===r.asin);
@@ -7113,14 +7218,15 @@ function declinedReleases(states, asked){
     const rows=by[k];
     /* any other release means an answer came back; a line already declined is
        one an earlier, interrupted write got to, so the rest are finished here.
-       A code another line also has (two runs on one date) is left alone: an
-       OMS row for it could not be told apart, so it could never be held again. */
+       A code another line also has (the two 2026-10-23 runs) is still left
+       alone: answers are per client now, but an oms-status from before that
+       sends none for such a code, and its sheet would look absent. */
     if(rows.some(r=>(r.released_at && !isDeclined(r)) || !r.tracking_code || n[r.tracking_code]!==1
       || r.id===undefined || r.id===null || !asked.has(r.tracking_code))) continue;
     const open=rows.filter(r=>!r.released_at);
     if(!open.length) continue;
     if(!(Math.min(...rows.map(sheetAgeDays)) >= DECLINED_DAYS)) continue;
-    if(rows.some(r=>states[r.tracking_code])) continue;
+    if(rows.some(r=>states[lineKey(r)])) continue;
     for(const r of open) out.push(Object.assign({}, r, {gate:false, why:DECLINED_WHY}));
   }
   return out;
@@ -7135,7 +7241,7 @@ function declinedReleases(states, asked){
 function declinedRevivals(states){
   const n=codeCounts(), done=(M.reheld ||= new Set());
   return M.ledger.filter(r=>isDeclined(r) && r.id!==undefined && r.id!==null
-    && states[r.tracking_code] && n[r.tracking_code]===1 && !done.has(r.id));
+    && states[lineKey(r)] && n[r.tracking_code]===1 && !done.has(r.id));
 }
 async function reholdLines(rows){
   if(!rows.length || M.gatedBusy) return 0;
@@ -7244,8 +7350,7 @@ async function sweepOms(){
   M.sweeping=true;
   try{
     const asked=new Set(live.concat(declined).map(r=>r.tracking_code));
-    const data=await omsFetch([...asked]);
-    const states=(data && data.states) || {};
+    const states=await omsFetch([...asked]);     // per line (lineKey)
     await reholdLines(declinedRevivals(states));
     const rel=omsReleases(live).concat(declinedReleases(states, asked));
     if(rel.length) await applyGatedFixes(rel, true);
@@ -7428,10 +7533,10 @@ function renderSheets(){
     const codes=lines.map(r=>r.tracking_code).filter(Boolean);
     const needsAsking=(r)=>{
       if(!r.tracking_code || r.released_at) return false;   /* its answer is on the ledger */
-      const b=omsBand(r.tracking_code);
+      const b=omsBand(r);
       if(b.band==="wait") return true;                     /* no result yet, waiting for invoice, on hold, error */
       if(b.held) return false;                             /* allocated to Amazon: final */
-      return !M.oms[r.tracking_code];                      /* a rejection seen on an earlier visit: confirm it before releasing */
+      return !M.oms[lineKey(r)];                           /* a rejection seen on an earlier visit: confirm it before releasing */
     };
     const paint=(msg)=>{
       const box=el("sh-oms"); if(!box) return;
@@ -7507,7 +7612,7 @@ function renderSheets(){
     };
     /* Draw what is already known, and say "checking" only for a sheet this
        browser has never had an answer for. */
-    paint(lines.some(r=>needsAsking(r) && !M.oms[r.tracking_code] && !M.omsSeen[r.tracking_code]) ? "checking\u2026" : "");
+    paint(lines.some(r=>needsAsking(r) && !M.oms[lineKey(r)] && !M.omsSeen[lineKey(r)]) ? "checking\u2026" : "");
     clearTimeout(M.omsTimer);
     /* Drawn again for the same sheet (a teammate's change came in): keep the
        half-minute rhythm instead of asking OMS again straight away. */
@@ -8329,7 +8434,6 @@ function init(){
   
   
 
-  M.cfg.sheetDate = M.cfg.sheetDate || new Date().toISOString().slice(0,10);
 }
 })();
 </script>
