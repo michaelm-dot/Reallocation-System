@@ -6949,9 +6949,11 @@ function showClientRuns(code){
   const runs=Object.values(by).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   const budget=(code in M.budgets) ? M.budgets[code] : null;
   const byM={};
+  /* Spent leaves released lines out, as the budget does (recompute): a fall off
+     or a declined sheet put its money back. */
   for(const r of mine){ const m=monthOf(r);
     (byM[m] ||= {items:0, value:0, runs:new Set()});
-    byM[m].items++; byM[m].value+=Number(r.total_price)||0; byM[m].runs.add(r.batch_id); }
+    byM[m].items++; if(!r.released_at) byM[m].value+=Number(r.total_price)||0; byM[m].runs.add(r.batch_id); }
   const mkeys=Object.keys(byM).sort().reverse();
 
   box.innerHTML=
@@ -7041,7 +7043,19 @@ function omsBand(code){
   /* The final result only. The tracker's order status reads Not Yet Ordered
      or Ungate Checking while an order is still being worked, and treating
      that as a result would release lines nobody has finished with. */
-  const f=String((s && s.final_result) || "").trim();
+  return bandOf(String((s && s.final_result) || "").trim());
+}
+/* A line on screen: a released line shows the reason it was released with,
+   which is on the ledger. M.oms holds only answers fetched from OMS, because
+   omsReleases acts on whatever is in it. */
+function lineBand(r){
+  return r.released_at && r.release_reason ? bandOf(String(r.release_reason).trim()) : omsBand(r.tracking_code);
+}
+function lineBadge(r){
+  const b=lineBand(r);
+  return '<span class="oms '+b.band+'">'+esc(b.text)+'</span>';
+}
+function bandOf(f){
   if(!f) return {band:"wait", text:"Waiting for result", held:true};
   if(/^waiting for invoice$/i.test(f)) return {band:"wait", text:f, held:true};
   /* Not a verdict yet: the shipment is on hold, or OMS hit an error. The line
@@ -7066,6 +7080,84 @@ function omsReleases(rows){
     out.push(Object.assign({}, r, {gate:!!b.gate, why:b.text}));
   }
   return out;
+}
+
+/* A sheet nobody took up was declined. A client's sheet goes into OMS once
+   the client says yes, so a sheet with not one line in OMS a week after it
+   was recorded counts as one whole fall off: every line is released, so the
+   budget comes back and the ASINs go back to the pool. Not Gated, so the same
+   ASINs can be offered to the client again. Any line in OMS at all, even Not
+   Yet Ordered with no result (a sheet sent back to Distributor Order looks
+   like that), means it was taken up; OMS itself marks those Not Available
+   after thirty days. Decided only on an answer just fetched for every line. */
+const DECLINED_DAYS = 7;
+const DECLINED_WHY = "Declined — no answer in 7 days";
+const isDeclined = r => !!r.released_at && r.release_reason===DECLINED_WHY;
+/* From the moment the run was recorded (allocated_at, set by the database).
+   The sheet date is a UTC date and would start the week up to a day early;
+   a line not read back from the database yet has no allocated_at and is new. */
+function sheetAgeDays(row){
+  const t=Date.parse(row.allocated_at||"");
+  return isNaN(t) ? 0 : (Date.now() - t) / 86400000;
+}
+function codeCounts(){
+  const n={};
+  for(const r of M.ledger) if(r.tracking_code) n[r.tracking_code]=(n[r.tracking_code]||0)+1;
+  return n;
+}
+function declinedReleases(states, asked){
+  const by={}, n=codeCounts();
+  for(const r of M.ledger) (by[r.batch_id+"|"+r.store_code] ||= []).push(r);
+  const out=[];
+  for(const k in by){
+    const rows=by[k];
+    /* any other release means an answer came back; a line already declined is
+       one an earlier, interrupted write got to, so the rest are finished here.
+       A code another line also has (two runs on one date) is left alone: an
+       OMS row for it could not be told apart, so it could never be held again. */
+    if(rows.some(r=>(r.released_at && !isDeclined(r)) || !r.tracking_code || n[r.tracking_code]!==1
+      || r.id===undefined || r.id===null || !asked.has(r.tracking_code))) continue;
+    const open=rows.filter(r=>!r.released_at);
+    if(!open.length) continue;
+    if(!(Math.min(...rows.map(sheetAgeDays)) >= DECLINED_DAYS)) continue;
+    if(rows.some(r=>states[r.tracking_code])) continue;
+    for(const r of open) out.push(Object.assign({}, r, {gate:false, why:DECLINED_WHY}));
+  }
+  return out;
+}
+/* A declined sheet that turns up in OMS after all (the client said yes late)
+   is back in play: each line OMS now has is held again, so its budget and slot
+   count, and the usual rules take it from there. Only for a code no other line
+   on the ledger has, so a row of another sheet cannot bring one back. Once per
+   line in this tab: a line with an OMS row is never declined by this code, so
+   seeing it declined again means a tab on an older build released it, and
+   holding it again would only flip it back and forth until that tab reloads. */
+function declinedRevivals(states){
+  const n=codeCounts(), done=(M.reheld ||= new Set());
+  return M.ledger.filter(r=>isDeclined(r) && r.id!==undefined && r.id!==null
+    && states[r.tracking_code] && n[r.tracking_code]===1 && !done.has(r.id));
+}
+async function reholdLines(rows){
+  if(!rows.length || M.gatedBusy) return 0;
+  M.gatedBusy=true;
+  try{
+    const ids=rows.map(r=>r.id);
+    for(let i=0;i<ids.length;i+=200){
+      const {error}=await sb.from("mos_allocations").update({released_at:null, release_reason:null})
+        .in("id", ids.slice(i,i+200)).eq("release_reason", DECLINED_WHY);
+      if(error) throw error;
+    }
+    for(const r of rows){ r.released_at=null; r.release_reason=null; (M.reheld ||= new Set()).add(r.id); }
+    recompute();
+    M.result=null;
+    const value=rows.reduce((s,r)=>s+(Number(r.total_price)||0),0);
+    note(rows.length.toLocaleString()+" line"+(rows.length===1?"":"s")+" of a declined sheet turned up in OMS"+
+      " and "+(rows.length===1?"is":"are")+" held again · "+cash(value)+" back on the budget used.");
+    return rows.length;
+  }catch(e){
+    note("Could not hold the declined lines again: "+(e.message||e), true);
+    return 0;
+  }finally{ M.gatedBusy=false; M.wroteAt=Date.now(); }
 }
 
 /* Two things are wrong when Amazon answers Gated, and both have to be put
@@ -7126,8 +7218,10 @@ async function applyGatedFixes(fixes, quiet){
     M.result=null;
     if(!quiet) renderMos();
     const clients=new Set(fixes.map(f=>f.store_code)).size;
+    const declined=new Set(fixes.filter(f=>f.why===DECLINED_WHY).map(f=>f.batch_id+"|"+f.store_code)).size;
     note(fixes.length.toLocaleString()+" line"+(fixes.length===1?"":"s")+" released"+
       (clients>1 ? " across "+clients+" clients" : "")+" \u00b7 "+
+      (declined ? declined+" sheet"+(declined===1?"":"s")+" declined (no answer in "+DECLINED_DAYS+" days) \u00b7 " : "")+
       (gated.length ? gated.length+" also marked Gated \u00b7 " : "")+
       cash(value)+" back on budget.");
     return fixes.length;
@@ -7144,11 +7238,16 @@ async function applyGatedFixes(fixes, quiet){
 async function sweepOms(){
   if(M.sweeping || M.gatedBusy) return;
   const live=M.ledger.filter(r=>!r.released_at && r.tracking_code);
-  if(!live.length) return;
+  /* declined lines are asked about too, in case the client said yes late */
+  const declined=M.ledger.filter(r=>isDeclined(r) && r.tracking_code);
+  if(!live.length && !declined.length) return;
   M.sweeping=true;
   try{
-    await omsFetch(live.map(r=>r.tracking_code));
-    const rel=omsReleases(live);
+    const asked=new Set(live.concat(declined).map(r=>r.tracking_code));
+    const data=await omsFetch([...asked]);
+    const states=(data && data.states) || {};
+    await reholdLines(declinedRevivals(states));
+    const rel=omsReleases(live).concat(declinedReleases(states, asked));
     if(rel.length) await applyGatedFixes(rel, true);
     M.sweptAt=new Date();
     if(M.view==="sheets" || M.view==="clients") renderMos();
@@ -7158,17 +7257,21 @@ async function sweepOms(){
   }finally{ M.sweeping=false; }
 }
 
-function omsBadge(code){
-  const b=omsBand(code);
-  return '<span class="oms '+b.band+'">'+esc(b.text)+'</span>';
-}
-function omsSummary(codes){
-  const n={none:0, wait:0, good:0, bad:0};
-  for(const c of codes) n[omsBand(c).band]++;
-  /* A line counts as settled once OMS has said something either way. */
-  return {waiting:n.wait, good:n.good, bad:n.bad, settled:n.good+n.bad};
+/* The kind of a line for the open sheet's chips: its band, or declined. */
+const lineKind = r => isDeclined(r) ? "declined" : lineBand(r).band;
+function omsSummary(lines){
+  const n={wait:0, good:0, bad:0, declined:0};
+  for(const r of lines) if(r.tracking_code) n[lineKind(r)]++;
+  /* A line counts as settled once OMS has said something either way; a
+     declined line is one OMS never had. */
+  return {waiting:n.wait, good:n.good, bad:n.bad, declined:n.declined, settled:n.good+n.bad};
 }
 
+/* Held, released on an OMS answer, and declined (never in OMS), for the run views. */
+function heldCounts(rows){
+  const held=rows.filter(r=>!r.released_at).length, dec=rows.filter(isDeclined).length;
+  return {held, dec, rel:rows.length-held-dec};
+}
 function sheetRuns(){
   const by={};
   for(const r of M.ledger){
@@ -7268,7 +7371,7 @@ function renderSheets(){
             '<td class="num b">'+cash(r.total_price)+'</td>'+
             '<td class="num"><span class="ui-pill '+band+'">'+(rr*100).toFixed(1)+'%</span></td>'+
             '<td class="num '+(pu<0?'neg':'pos')+'">'+cash(pu)+'</td>'+
-            '<td>'+omsBadge(r.tracking_code)+'</td></tr>';
+            '<td>'+lineBadge(r)+'</td></tr>';
         }).join('')+
         '</tbody></table></div>'+
         '<div class="ui-foot"><span>Final result is read from OMS every half minute while a line can still move.</span>'+
@@ -7281,7 +7384,7 @@ function renderSheets(){
       const q=String(view.q||"").trim().toUpperCase(), trs=body.querySelectorAll("tbody tr");
       let shown=0;
       lines.forEach((r,i)=>{
-        const hit=(view.f==="all" || omsBand(r.tracking_code).band===view.f) &&
+        const hit=(view.f==="all" || lineKind(r)===view.f) &&
           (!q || (r.asin+" "+(r.brand||(meta.get(r.asin)||{}).brand||"")).toUpperCase().indexOf(q)>=0);
         if(hit) shown++;
         if(trs[i]) trs[i].hidden=!hit;
@@ -7291,10 +7394,11 @@ function renderSheets(){
         : 'Showing '+shown.toLocaleString()+' of '+lines.length.toLocaleString();
     };
     const shChips=()=>{
-      const n={all:lines.length, wait:0, good:0, bad:0};
-      for(const r of lines) n[omsBand(r.tracking_code).band]++;
+      const n={all:lines.length, wait:0, good:0, bad:0, declined:0};
+      for(const r of lines) n[lineKind(r)]++;
       const box=el("sh-chips");
-      if(box) box.innerHTML=[["all","All"],["wait","Waiting"],["good","Allocated"],["bad","Rejected"]]
+      if(box) box.innerHTML=[["all","All"],["wait","Waiting"],["good","Allocated"],["bad","Rejected"],["declined","Declined"]]
+        .filter(c=>c[0]!=="declined" || n.declined || view.f==="declined")
         .map(c=>'<button class="ui-chip" type="button" data-shf="'+c[0]+'" aria-pressed="'+(view.f===c[0])+'">'+
           c[1]+'<em>'+n[c[0]].toLocaleString()+'</em></button>').join('');
     };
@@ -7318,10 +7422,9 @@ function renderSheets(){
        asks OMS about those lines every half minute and leaves the rest alone;
        what was seen last shows straight away. */
     if(M.gatedFor!==code){ M.gatedFor=code; M.gatedLog=0; M.gatedGateLog=0; }
-    for(const r of lines){
-      if(r.released_at && r.release_reason && !M.oms[r.tracking_code])
-        M.oms[r.tracking_code]={final_result:r.release_reason};
-    }
+    /* A released line shows its reason from the ledger (lineBand). It is not
+       written into M.oms: a code can repeat on another sheet, and omsReleases
+       would take that reason as OMS's answer for the other sheet's line. */
     const codes=lines.map(r=>r.tracking_code).filter(Boolean);
     const needsAsking=(r)=>{
       if(!r.tracking_code || r.released_at) return false;   /* its answer is on the ledger */
@@ -7332,29 +7435,40 @@ function renderSheets(){
     };
     const paint=(msg)=>{
       const box=el("sh-oms"); if(!box) return;
-      const s=omsSummary(codes);
+      const s=omsSummary(lines);
       box.innerHTML='<i>IN OMS</i><b>'+s.settled.toLocaleString()+' of '+codes.length.toLocaleString()+'</b>'+
-        '<small>'+(msg ? esc(msg) : s.settled
-          ? (s.good?s.good+' good':'')+(s.bad?(s.good?' \u00b7 ':'')+s.bad+' rejected':'')+
-            (s.waiting?' \u00b7 '+s.waiting+' waiting':'')
+        '<small>'+(msg ? esc(msg) : s.settled || s.declined
+          ? [s.good?s.good+' good':'', s.bad?s.bad+' rejected':'',
+             s.declined?s.declined+' declined, never in OMS':'', s.waiting?s.waiting+' waiting':'']
+            .filter(Boolean).join(' \u00b7 ')
           : 'all waiting for result')+'</small>';
       lines.forEach((r,i)=>{
         const td=body.querySelectorAll("tbody tr")[i];
-        if(td) td.lastElementChild.innerHTML=omsBadge(r.tracking_code);
+        if(td) td.lastElementChild.innerHTML=lineBadge(r);
       });
 
       const fix=el("sh-fix");
       if(fix){
-        const rel=lines.filter(r=>r.released_at);
-        const n=rel.length, g=rel.filter(r=>/^gated$/i.test(String(r.release_reason||""))).length;
-        fix.hidden=!n;
-        if(n) fix.innerHTML='<span><b>'+n.toLocaleString()+'</b> line'+(n===1?'':'s')+
+        /* declined lines (never in OMS) and lines OMS answered are told apart */
+        const rel=lines.filter(r=>r.released_at), dec=rel.filter(isDeclined).length;
+        const ans=rel.filter(r=>!isDeclined(r));
+        const n=ans.length, g=ans.filter(r=>/^gated$/i.test(String(r.release_reason||""))).length;
+        fix.hidden=!rel.length;
+        const decText=!dec ? '' : (dec===lines.length
+            ? 'Not one line of this sheet was in OMS a week after it was recorded, so the sheet counts as declined: all <b>'+
+              dec.toLocaleString()+'</b> line'+(dec===1?' was':'s were')+' released'
+            : '<b>'+dec.toLocaleString()+'</b> of '+lines.length.toLocaleString()+' lines were released as declined'+
+              ' (not in OMS a week after the sheet was recorded)')+
+          ', so the ASIN'+(dec===1?'':'s')+' went back to the pool and the budget was put back;'+
+          ' a declined line that turns up in OMS later is held again.'+(n ? ' ' : '');
+        if(rel.length) fix.innerHTML='<span>'+decText+(n ? '<b>'+n.toLocaleString()+'</b> line'+(n===1?'':'s')+
           ' came back with an answer that ends the hold, so the ASIN'+(n===1?'':'s')+
           ' went back to the pool and the budget was put back.'+
           (g ? ' <b>'+g+'</b> of '+(n===1?'them':'those')+' answered Gated and '+
                (g===1?'was':'were')+' marked Gated in the ASIN database as well, so '+
                (g===1?'it':'they')+' will not be offered to '+esc(code)+' again.'
-             : ' They can be offered to '+esc(code)+' again on a later run.')+'</span>';
+             : ' They can be offered to '+esc(code)+' again on a later run.')
+          : ' They can be offered to '+esc(code)+' again on a later run.')+'</span>';
       }
       shChips(); shFilter();
     };
@@ -7393,7 +7507,7 @@ function renderSheets(){
     };
     /* Draw what is already known, and say "checking" only for a sheet this
        browser has never had an answer for. */
-    paint(codes.some(c=>!M.oms[c] && !M.omsSeen[c]) && lines.some(needsAsking) ? "checking\u2026" : "");
+    paint(lines.some(r=>needsAsking(r) && !M.oms[r.tracking_code] && !M.omsSeen[r.tracking_code]) ? "checking\u2026" : "");
     clearTimeout(M.omsTimer);
     /* Drawn again for the same sheet (a teammate's change came in): keep the
        half-minute rhythm instead of asking OMS again straight away. */
@@ -7413,14 +7527,15 @@ function renderSheets(){
       byClient[b].reduce((s,x)=>s+(+x.total_price||0),0) -
       byClient[a].reduce((s,x)=>s+(+x.total_price||0),0));
 
-    const held=run.rows.filter(r=>!r.released_at).length;
+    const hk=heldCounts(run.rows);
     head.innerHTML=
       '<nav class="sh-crumb"><button class="ui-link" id="sh-back" type="button">Offer sheets</button><span>/</span>'+
         '<b>'+longDate(run.date)+'</b></nav>'+
       '<div class="ui-ph"><div><h2>'+longDate(run.date)+'</h2>'+
         '<p>'+codes.length+' client'+(codes.length===1?'':'s')+' \u00b7 '+
           run.rows.length.toLocaleString()+' items \u00b7 '+cash0(run.value)+' \u00b7 '+
-          held.toLocaleString()+' held, '+(run.rows.length-held).toLocaleString()+' released in OMS \u00b7 run '+esc(run.id)+'</p></div>'+
+          hk.held.toLocaleString()+' held, '+hk.rel.toLocaleString()+' released in OMS'+
+          (hk.dec?', '+hk.dec.toLocaleString()+' declined (never in OMS)':'')+' \u00b7 run '+esc(run.id)+'</p></div>'+
         '<div class="ui-acts">'+
           '<button class="ung-tool warn" id="sh-cancel-run" type="button">Cancel the whole run</button>'+
           '<button class="ung-tool go" id="sh-dl-run" type="button">Download all</button></div></div>';
@@ -7447,10 +7562,12 @@ function renderSheets(){
       const roi=roiOf(rows);
       const month=String(run.date).slice(0,7);
       const left=remainingFor(c, month);
-      const hc=rows.filter(r=>!r.released_at).length;
+      const hc=heldCounts(rows);
       return '<article class="sh-card sh-run open" data-sh-open="'+esc(c)+'">'+
         '<div class="sh-rtop"><h3 class="ui-code">'+esc(c)+'</h3>'+
-          '<span class="ui-meta">'+hc.toLocaleString()+' held · '+(rows.length-hc).toLocaleString()+' released</span></div>'+
+          '<span class="ui-meta">'+(hc.dec && hc.dec===rows.length ? 'declined, never in OMS'
+            : hc.held.toLocaleString()+' held · '+hc.rel.toLocaleString()+' released'+
+              (hc.dec?' · '+hc.dec.toLocaleString()+' declined':''))+'</span></div>'+
         '<div class="sh-kv">'+
           '<div><i>Items</i><b>'+rows.length.toLocaleString()+'</b></div>'+
           '<div><i>Value</i><b>'+cash0(val)+'</b></div>'+
@@ -7500,8 +7617,9 @@ function renderSheets(){
   body.innerHTML = runs.length
     ? runs.map(run=>{
         const roi=roiOf(run.rows);
-        /* Held: still on its slot and its budget. Released: OMS answered in a way that ended it. */
-        const held=run.rows.filter(r=>!r.released_at).length, n=run.rows.length;
+        /* Held: still on its slot and its budget. Released: OMS answered in a way that ended it.
+           Declined: the client's sheet never reached OMS within a week. */
+        const hk=heldCounts(run.rows), held=hk.held, n=run.rows.length;
         const pct=n ? held/n*100 : 0;
         return '<article class="sh-card sh-run open" data-sh-run="'+esc(run.id)+'">'+
           '<div class="sh-rtop"><h3>'+longDate(run.date)+'</h3><span class="ui-pill thin">Amazon</span></div>'+
@@ -7511,7 +7629,8 @@ function renderSheets(){
             '<div><i>Value</i><b>'+cash0(run.value)+'</b></div>'+
             '<div><i>ROI</i><b>'+(roi*100).toFixed(1)+'%</b></div>'+
           '</div>'+
-          '<div class="sh-held"><span>In OMS: '+held.toLocaleString()+' held · '+(n-held).toLocaleString()+' released</span>'+
+          '<div class="sh-held"><span>In OMS: '+held.toLocaleString()+' held · '+hk.rel.toLocaleString()+' released'+
+            (hk.dec?' · '+hk.dec.toLocaleString()+' declined':'')+'</span>'+
             '<span>'+Math.round(pct)+'% held</span></div>'+
           '<div class="ui-bar"><span style="width:'+pct.toFixed(1)+'%"></span></div>'+
           '<div class="sh-rfoot"><button class="ung-tool" data-sh-all="'+esc(run.id)+'" type="button">Download all</button>'+
