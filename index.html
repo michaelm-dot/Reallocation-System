@@ -1306,7 +1306,7 @@ body{padding-left:214px}
          #respick is filled by renderResultPicker and hides itself when empty -->
     <div class="ui-card ui-noprint" id="os-results">
       <div class="ui-tools"><span class="ui-title">Reallocation results</span>
-        <span class="ui-meta" title="Rows that landed with a client, in the O2I layout, with the Walmart rows carrying whatever you typed in">In the O2I layout; Walmart rows carry what you typed.</span>
+        <span class="ui-meta" title="Only the rows on the offer sheets below (not the suggested ones), in the O2I layout, with the Walmart rows carrying whatever you typed in">Offer sheet rows only, in the O2I layout; Walmart rows carry what you typed.</span>
         <span class="ui-spacer"></span>
         <span class="resgrp"><b>Amazon</b>
           <button class="btn sm" data-res="amazon" data-kind="copy">Copy</button>
@@ -3759,11 +3759,19 @@ function allBooks(){
   ].sort((x,y)=> y.b.total - x.b.total);
 }
 
+/* The rows on an offer sheet and the client each is on, exactly as this tab shows
+   them (amazonGroups, walmartGroups). A suggestion is on no sheet, so the results
+   leave it out. */
+function sheetClientOf(channel){
+  const m = new Map();
+  const add = g => Object.entries(g).forEach(([code, list]) => list.forEach(it => m.set(it, code)));
+  if(channel !== "walmart") add(amazonGroups());
+  if(channel !== "amazon") add(walmartGroups());
+  return m;
+}
 function resultClients(channel){
   const n = {};
-  items.filter(i=>i.client && (!channel ||
-      (channel === "walmart" ? i.stage === "walmart" : i.stage !== "walmart")))
-    .forEach(i=>{ n[i.client] = (n[i.client] || 0) + 1; });
+  sheetClientOf(channel).forEach(c=>{ n[c] = (n[c] || 0) + 1; });
   return Object.entries(n).sort((a,b)=>a[0].localeCompare(b[0]));
 }
 function renderResultPicker(){
@@ -3861,11 +3869,10 @@ function dateOut(v){
   return m ? p(m[1]) + "/" + p(m[2]) + "/" + m[3] : d;
 }
 function importRows(channel){
-  return items.filter(i=>i.client && (!channel ||
-      (channel === "walmart" ? i.stage === "walmart" : i.stage !== "walmart"))
-      && (!resPick.size || resPick.has(i.client))).map(it=>{
+  const on = sheetClientOf(channel);
+  return items.filter(i=>on.has(i) && (!resPick.size || resPick.has(on.get(i)))).map(it=>{
     const v = liveRow(it);
-    const store = storeBy(it.client);
+    const store = storeBy(on.get(it));
     return [
       it.tracking,
       v.id,                                   /* WM # on a Walmart row, otherwise the ASIN */
@@ -3896,7 +3903,7 @@ function downloadResults(channel){
   if(typeof XLSX === "undefined") return toast("The spreadsheet writer didn't load \u2014 reload the page");
   const rows = importRows(channel);
   const what = channelLabel(channel);
-  if(!rows.length) return toast("No " + (channel ? what + " " : "") + "row has a client yet");
+  if(!rows.length) return toast("No " + (channel ? what + " " : "") + "row is on an offer sheet yet");
   const ws = XLSX.utils.aoa_to_sheet([IMPORT_HEAD, ...rows]);
   ws["!cols"] = [{wch:16},{wch:14},{wch:15},{wch:18},{wch:40},{wch:44},{wch:18},{wch:11},{wch:11},
     {wch:14},{wch:16},{wch:9},{wch:10},{wch:15},{wch:16},{wch:13},{wch:13},{wch:16},{wch:18},{wch:22}];
@@ -4242,7 +4249,7 @@ document.addEventListener("click", e=>{
     const ch = rdl.dataset.res, kind = rdl.dataset.kind;
     const rows = importRows(ch === "all" ? null : ch);
     const what = channelLabel(ch === "all" ? null : ch);
-    if(!rows.length) return toast("No " + (ch === "all" ? "" : what + " ") + "row has a client yet");
+    if(!rows.length) return toast("No " + (ch === "all" ? "" : what + " ") + "row is on an offer sheet yet");
     if(kind === "xlsx") return downloadResults(ch === "all" ? null : ch);
     if(kind === "csv"){
       const who = resPick.size === 1 ? " \u2014 " + [...resPick][0] : resPick.size ? " \u2014 " + resPick.size + " clients" : "";
