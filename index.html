@@ -768,6 +768,7 @@
   #goods-grid .ungtbl.goods td.gl a{font:500 12.5px var(--sans);color:var(--amazon)}
   #goods-grid .ungtbl.goods tr.retired td{color:var(--ink3)}
   #goods-grid .ungtbl.goods tr.retired td.gasin .gone{margin-top:2px;font:500 10px var(--sans);letter-spacing:.04em;color:#a08a5c}
+  #goods-grid .ungtbl.goods td.gasin .blkt{margin-top:2px;font:600 10px var(--sans);letter-spacing:.04em;color:var(--flag)}
 
   /* ---- MOS ASIN database ---- */
   #mos-db .ung-legend{gap:14px;font:400 12px var(--sans);color:var(--ink2)}
@@ -1238,6 +1239,9 @@ body{padding-left:214px}
 .ungwrap .ungtbl tr.retired th.cor{color:var(--ink3)}
 .ungwrap .ungtbl tr.retired th.cor .gone{display:block;font:500 8.5px var(--sans);
   color:#a08a5c;text-transform:uppercase;letter-spacing:.08em;margin-top:-1px}
+/* Restricted / Generic: never offered again (mos_asin_blocks) */
+.ungwrap .ungtbl .blkt{display:block;font:600 8.5px var(--sans);
+  color:#9b2c20;text-transform:uppercase;letter-spacing:.08em;margin-top:-1px}
 .ungwrap .ungtbl thead th.num{z-index:3;background:#121a17;color:#fff;text-align:center}
 .ungwrap .ungtbl th.slot{position:sticky;left:158px;background:#fff;z-index:1;
   width:58px;min-width:58px;font:600 10px var(--mono);color:var(--ink3);
@@ -4434,6 +4438,7 @@ const M = {
   pending:new Set(),
   blank:new Set(),            // nobody has checked this pair yet
   ledger:[],
+  blocks:new Map(),           // asin -> why it is never offered again (Restricted / Generic)
   counts:{}, spent:{},
   cfg:{method:"spread", minOrder:500, minRoi:0.10, maxClients:3, pendingOn:false,
        year:2026, quarter:"Q3", channel:"amazon"},
@@ -4451,6 +4456,17 @@ const cash0 = n => "$"+Math.round(Number(n)||0).toLocaleString("en-US");
 const norm = d => String(d??"").trim().replace(/\s+/g," ").toUpperCase();
 const key = (a,s) => a+"|"+s;
 const offerable = k => M.ungated.has(k) || (M.cfg.pendingOn && M.pending.has(k));
+/* An ASIN that came back Restricted or Generic on an offer sheet is never
+   offered again, to anyone (owner, 2026-11-05). Both are about the ASIN, not
+   about one client's ungating. Kept in mos_asin_blocks, shown in the ASIN
+   database and Good to Order ASINs; allocate() passes it over. */
+const BLOCK_WHY = /^(restricted|generic)$/i;
+const isBlockWhy = w => BLOCK_WHY.test(String(w||"").trim());
+function blockTip(b){
+  return "Came back "+b.why+(b.store?" for "+b.store:"")+
+    (b.code||b.date ? " ("+[b.code,b.date].filter(Boolean).join(", ")+")" : "")+
+    ". Never offered on an offer sheet again.";
+}
 /* picked is null until someone unticks a box, so the usual case is everyone. */
 const inRun = c => M.picked===null || M.picked.has(c);
 
@@ -4623,7 +4639,7 @@ async function loadAll(){
   return again;
 }
 async function _loadAll(){
-  const [budgets, asins, clients, gating, ledger, settings] = await Promise.all([
+  const [budgets, asins, clients, gating, ledger, settings, blocks] = await Promise.all([
     readAll("mos_budgets","store_code,budget","store_code"),
     readAll("mos_asins","*","asin")
       .then(rows=>rows.sort((a,b)=>byNum(a.pos,b.pos)||byText(a.asin,b.asin))),
@@ -4632,7 +4648,16 @@ async function _loadAll(){
     readGating(),
     readAll("mos_allocations","*","id"),
     sb.from("mos_settings").select("*").eq("id",true).maybeSingle(),
+    readAll("mos_asin_blocks","asin,reason,store_code,tracking_code,sheet_date,blocked_at","asin"),
   ]);
+  /* Never offered again. The ledger is read too: a line released Restricted
+     or Generic by a tab still on an older page has no block row yet. */
+  M.blocks=new Map();
+  for(const b of blocks) M.blocks.set(b.asin, {asin:b.asin, why:String(b.reason||"").trim(),
+    store:b.store_code||"", code:b.tracking_code||"", date:b.sheet_date||"", at:b.blocked_at||""});
+  for(const r of ledger) if(r.released_at && isBlockWhy(r.release_reason) && !M.blocks.has(r.asin))
+    M.blocks.set(r.asin, {asin:r.asin, why:String(r.release_reason).trim(), store:r.store_code||"",
+      code:r.tracking_code||"", date:r.sheet_date||"", at:r.released_at, unsaved:true});
   M.budgets={};
   for(const b of budgets) M.budgets[b.store_code]=Number(b.budget)||0;
   M.all=asins.map(r=>({
@@ -5064,6 +5089,7 @@ const REASONS={
   nobudget:"No budget on record for this client",
   overbudget:"Line costs more than the client has left",
   zero:"ASIN has no line price",
+  blocked:"ASIN came back Restricted or Generic on an earlier offer sheet, so it is never offered again (counted once per ASIN; see the ASIN database)",
 };
 function allocate(excluded, banned){
   excluded = excluded || new Set();
@@ -5081,6 +5107,7 @@ function allocate(excluded, banned){
   const countsAfter={}; let exhausted=0;
 
   for(const r of M.pool){
+    if(M.blocks.has(r.asin)){ skips.blocked=(skips.blocked||0)+1; continue; }   /* Restricted / Generic */
     const holders=new Set(M.counts[r.asin]||[]);
     if(holders.size>=cap){ exhausted++; countsAfter[r.asin]=holders.size; continue; }
     const able=[];
@@ -5878,10 +5905,14 @@ function _ungPaint2(which){
   ungWire();
   var q=((sInp&&sInp.value)||'').trim().toUpperCase();
   var onlyRes=onlyInp&&onlyInp.checked, resSet=onlyRes?_ungResSet():null;
+  /* The database lists every ASIN never to be offered again, answered or not,
+     and a search for "Restricted" or "Generic" finds them. */
+  var blk=open ? null : (M.blocks||new Map());
   var shown=rows.filter(function(a){
-    if(q && a.toUpperCase().indexOf(q)<0) return false;
+    var b=blk && blk.get(a);
+    if(q && a.toUpperCase().indexOf(q)<0 && !(b && b.why.toUpperCase().indexOf(q)===0)) return false;
     if(onlyRes && !resSet[a]) return false;
-    return ungRowOn(a, clients, open);
+    return ungRowOn(a, clients, open) || !!b;
   });
   var MAXR=2000;
   var head='<tr><th class="num">#</th><th class="cor">ASIN</th>'+
@@ -5909,7 +5940,7 @@ function _ungPaint2(which){
   var cap = open ? MAXR : Math.min(M.dbPage, MAXR);
   var parts=[], lim=Math.min(shown.length,cap);
   for(var i=0;i<lim;i++){
-    var a=shown[i], added=!fileSet[a], gone=!live[a], tds='';
+    var a=shown[i], added=!fileSet[a], gone=!live[a], tds='', bk=blk && blk.get(a);
     for(var j=0;j<clients.length;j++){
       var c=clients[j], k=key(a,c), s=ungCellState(k);
       /* Repeating the ASIN and the client on nearly two hundred thousand
@@ -5936,6 +5967,7 @@ function _ungPaint2(which){
       (added?' title="Idinagdag — wala sa na-upload na sheet"':'')+'>'+rowNum[a]+'</th>'+
       '<th class="cor"'+(gone?' title="No longer in Ungate List 3.0, kept here for its answers"':'')+'>'+
       a+(gone?'<span class="gone">'+(orphan[a]?'not in list':'retired')+'</span>':'')+
+      (bk?'<span class="blkt" title="'+esc(blockTip(bk))+'">'+esc(bk.why)+' · never offer</span>':'')+
       '</th>'+slotTd+tds+'</tr>');
   }
   var box=el(open?'ung-grid':'db-grid');
@@ -5959,6 +5991,8 @@ function _ungPaint2(which){
     if(dc) dc.innerHTML='showing '+lim.toLocaleString()+
       ' of '+shown.length.toLocaleString()+' ASINs \u00b7 '+clients.length+' of '+
       ungCols().length+' clients'+
+      (blk.size ? ' \u00b7 <span title="Search Restricted or Generic to list them">'+blk.size.toLocaleString()+
+        ' never offered again (Restricted / Generic)</span>' : '')+
       (lim<shown.length ? ' <button class="ung-tool" id="db-more" type="button">Show 300 more</button>' : '');
     if(el('db-more')) el('db-more').onclick=function(){ M.dbPage=(M.dbPage||300)+300; renderDb(); };
     return;
@@ -6658,19 +6692,24 @@ function renderGoods(){
   var q=((el("goods-search")&&el("goods-search").value)||"").trim().toUpperCase();
   var tone=M.goodsTone||"all";
 
-  /* The cards count the whole list; search and chips only narrow the table. */
-  var live=0, n={good:0, thin:0, bad:0};
-  all.forEach(function(r){ if(!r.active) return; live++; var t=goodsRowTone(r); if(t in n) n[t]++; });
+  /* The cards count the whole list; search and chips only narrow the table.
+     An ASIN never to be offered again (Restricted / Generic) counts as that,
+     not as good to order, whatever the sheet says about its profit. */
+  var blk=M.blocks||new Map();
+  var toneOf=function(r){ return blk.has(r.asin) ? "blk" : goodsRowTone(r); };
+  var live=0, n={good:0, thin:0, bad:0, blk:0};
+  all.forEach(function(r){ if(!r.active) return; live++; var t=toneOf(r); if(t in n) n[t]++; });
   var tally=el("goods-tally");
   if(tally) tally.innerHTML = all.length
     ? '<div class="ui-stat"><i>On the list</i><b>'+live.toLocaleString()+'</b></div>'+
       '<div class="ui-stat good"><i>Good to order</i><b>'+n.good.toLocaleString()+'</b></div>'+
       '<div class="ui-stat"><i>Low profit</i><b>'+n.thin.toLocaleString()+'</b></div>'+
       '<div class="ui-stat"><i>Not profitable</i><b>'+n.bad.toLocaleString()+'</b></div>'+
+      '<div class="ui-stat"><i>Never offer</i><b>'+n.blk.toLocaleString()+'</b><small>Restricted / Generic</small></div>'+
       '<div class="ui-stat"><i>Retired</i><b>'+(all.length-live).toLocaleString()+'</b><small>kept for their answers</small></div>'
     : '';
   var chips=el("goods-chips");
-  if(chips) chips.innerHTML=[["all","All"],["good","Good to order"],["thin","Low profit"],["bad","Not profitable"]]
+  if(chips) chips.innerHTML=[["all","All"],["good","Good to order"],["thin","Low profit"],["bad","Not profitable"],["blk","Never offer"]]
     .map(function(c){ return '<button class="ui-chip" type="button" data-gf="'+c[0]+'" aria-pressed="'+(tone===c[0])+'">'+c[1]+'</button>'; })
     .join('');
   var s=el("goods-synced");
@@ -6680,7 +6719,7 @@ function renderGoods(){
 
   var rows=all.filter(function(r){
     if(!showGone && !r.active) return false;
-    if(tone!=="all" && goodsRowTone(r)!==tone) return false;
+    if(tone!=="all" && toneOf(r)!==tone) return false;
     if(q && (r.asin+" "+r.upc+" "+r.brand).toUpperCase().indexOf(q)<0) return false;
     return true;
   });
@@ -6697,8 +6736,10 @@ function renderGoods(){
       var out;
       if(f==='asin'){
         cls+=' gasin';
+        var bk=blk.get(r.asin);
         out=esc(v)+(r.upc?'<span class="gupc">'+esc(r.upc)+'</span>':'')+
-            (r.active?'':'<span class="gone">retired</span>');
+            (r.active?'':'<span class="gone">retired</span>')+
+            (bk?'<span class="blkt" title="'+esc(blockTip(bk))+'">'+esc(bk.why)+' · never offer</span>':'');
       }
       else if(f==='status') out=goodsPill(r);
       else if(kind==='m'){ out=cash(v); if(v<0) cls+=' neg'; }
@@ -6786,7 +6827,7 @@ function clientReport(month){
     /* Ungated counts what can be offered and To check the same list Ungate
        Checking works: the Good to Order ASINs. */
     let ung=0, todo=0;
-    for(const r of (M.pool||[])) if(M.ungated.has(key(r.asin,code))) ung++;
+    for(const r of (M.pool||[])) if(!M.blocks.has(r.asin) && M.ungated.has(key(r.asin,code))) ung++;
     for(const r of ungList()) if(ungCellOpen(key(r.asin,code))) todo++;
     const budget=(code in M.budgets) ? M.budgets[code] : null;
     const spent=spentIn(code, month);
@@ -7283,6 +7324,25 @@ async function applyGatedFixes(fixes, quiet){
   const value=fixes.reduce((s,f)=>s+(Number(f.total_price)||0),0);
   const gated=fixes.filter(f=>f.gate);
   try{
+    /* Restricted or Generic is about the ASIN: saved first, so it is never
+       offered to anyone again even if the release below fails part way. An
+       ASIN already saved is skipped; one known only from the ledger is saved. */
+    const blocks=[];
+    for(const f of fixes){
+      if(!isBlockWhy(f.why)) continue;
+      const b=M.blocks.get(f.asin);
+      if((b && !b.unsaved) || blocks.some(x=>x.asin===f.asin)) continue;
+      blocks.push({asin:f.asin, reason:String(f.why).trim(), store_code:f.store_code||null,
+        tracking_code:f.tracking_code||null, sheet_date:f.sheet_date||null,
+        allocation_id:(f.id===undefined ? null : f.id)});
+    }
+    if(blocks.length){
+      const {error}=await sb.from("mos_asin_blocks").upsert(blocks,{onConflict:"asin", ignoreDuplicates:true});
+      if(error) throw error;
+      const now=new Date().toISOString();
+      for(const b of blocks) M.blocks.set(b.asin, {asin:b.asin, why:b.reason, store:b.store_code||"",
+        code:b.tracking_code||"", date:b.sheet_date||"", at:now});
+    }
     /* Only a Gated answer changes what the client may sell. Not Available,
        Storage Limit and the rest are about this order, not about ungating, so
        the ASIN can be offered to the same client again another time. */
@@ -7336,6 +7396,7 @@ async function applyGatedFixes(fixes, quiet){
       (clients>1 ? " across "+clients+" clients" : "")+" \u00b7 "+
       (declined ? declined+" sheet"+(declined===1?"":"s")+" declined (no answer in "+DECLINED_DAYS+" days) \u00b7 " : "")+
       (gated.length ? gated.length+" also marked Gated \u00b7 " : "")+
+      (blocks.length ? blocks.length+" ASIN"+(blocks.length===1?"":"s")+" Restricted/Generic, saved to the ASIN database as never to offer \u00b7 " : "")+
       cash(value)+" back on budget.");
     return fixes.length;
   }catch(e){
@@ -7565,6 +7626,7 @@ function renderSheets(){
         const rel=lines.filter(r=>r.released_at), dec=rel.filter(isDeclined).length;
         const ans=rel.filter(r=>!isDeclined(r));
         const n=ans.length, g=ans.filter(r=>/^gated$/i.test(String(r.release_reason||""))).length;
+        const k=ans.filter(r=>isBlockWhy(r.release_reason)).length;
         fix.hidden=!rel.length;
         const decText=!dec ? '' : (dec===lines.length
             ? 'Not one line of this sheet was in OMS a week after it was recorded, so the sheet counts as declined: all <b>'+
@@ -7578,8 +7640,10 @@ function renderSheets(){
           ' went back to the pool and the budget was put back.'+
           (g ? ' <b>'+g+'</b> of '+(n===1?'them':'those')+' answered Gated and '+
                (g===1?'was':'were')+' marked Gated in the ASIN database as well, so '+
-               (g===1?'it':'they')+' will not be offered to '+esc(code)+' again.'
-             : ' They can be offered to '+esc(code)+' again on a later run.')
+               (g===1?'it':'they')+' will not be offered to '+esc(code)+' again.' : '')+
+          (k ? ' <b>'+k+'</b> came back Restricted or Generic and '+(k===1?'is':'are')+
+               ' saved in the ASIN database, so '+(k===1?'it is':'they are')+' never offered to anyone again.' : '')+
+          (n>g+k ? ' '+(g||k ? 'The rest' : 'They')+' can be offered to '+esc(code)+' again on a later run.' : '')
           : ' They can be offered to '+esc(code)+' again on a later run.')+'</span>';
       }
       shChips(); shFilter();
