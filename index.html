@@ -867,6 +867,29 @@
   #ung-clients .ung-cpick:hover{background:#F7F9F8}
   #ung-clients .ung-cpick:has(> .ung-crow[aria-pressed="true"]){background:var(--wash-amazon);box-shadow:inset 3px 0 0 var(--amazon)}
   #ung-clients .ung-cpick .ung-crow[aria-pressed="true"]{background:transparent;box-shadow:none}
+  /* Account with problem (owner, 2026-11-10): the button on each row, the confirm, and the
+     accounts taken out of the queue, listed under it with Back to queue */
+  #ung-clients .ung-cprob{flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;
+    margin:0 8px 0 -4px;padding:0;border:1px solid var(--rule2);border-radius:6px;background:#fff;color:#b0b8b4;cursor:pointer}
+  #ung-clients .ung-cprob svg{width:14px;height:14px;display:block}
+  #ung-clients .ung-cprob:hover,#ung-clients .ung-cprob:focus-visible{border-color:#e3b4ad;background:#FFF4F2;color:var(--flag)}
+  #ung-clients .ung-probform{padding:10px 14px;border-bottom:1px solid var(--rule2);background:#FFF8F6;box-shadow:inset 3px 0 0 var(--flag);font-size:13px}
+  #ung-clients .ung-probform .t{margin-bottom:6px;color:var(--ink)}
+  #ung-clients .ung-probform .t b{font:500 13px var(--mono)}
+  #ung-clients .ung-probform input{width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid var(--rule);border-radius:8px;
+    background:#fff;font:400 13px var(--sans);color:var(--ink)}
+  #ung-clients .ung-probform .a{display:flex;gap:6px;margin:8px 0 6px}
+  #ung-clients .ung-probform small{display:block;font-size:11.5px;line-height:1.4;color:var(--ink3)}
+  #ung-clients .ung-probhead{padding:8px 14px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule2);background:#FAFBFA;
+    font:500 11px var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--flag)}
+  #ung-clients .ung-probrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:8px 14px;border-bottom:1px solid var(--rule2);
+    background:var(--panel);font-size:12px}
+  #ung-clients .ung-probrow .ui-code{flex:1 1 auto;font:500 13px var(--mono);color:var(--ink2)}
+  #ung-clients .ung-probrow .ung-tool{flex:none;padding:4px 8px;font-size:12px}
+  /* the note and the date on their own line, so they can be read in the narrow list */
+  #ung-clients .ung-probrow .why{flex:1 1 100%;order:3;min-width:0;line-height:1.4;color:var(--ink3);overflow-wrap:anywhere}
+  #mos-ungate .ung-clist #ung-cfoot{flex-wrap:wrap;row-gap:4px}
+  #mos-ungate .ung-clist #ung-cfoot .ung-cfoot-prob{flex:1 1 100%;display:flex;align-items:center;gap:8px;color:var(--flag)}
   .ung-cpickbar{display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--rule);
     background:#FAFBFA;font-size:12px;color:var(--ink2)}
   .ung-cpickbar b{font-weight:500;color:var(--ink)}
@@ -4439,6 +4462,7 @@ const M = {
   blank:new Set(),            // nobody has checked this pair yet
   ledger:[],
   blocks:new Map(),           // asin -> why it is never offered again (Restricted / Generic)
+  problem:new Map(),          // code -> {at, note}: account with a problem, out of the queue, no offer sheets
   counts:{}, spent:{},
   cfg:{method:"spread", minOrder:500, minRoi:0.10, maxClients:3, pendingOn:false,
        year:2026, quarter:"Q3", channel:"amazon"},
@@ -4467,6 +4491,11 @@ function blockTip(b){
     (b.code||b.date ? " ("+[b.code,b.date].filter(Boolean).join(", ")+")" : "")+
     ". Never offered on an offer sheet again.";
 }
+/* An account with a problem (owner, 2026-11-10) is out of the Ungate Checking
+   queue (its list, Extract and counts) and gets no offer sheet until someone
+   brings it back. Kept on mos_clients (problem_at, problem_note); its answers
+   and rows are not touched, so it comes back exactly as it left. */
+const isProblem = c => M.problem.has(c);
 /* picked is null until someone unticks a box, so the usual case is everyone. */
 const inRun = c => M.picked===null || M.picked.has(c);
 
@@ -4643,7 +4672,7 @@ async function _loadAll(){
     readAll("mos_budgets","store_code,budget","store_code"),
     readAll("mos_asins","*","asin")
       .then(rows=>rows.sort((a,b)=>byNum(a.pos,b.pos)||byText(a.asin,b.asin))),
-    readAll("mos_clients","store_code,position","store_code")
+    readAll("mos_clients","store_code,position,problem_at,problem_note","store_code")
       .then(rows=>rows.sort((a,b)=>byNum(a.position,b.position)||byText(a.store_code,b.store_code))),
     readGating(),
     readAll("mos_allocations","*","id"),
@@ -4692,6 +4721,8 @@ async function _loadAll(){
   }
   M.orphans=orphans.size;
   M.stores=clients.map(c=>c.store_code);
+  M.problem=new Map();
+  for(const c of clients) if(c.problem_at) M.problem.set(c.store_code, {at:c.problem_at, note:c.problem_note||""});
   M.ungated=new Set(); M.pending=new Set(); M.blank=new Set();
   for(const g of gating){
     const k=key(g.asin,g.store_code);
@@ -5098,7 +5129,9 @@ function allocate(excluded, banned){
   const date=runDate();
   const remaining={}, assigned={}, skips={}, before={}, after={};
   const pos={}; M.stores.forEach((c,i)=>{ pos[c]=i; });
-  const live=M.stores.filter(c=>!excluded.has(c) && inRun(c));
+  /* An account with a problem gets no sheet, ticked or not. */
+  const live=M.stores.filter(c=>!excluded.has(c) && inRun(c) && !isProblem(c));
+  const problem=M.stores.filter(c=>inRun(c) && isProblem(c));
   for(const c of M.stores){
     const rem=remainingFor(c);
     remaining[c] = rem===null ? 0 : rem;
@@ -5146,7 +5179,7 @@ function allocate(excluded, banned){
   const lines=Object.values(assigned).reduce((s,v)=>s+v.length,0);
   const value=Object.values(assigned).reduce((s,v)=>s+v.reduce((t,r)=>t+r.total,0),0);
   return {date, cap, assigned, skips, before, after, countsAfter, exhausted, lines, value,
-          base, offset, served:Object.values(assigned).filter(v=>v.length).length};
+          base, offset, problem, served:Object.values(assigned).filter(v=>v.length).length};
 }
 /* A sheet is worth sending only if it clears both bars: the minimum value,
    and a blended ROI at least as good as the target. The two pull against each
@@ -5622,7 +5655,7 @@ function _ungEdit(td){
    is picked lives in M and a second draw changes nothing. */
 function _ungPaintList(){
   ungWire();
-  var cols=ungCols(), open=Object.create(null);
+  var cols=ungColsFor(true), open=Object.create(null);
   cols.forEach(function(c){ open[c]=ungWork(c); });
   M.ungOpen=open;
   if(!M.ungClient || cols.indexOf(M.ungClient)<0){
@@ -5638,19 +5671,34 @@ function _ungPaintList(){
   ungTally(true);
 }
 
+/* The small button on every account: a warning triangle. */
+var UNG_PROB_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+
+  '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
 function _ungDrawClients(){
   var box=el('ung-clients'); if(!box) return;
   var open=M.ungOpen||{}, all=ungList().length, sel=M.ungClient;
   var q=((el('ung-cfind')&&el('ung-cfind').value)||'').trim().toUpperCase();
-  var cols=ungCols().slice().sort(function(a,b){ return (open[b]||0)-(open[a]||0) || a.localeCompare(b); });
+  var cols=ungColsFor(true).slice().sort(function(a,b){ return (open[b]||0)-(open[a]||0) || a.localeCompare(b); });
   var clear=cols.filter(function(c){ return !open[c]; }).length;
+  /* The confirm is for a client still in the queue (another tab may have taken it out). */
+  if(M.ungProbAsk && cols.indexOf(M.ungProbAsk)<0){ M.ungProbAsk=null; M.ungProbNote=''; }
   /* A search finds a caught-up client too; otherwise they wait behind Show. */
   var shown=cols.filter(function(c){
-    return q ? c.toUpperCase().indexOf(q)>=0 : (open[c] || M.ungShowDone || c===sel);
+    return q ? c.toUpperCase().indexOf(q)>=0 : (open[c] || M.ungShowDone || c===sel || c===M.ungProbAsk);
   });
   /* The tick beside each client is who Extract makes a file for; clicking the
-     row itself still just shows that client's ASINs. */
-  box.innerHTML = shown.map(function(c){
+     row itself still just shows that client's ASINs. The ! takes the account
+     out of the queue, after a confirm with an optional note. */
+  var html = shown.map(function(c){
+    if(c===M.ungProbAsk) return '<div class="ung-probform" data-ucform="'+esc(c)+'">'+
+      '<div class="t"><b>'+esc(c)+'</b> — account with problem?</div>'+
+      '<input data-ucnote maxlength="200" placeholder="What is wrong? (optional)" value="'+esc(M.ungProbNote||'')+'"'+
+        ' aria-label="What is wrong with the '+esc(c)+' account">'+
+      '<div class="a"><button class="ung-tool go" type="button" data-ucprobgo="'+esc(c)+'"'+(M.probBusy?' disabled':'')+'>'+
+        (M.probBusy?'Saving…':'Take out')+'</button>'+
+        '<button class="ung-tool" type="button" data-ucprobno>Cancel</button></div>'+
+      '<small>'+esc(c)+' leaves this list and Extract, and gets no offer sheet, until you bring it back from '+
+        'Accounts with problem below. Its answers and Pending rows stay as they are.</small></div>';
     var n=open[c]||0, done=all? (all-n)/all*100 : 0;
     return '<div class="ung-cpick"><input type="checkbox" data-ucpick="'+esc(c)+'" aria-label="Extract '+esc(c)+'"'+
       (ungIn(c)?' checked':'')+'>'+
@@ -5658,8 +5706,25 @@ function _ungDrawClients(){
       ' title="'+(all-n).toLocaleString()+' of '+all.toLocaleString()+' answered">'+
       '<span class="ui-code">'+esc(c)+'</span>'+
       '<span class="ui-bar"><span style="width:'+done.toFixed(1)+'%"></span></span>'+
-      '<span class="n">'+(n?n.toLocaleString():'clear')+'</span></button></div>';
-  }).join('') || '<div class="ung-cnone">'+(q ? 'No client matches that.' : 'Nobody has anything left to check.')+'</div>';
+      '<span class="n">'+(n?n.toLocaleString():'clear')+'</span></button>'+
+      '<button type="button" class="ung-cprob" data-ucprob="'+esc(c)+'" title="Account with problem: take '+esc(c)+
+        ' out of the queue" aria-label="Account with problem: take '+esc(c)+' out of the queue">'+UNG_PROB_ICON+'</button></div>';
+  }).join('') || '<div class="ung-cnone">'+(q ? 'No client in the queue matches that.' : 'Nobody has anything left to check.')+'</div>';
+  /* Taken out of the queue: shown under Show (or when a search matches), each
+     with what was wrong, since when, and Back to queue. */
+  var probs=ungCols().filter(isProblem).filter(function(c){ return !q || c.toUpperCase().indexOf(q)>=0; })
+    .sort(function(a,b){ return a.localeCompare(b); });
+  if(probs.length && (M.ungShowProb || q)) html += '<div class="ung-probhead">Accounts with problem</div>'+
+    probs.map(function(c){
+      var p=M.problem.get(c)||{}, d=Date.parse(p.at||''), since=isNaN(d) ? '' :
+        new Date(d).toLocaleDateString('en-US',{month:'short', day:'numeric', year:'numeric'});
+      var why=(p.note||'No note')+(since?' · since '+since:'');
+      return '<div class="ung-probrow"><span class="ui-code">'+esc(c)+'</span>'+
+        '<span class="why" title="'+esc(why)+'">'+esc(why)+'</span>'+
+        '<button class="ung-tool" type="button" data-ucback="'+esc(c)+'"'+(M.probBusy?' disabled':'')+
+          ' title="The account is fine again: put '+esc(c)+' back in the queue">Back to queue</button></div>';
+    }).join('');
+  box.innerHTML = html;
   _ungCpickbar();
   _ungCfoot(clear);
   /* The Extract panel names the ticked clients and counts their ASINs. */
@@ -5668,7 +5733,7 @@ function _ungDrawClients(){
 /* "Extract 3 of 5 clients" (of those with work), with All and None. */
 function _ungCpickbar(){
   var bar=el('ung-cpickbar'); if(!bar) return;
-  var open=M.ungOpen||{}, work=ungCols().filter(function(c){ return open[c]; });
+  var open=M.ungOpen||{}, work=ungColsFor(true).filter(function(c){ return open[c]; });
   var ticked=work.filter(ungIn).length;
   bar.innerHTML='<span title="Ticked clients with ASINs left to check get a file when you Extract">'+
       'Extract <b>'+ticked+'</b> of '+work.length+' client'+(work.length===1?'':'s')+'</span>'+
@@ -5678,18 +5743,57 @@ function _ungCpickbar(){
 }
 /* One tick changed, in the list or in the Extract panel: both show the same choice. */
 function ungSetPick(code, on){
-  var cols=ungColsFor(true);
+  /* Over every client, the accounts out of the queue too: the pick is shared
+     with the ASIN database's Extract, which keeps their columns. The queue
+     leaves them out on its own (ungColsFor(true)). */
+  var cols=ungCols();
   if(ungPick===null) ungPick=new Set(cols);
   if(on) ungPick.add(code); else ungPick.delete(code);
   if(cols.every(ungIn)) ungPick=null;
 }
 function _ungCfoot(clear){
   var f=el('ung-cfoot'); if(!f) return;
-  if(clear==null){ var open=M.ungOpen||{}; clear=ungCols().filter(function(c){ return !open[c]; }).length; }
-  f.innerHTML = clear
+  if(clear==null){ var open=M.ungOpen||{}; clear=ungColsFor(true).filter(function(c){ return !open[c]; }).length; }
+  var np=ungCols().filter(isProblem).length;
+  f.innerHTML = (clear
     ? '<span>'+clear+' client'+(clear===1?' is':'s are')+' all caught up</span>'+
       '<button class="ui-link" type="button" data-ungdone>'+(M.ungShowDone?'Hide':'Show')+'</button>'
-    : '<span>Every client has something to check</span>';
+    : '<span>Every client has something to check</span>')+
+    (np ? '<span class="ung-cfoot-prob"><span>'+np+' account'+(np===1?'':'s')+' with problem, out of the queue</span>'+
+      '<button class="ui-link" type="button" data-ungprob>'+(M.ungShowProb?'Hide':'Show')+'</button></span>' : '');
+}
+/* Takes an account out of the queue (on) or brings it back. One row of
+   mos_clients, read back from the database; memory follows what it returns.
+   Nothing else is written: gating, Pending rows and the ledger stay. */
+async function ungSetProblem(code, on, why){
+  if(M.probBusy) return;
+  M.probBusy=true; M.touched=Date.now();
+  if(M.on) _ungDrawClients();
+  var at=new Date().toISOString(), text=String(why||'').trim().slice(0,200);
+  try{
+    var set = on ? {problem_at:at, problem_note:text||null, problem_by:(typeof me!=="undefined" && me) ? me.id : null, updated_at:at}
+                 : {problem_at:null, problem_note:null, problem_by:null, updated_at:at};
+    var r=await sb.from("mos_clients").update(set).eq("store_code", code).select("store_code,problem_at,problem_note");
+    if(r.error) throw r.error;
+    if(!r.data || !r.data.length) throw new Error(code+" is not on the roster");
+    var row=r.data[0];
+    if(row.problem_at) M.problem.set(code, {at:row.problem_at, note:row.problem_note||""});
+    else M.problem.delete(code);
+    if(on){
+      if(M.ungProbAsk===code){ M.ungProbAsk=null; M.ungProbNote=''; }
+      if(M.ungClient===code) M.ungClient=null;      /* the busiest one left is shown instead */
+    }else if(ungPick){ ungPick.add(code); }           /* back with its Extract tick on */
+    M.result=null;                                   /* a preview made before no longer holds */
+    note(on
+      ? code+" is out of the Ungate Checking queue and gets no offer sheet (account with problem)."+
+        " Bring it back from Accounts with problem at the bottom of the client list."
+      : code+" is back in the Ungate Checking queue and can get offer sheets again.");
+  }catch(e){
+    note("Could not "+(on ? "take "+code+" out of" : "bring "+code+" back to")+" the queue: "+(e.message||e), true);
+  }finally{
+    M.probBusy=false; M.wroteAt=Date.now();
+    if(M.on) renderMos();
+  }
 }
 /* An answer changes only the picked client's count: update its row where it
    stands, so the list does not re-sort under the user. The order catches up
@@ -5858,7 +5962,7 @@ function ungWire(){
 
 function _ungPaintGrid(){ _ungPaint2("ungate"); }
 function ungTally(open){
-  var clients=ungCols(), rows=ungRowsFor(open);
+  var clients=ungColsFor(open), rows=ungRowsFor(open);
   var u=0,p=0,b=0,g=0, busy=Object.create(null);
   for(var i=0;i<rows.length;i++) for(var j=0;j<clients.length;j++){
     var k=key(rows[i].asin,clients[j]);
@@ -6107,7 +6211,9 @@ function ungCols(){
    empty column is the point: MDH sitting blank in the database is how you
    see it is still being checked, and it fills in on its own as answers come
    back on Ungate Checking. */
-function ungColsFor(openTab){ return ungCols(); }
+function ungColsFor(openTab){ return openTab ? ungCols().filter(c=>!isProblem(c)) : ungCols(); }
+/* The Ungate Checking queue leaves out an account with a problem; the ASIN
+   database still shows its column. */
 /* Ungate Checking works the Good to Order ASINs only (owner, 2026-10-06): an
    ASIN that has left the Asins tab is not checked. Its answers, and any "not
    checked" row, stay in mos_gating, so one that comes back is already sorted
@@ -6838,8 +6944,10 @@ function clientReport(month){
     const prio = !sheets ? 1 : (fall && fallPct>=M.clFallMin) ? 2 : 0;
     /* Room for a sheet: at least the minimum order left in this month's budget. */
     const minOrder=(M.cfg && M.cfg.minOrder) || 0;
-    const canOffer = !!budget && ung>0 && (left||0)>=minOrder;
-    const why = !budget ? "no budget" : !ung ? "no Ungated ASINs yet"
+    /* An account with a problem gets no sheet until it is back in the queue. */
+    const problem=isProblem(code);
+    const canOffer = !problem && !!budget && ung>0 && (left||0)>=minOrder;
+    const why = problem ? "account with problem" : !budget ? "no budget" : !ung ? "no Ungated ASINs yet"
       : (left||0)<minOrder ? "under the "+cash0(minOrder)+" minimum left" : "";
     return {pos:i+1, code, budget, spent, left,
             used: budget ? spent/budget : 0,
@@ -6847,7 +6955,7 @@ function clientReport(month){
             holding:live.length, last:dates.length?dates[dates.length-1]:"",
             everItems:all.length, everValue:all.reduce((s,r)=>s+(Number(r.total_price)||0),0),
             ung, todo, roi:roiOf(mine),
-            sheets, lines:month_.length, good, fall, wait, fallPct, prio, canOffer, why,
+            sheets, lines:month_.length, good, fall, wait, fallPct, prio, canOffer, why, problem,
             /* Results sort by the share that fell off; no results yet sorts last. */
             resKey: month_.length ? fallPct : -1, decided};
   });
@@ -6986,7 +7094,9 @@ function renderClientReport(){
     C.map(c=>'<th class="cs'+(LEFT[c[0]]?' l':'')+'" data-cs="'+c[0]+'">'+c[1]+arrow(c[0])+'</th>').join('')+'</tr>';
 
   const cell={
-    code:     r=>'<td class="c">'+r.code+'</td>',
+    code:     r=>'<td class="c">'+r.code+(r.problem ? ' <span class="ui-pill bad" title="Out of the Ungate Checking queue and gets no offer sheet'+
+                   (M.problem.get(r.code) && M.problem.get(r.code).note ? ': '+esc(M.problem.get(r.code).note) : '')+
+                   '. Bring it back on Ungate Checking.">account problem</span>' : '')+'</td>',
     prio:     r=>'<td class="cl-prio">'+(r.prio===1 ? '<span class="ui-pill bad">1 · no sheet</span>'
                    : r.prio===2 ? '<span class="ui-pill thin">2 · fall offs</span>' : '<span class="dim">—</span>')+
                  (r.prio && !r.canOffer ? '<small class="dim" title="An offer sheet needs a budget with at least the minimum order left, and Ungated ASINs">'+
@@ -7967,6 +8077,8 @@ function renderResult(){
     : "";
   el("mos-dropped").innerHTML = (stale
       ? `<p class="mos-warn"><b>The data changed since this preview</b> (a teammate's change, or a refresh). Generate and record checks it against the latest data first and records only if the plan is unchanged; press Preview again to see the current plan or to download.</p>` : "")
+    + ((R.problem && R.problem.length)
+      ? `<p class="mos-warn">Left out, account with problem: <b>${R.problem.map(esc).join(", ")}</b>. They get no offer sheet until they are brought back to the queue on Ungate Checking.</p>` : "")
     + roiLine + ((R.dropped && R.dropped.length)
     ? `<p class="mos-warn">Dropped for falling under ${cash0(R.minOrder)}: <b>${R.dropped.map(esc).join(", ")}</b>.
        Their ASINs went back to the pool${R.passes>1?` over ${R.passes} passes`:""}, so no client slots were used on them.</p>`
@@ -8133,6 +8245,12 @@ function _mosLiveHold(){
   var imp=el("ung-picker");
   if(M.view==="ungate" && imp && !imp.hidden && imp.querySelector('[data-ungimp="go"]')) return "import";
   if(document.querySelector(".ung-menu, select.ung-pick")) return "menu";
+  /* typing what is wrong with an account: the redraw would take the box away */
+  var ae=document.activeElement;
+  if(ae && ae.matches && ae.matches("input[data-ucnote]")) return "menu";
+  /* the pointer on an account out of the queue: a redraw could slide another
+     account's Back to queue under it */
+  if(document.querySelector("#ung-clients .ung-probrow:hover, #ung-clients .ung-probform:hover")) return "menu";
   return Date.now()-M.touched < LIVE_IDLE ? "active" : "";
 }
 /* force: go ahead even though someone is active (Preview and Generate and
@@ -8378,8 +8496,38 @@ function init(){
      carry no wcell/ucell cells.) */
   var _ucl=el("ung-clients");
   if(_ucl) _ucl.addEventListener("click", function(e){
-    var b=e.target.closest && e.target.closest("button[data-uc]"); if(!b) return;
+    if(!e.target.closest) return;
+    /* Account with problem: ! asks, the confirm takes it out, Back to queue returns it. */
+    var pb=e.target.closest("button[data-ucprob]");
+    if(pb){
+      /* one account at a time: a second confirm opened mid-save would look saved */
+      if(M.probBusy){ note("Still saving the last account. Try again in a moment.", true); return; }
+      M.ungProbAsk=pb.dataset.ucprob; M.ungProbNote='';
+      _ungDrawClients();
+      var ni=_ucl.querySelector("input[data-ucnote]"); if(ni) ni.focus();
+      return;
+    }
+    if(e.target.closest("button[data-ucprobno]")){ M.ungProbAsk=null; M.ungProbNote=''; _ungDrawClients(); return; }
+    var go=e.target.closest("button[data-ucprobgo]");
+    if(go){ ungSetProblem(go.dataset.ucprobgo, true, M.ungProbNote); return; }
+    var bk=e.target.closest("button[data-ucback]");
+    if(bk){ ungSetProblem(bk.dataset.ucback, false); return; }
+    var b=e.target.closest("button[data-uc]"); if(!b) return;
     M.ungClient=b.dataset.uc; _ungDrawClients(); _ungDrawWork();
+  });
+  /* The note is kept in M, so a redraw (a teammate's change) does not lose it. */
+  if(_ucl) _ucl.addEventListener("input", function(e){
+    var x=e.target.closest && e.target.closest("input[data-ucnote]"); if(!x) return;
+    M.ungProbNote=x.value;
+  });
+  if(_ucl) _ucl.addEventListener("keydown", function(e){
+    var x=e.target.closest && e.target.closest("input[data-ucnote]"); if(!x) return;
+    if(e.key==="Enter"){
+      e.preventDefault();
+      if(M.probBusy){ note("Still saving the last account. Try again in a moment.", true); return; }
+      if(M.ungProbAsk) ungSetProblem(M.ungProbAsk, true, x.value);
+    }
+    else if(e.key==="Escape"){ M.ungProbAsk=null; M.ungProbNote=''; _ungDrawClients(); }
   });
   /* The tick boxes in the client list choose who Extract makes files for. */
   if(_ucl) _ucl.addEventListener("change", function(e){
@@ -8395,7 +8543,15 @@ function init(){
   });
   var _ucf=el("ung-cfoot");
   if(_ucf) _ucf.addEventListener("click", function(e){
-    if(!(e.target.closest && e.target.closest("button[data-ungdone]"))) return;
+    if(!e.target.closest) return;
+    if(e.target.closest("button[data-ungprob]")){
+      M.ungShowProb=!M.ungShowProb; _ungDrawClients();
+      /* the section is at the end of a long list: bring it into view */
+      var bx=el("ung-clients"), hd=M.ungShowProb && bx && bx.querySelector(".ung-probhead");
+      if(hd) bx.scrollTop += hd.getBoundingClientRect().top - bx.getBoundingClientRect().top;
+      return;
+    }
+    if(!e.target.closest("button[data-ungdone]")) return;
     M.ungShowDone=!M.ungShowDone; _ungDrawClients();
   });
   if(el("ung-cfind")) el("ung-cfind").addEventListener("input", _ungDrawClients);
