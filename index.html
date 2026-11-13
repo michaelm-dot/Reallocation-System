@@ -1009,9 +1009,9 @@
   <nav class="tabs" id="tabs">
     <button data-view="queue" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>Queue</button>
     <button data-view="all" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>All items</button>
-    <button data-view="amazon" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0"/></svg>Amazon ungating</button>
-    <button data-view="walmart" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11h16V9"/><path d="M9 22V12h6v10"/></svg>Walmart</button>
-    <button data-view="dom" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>For Liquidation</button>
+    <button data-view="amazon" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0"/></svg><span class="navtx">Amazon ungating<span class="navamt" id="navamt-amazon"></span></span></button>
+    <button data-view="walmart" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11h16V9"/><path d="M9 22V12h6v10"/></svg><span class="navtx">Walmart<span class="navamt" id="navamt-walmart"></span></span></button>
+    <button data-view="dom" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span class="navtx">For Liquidation<span class="navamt" id="navamt-dom"></span></span></button>
     <button data-view="sheets" data-needs><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>Offer sheets</button>
   </nav>
   <nav class="tabs" id="mos-tabs">
@@ -1054,6 +1054,13 @@
 #sidenav #mos-switch button[aria-current="true"] svg,
 #sidenav .tabs button[aria-current="true"] svg{opacity:1;color:#6fd3a3}
 #sidenav button:disabled{opacity:.38;cursor:not-allowed;background:transparent}
+/* What the items in Amazon ungating, Walmart and For Liquidation add up to, on a
+   second line under the name: the sidebar is too narrow for both on one line. */
+#sidenav #tabs .navtx{display:flex;flex-direction:column;min-width:0}
+#sidenav #tabs .navamt{display:block;margin-top:2px;font:400 10.5px var(--mono);color:#7f8c85;letter-spacing:.02em}
+#sidenav #tabs .navamt:empty{display:none}
+#sidenav #tabs button:hover .navamt{color:#a9b5ae}
+#sidenav #tabs button[aria-current="true"] .navamt{color:#9fd9bd}
 body{padding-left:214px}
 .masthead{justify-content:flex-end;gap:12px}
 
@@ -2607,6 +2614,8 @@ function recompute(){
     sheets.push({id:uid(), channel:"amazon", client:code, itemIds:list.map(i=>i.id),
       total:list.reduce((a,i)=>a+liveAmount(i),0), date:new Date().toISOString().slice(0,10)});
   });
+  /* every change comes through here, so the sidebar totals follow it */
+  if(typeof renderNavTotals === "function") renderNavTotals();
 }
 
 /* ---------------- walmart record ---------------- */
@@ -3356,6 +3365,58 @@ function renderAll(){
   restoreScroll("#view-all", keep);
 }
 
+/* ---------------- sidebar totals ----------------
+   What the items in Amazon ungating, Walmart and For Liquidation add up to, shown
+   under each name in the sidebar (owner, 2026-11-14). Each row counts in one tab only:
+   - Amazon ungating: every B0 row not routed to Walmart (to check, Suggested and on an
+     Amazon offer sheet), the rows behind the ASINs the tab lists. Worth unit cost x qty,
+     or the O2I amount when that is blank, the same as liveAmount (what a sheet adds up).
+   - Walmart: the rows the tab lists, Walmart offer rows included. For Liquidation rows
+     are left out; they have their own total.
+   - For Liquidation: the same figure as the Total price card on that tab (domOsRows).
+   The search boxes and the Show buttons on the tabs do not change them. Read-only:
+   nothing here creates a walmart record. Redrawn at the end of recompute() and render(). */
+function navRowAmount(it){
+  const rec = wm[it.id] || {};
+  const unit = typedNum(rec.uprice, it.uprice || 0);
+  return r2(unit * (Number(it.qty) || 0)) || Number(it.value) || 0;
+}
+/* the domOsRows / wmOsRow amount: unit x bundles x bundle size */
+function navWmAmount(it){
+  const rec = wm[it.id] || {};
+  const pick = (v, fallback) => v !== "" && v != null ? (Number(v) || 0) : fallback;
+  const unit = pick(rec.uprice, it.uprice || 0);
+  const bsize = pick(rec.bsize, it.bsize || 0);
+  const oq = Number(it.qty) || 0;
+  const qty = bsize > 0 ? r2(oq / bsize) : (it.sellable || 0);
+  return r2(unit * qty * bsize) || Number(it.value) || 0;
+}
+function navTotals(){
+  const t = {amazon:{sum:0, n:0, asins:new Set()}, walmart:{sum:0, n:0}, dom:{sum:0, n:0}};
+  items.forEach(it=>{
+    if(it.stage === "walmart"){
+      const k = wmResult(it).dom ? "dom" : "walmart";
+      t[k].sum += navWmAmount(it); t[k].n++;
+    } else if(/^B0/i.test(String(it.asin || ""))){
+      t.amazon.sum += navRowAmount(it); t.amazon.n++; t.amazon.asins.add(it.asin);
+    }
+  });
+  return t;
+}
+function renderNavTotals(){
+  if(typeof document === "undefined") return;
+  const t = items.length ? navTotals() : null;
+  const plural = (n, w) => n.toLocaleString("en-US") + " " + w + (n === 1 ? "" : "s");
+  [["amazon","Amazon ungating"],["walmart","Walmart"],["dom","For Liquidation"]].forEach(([k, name])=>{
+    const el = document.getElementById("navamt-" + k); if(!el) return;
+    if(!t){ el.textContent = ""; el.removeAttribute("title"); return; }
+    const x = t[k], total = money(r2(x.sum));
+    el.textContent = total;
+    el.title = total + " in " + name + ": " + (k === "amazon"
+      ? plural(x.asins.size, "ASIN") + " (" + plural(x.n, "row") + ")" : plural(x.n, "row"));
+  });
+}
+
 /* ---------------- other views ---------------- */
 const count = st => items.filter(i=>i.stage===st).length;
 function renderLedger(){
@@ -3953,7 +4014,7 @@ function render(){
      keep the window scroll unless you have actually changed tab. */
   const sameView = lastView === view;
   const wy = (typeof window !== "undefined" && window.scrollY) || 0;
-  renderLedger(); renderFiles(); renderBatchChip(); renderResultPicker(); renderWho();
+  renderLedger(); renderFiles(); renderBatchChip(); renderResultPicker(); renderWho(); renderNavTotals();
   document.querySelectorAll("#tabs button").forEach(b=>{
     b.setAttribute("aria-current", String(b.dataset.view===view));
     if(b.hasAttribute("data-needs")) b.disabled = !items.length;
